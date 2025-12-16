@@ -2,28 +2,6 @@
 # Tasks are ordered by priority (top = highest priority)
 
 tasks:
-  - id: TASK-001
-    title: "Implement HTTP client with session/cookie management"
-    spec_id: SPEC-SESSION-001
-    priority: 1
-    status: pending
-    description: |
-      Create HTTP client module that handles:
-      - Session initialization
-      - Cookie capture from Set-Cookie headers
-      - Cookie inclusion in subsequent requests
-      - Cookie update during session lifecycle
-    estimated_complexity: medium
-    dependencies: []
-    test_refs:
-      - TEST-SESSION-001
-      - TEST-SESSION-002
-      - TEST-SESSION-003
-    files_to_create:
-      - src/client/http.ts
-      - src/client/http.spec.ts
-      - src/types/http.types.ts
-
   - id: TASK-002
     title: "Implement DHLottery authentication"
     spec_id: SPEC-AUTH-001

@@ -3,4 +3,4 @@
 
 current_task: null
 
-# This file will be populated when a task moves from backlog to active
+# Task will be populated when moved from backlog

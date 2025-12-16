@@ -1,11 +1,15 @@
 # Completed Tasks
 
-completed_tasks: []
-
-# Tasks will be moved here when completed
-# Format:
-# - id: TASK-XXX
-#   title: "..."
-#   completed_at: "YYYY-MM-DD HH:mm:ss"
-#   outcome: "..."
-#   notes: "..."
+completed_tasks:
+  - id: TASK-001
+    title: "Implement HTTP client with session/cookie management"
+    spec_id: SPEC-SESSION-001
+    completed_at: "2025-12-16 14:38:00+09:00"
+    outcome: "success"
+    notes: |
+      Successfully implemented HTTP client with automatic cookie management.
+      - Created 3 files: http.types.ts, http.ts, http.spec.ts
+      - All 11 tests passed (TEST-SESSION-001, TEST-SESSION-002, TEST-SESSION-003)
+      - Used Cloudflare Workers Fetch API with getSetCookie() method
+      - Implemented clean cookie storage and serialization pattern
+      - Ready for use in authentication module (TASK-002)
