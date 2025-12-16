@@ -10,19 +10,19 @@ import type {
   NotificationPayload,
   TelegramEnv,
   TelegramMessage,
-} from "../types/notification.types";
+} from '../types/notification.types';
 
 /**
  * Get emoji based on notification type
  */
-function getTypeEmoji(type: NotificationPayload["type"]): string {
+function getTypeEmoji(type: NotificationPayload['type']): string {
   switch (type) {
-    case "success":
-      return "✅";
-    case "warning":
-      return "⚠️";
-    case "error":
-      return "❌";
+    case 'success':
+      return '✅';
+    case 'warning':
+      return '⚠️';
+    case 'error':
+      return '❌';
   }
 }
 
@@ -35,18 +35,18 @@ function formatMessage(payload: NotificationPayload): string {
 
   // Title with emoji
   lines.push(`${emoji} **${payload.title}**`);
-  lines.push("");
+  lines.push('');
 
   // Main message
   lines.push(payload.message);
 
   // Add details if present
   if (payload.details && Object.keys(payload.details).length > 0) {
-    lines.push("");
+    lines.push('');
     for (const [key, value] of Object.entries(payload.details)) {
       // Format key in title case
       const formattedKey = key
-        .replace(/([A-Z])/g, " $1")
+        .replace(/([A-Z])/g, ' $1')
         .replace(/^./, (str) => str.toUpperCase())
         .trim();
 
@@ -54,7 +54,7 @@ function formatMessage(payload: NotificationPayload): string {
     }
   }
 
-  return lines.join("\n");
+  return lines.join('\n');
 }
 
 /**
@@ -65,7 +65,7 @@ function formatMessage(payload: NotificationPayload): string {
  */
 export async function sendNotification(
   payload: NotificationPayload,
-  env: TelegramEnv,
+  env: TelegramEnv
 ): Promise<void> {
   try {
     // Format message text
@@ -75,7 +75,7 @@ export async function sendNotification(
     const message: TelegramMessage = {
       chat_id: env.TELEGRAM_CHAT_ID,
       text,
-      parse_mode: "Markdown",
+      parse_mode: 'Markdown',
     };
 
     // Build API URL
@@ -83,9 +83,9 @@ export async function sendNotification(
 
     // Send request to Telegram API
     const response = await fetch(url, {
-      method: "POST",
+      method: 'POST',
       headers: {
-        "Content-Type": "application/json",
+        'Content-Type': 'application/json',
       },
       body: JSON.stringify(message),
     });
@@ -93,17 +93,14 @@ export async function sendNotification(
     // Check response
     if (!response.ok) {
       const errorData = await response.json();
-      console.error(
-        `Telegram API error: ${response.status} ${response.statusText}`,
-        errorData,
-      );
+      console.error(`Telegram API error: ${response.status} ${response.statusText}`, errorData);
       return; // Do not retry, just log
     }
 
     // Success - no need to process response
   } catch (error) {
     // Log network errors or other failures
-    console.error("Failed to send Telegram notification:", error);
+    console.error('Failed to send Telegram notification:', error);
     // Do not throw - allow main execution to continue
   }
 }

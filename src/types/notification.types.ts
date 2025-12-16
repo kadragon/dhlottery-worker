@@ -9,7 +9,7 @@
 /**
  * Notification type
  */
-export type NotificationType = "success" | "warning" | "error";
+export type NotificationType = 'success' | 'warning' | 'error';
 
 /**
  * Notification payload
@@ -35,5 +35,5 @@ export interface TelegramEnv {
 export interface TelegramMessage {
   chat_id: string;
   text: string;
-  parse_mode: "Markdown" | "MarkdownV2";
+  parse_mode: 'Markdown' | 'MarkdownV2';
 }
