@@ -1,0 +1,11 @@
+# Completed Tasks
+
+completed_tasks: []
+
+# Tasks will be moved here when completed
+# Format:
+# - id: TASK-XXX
+#   title: "..."
+#   completed_at: "YYYY-MM-DD HH:mm:ss"
+#   outcome: "..."
+#   notes: "..."

@@ -1,0 +1,102 @@
+spec_id: SPEC-ACCOUNT-001
+title: "Account Information Retrieval"
+version: "1.0.0"
+status: "draft"
+
+description: |
+  Fetch and parse user account information including deposit balance
+  and current lottery round number from DHLottery account page.
+
+given_when_then:
+  - given: "Authenticated user session"
+    when: "Account info page is requested"
+    then: "HTML response is received and parsed"
+
+  - given: "Valid HTML response with account data"
+    when: "Parsing deposit balance"
+    then: "Balance is extracted as number in KRW"
+
+  - given: "Valid HTML response with lottery info"
+    when: "Parsing current round number"
+    then: "Round number is extracted as integer"
+
+  - given: "Malformed or unexpected HTML"
+    when: "Parsing fails"
+    then: "Descriptive error is thrown with context"
+
+acceptance_tests:
+  - id: TEST-ACCOUNT-001
+    desc: "Should fetch account info page"
+    criteria:
+      - "GET request to account page succeeds"
+      - "Response status is 200"
+      - "Response contains HTML content"
+
+  - id: TEST-ACCOUNT-002
+    desc: "Should parse deposit balance correctly"
+    criteria:
+      - "Balance regex matches format: '예치금: N,NNN원'"
+      - "Commas are removed before parsing"
+      - "Result is number in KRW"
+      - "Zero balance is handled correctly"
+
+  - id: TEST-ACCOUNT-003
+    desc: "Should parse current lottery round"
+    criteria:
+      - "Round number is extracted from HTML"
+      - "Result is positive integer"
+      - "Invalid round throws error"
+
+  - id: TEST-ACCOUNT-004
+    desc: "Should validate parsed data"
+    criteria:
+      - "Balance is non-negative number"
+      - "Round is positive integer"
+      - "Missing data throws descriptive error"
+
+  - id: TEST-ACCOUNT-005
+    desc: "Should return structured account info"
+    criteria:
+      - "Returns object with balance and round"
+      - "Types match AccountInfo interface"
+      - "Data is immediately usable"
+
+dependencies:
+  governance: "parsing-pattern, type-safety-patterns"
+  specs:
+    - SPEC-AUTH-001
+  external_services:
+    - "DHLottery account page"
+
+linked_tasks:
+  - TASK-003
+
+implementation_notes:
+  - "Use regex for simple HTML parsing"
+  - "Consider HTMLRewriter if DOM traversal needed"
+  - "Validate all parsed values before returning"
+  - "Store HTML fixtures for testing"
+
+data_model:
+  AccountInfo:
+    fields:
+      - name: "balance"
+        type: "number"
+        unit: "KRW"
+        validation: ">= 0"
+      - name: "currentRound"
+        type: "number"
+        validation: "> 0"
+
+error_scenarios:
+  - code: "ACCOUNT_PARSE_BALANCE_FAILED"
+    desc: "Cannot extract balance from HTML"
+    action: "Throw error with HTML snippet for debugging"
+
+  - code: "ACCOUNT_PARSE_ROUND_FAILED"
+    desc: "Cannot extract round number"
+    action: "Throw error with context"
+
+  - code: "ACCOUNT_INVALID_DATA"
+    desc: "Parsed data fails validation"
+    action: "Throw error with validation details"

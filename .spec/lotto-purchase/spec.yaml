@@ -1,0 +1,133 @@
+spec_id: SPEC-PURCHASE-001
+title: "Automatic Lottery Purchase"
+version: "1.0.0"
+status: "draft"
+
+description: |
+  Purchase 5 lottery games with auto-generated numbers
+  totaling 5,000 KRW after confirming sufficient balance.
+
+given_when_then:
+  - given: "Sufficient deposit balance (>= 30,000 KRW)"
+    when: "Purchase request is initiated"
+    then: "5 lottery games are purchased with auto numbers"
+
+  - given: "Purchase ready endpoint is called"
+    when: "Request to /egovUserReadySocket.json"
+    then: "System prepares for purchase transaction"
+
+  - given: "Purchase execution is called"
+    when: "POST to /execBuy.do with purchase details"
+    then: "Transaction is completed and result is returned"
+
+  - given: "Purchase succeeds"
+    when: "Result is received"
+    then: "Telegram success notification is sent with details"
+
+  - given: "Purchase fails (network, validation, etc.)"
+    when: "Error occurs during purchase"
+    then: "Transaction is rolled back and error notification sent"
+
+acceptance_tests:
+  - id: TEST-PURCHASE-001
+    desc: "Should prepare purchase transaction"
+    criteria:
+      - "GET request to /egovUserReadySocket.json succeeds"
+      - "Response indicates readiness"
+      - "Session is ready for purchase execution"
+
+  - id: TEST-PURCHASE-002
+    desc: "Should execute purchase with correct parameters"
+    criteria:
+      - "POST to /execBuy.do"
+      - "Number of games = 5"
+      - "Purchase mode = automatic (not manual)"
+      - "Total amount = 5,000 KRW"
+
+  - id: TEST-PURCHASE-003
+    desc: "Should receive and parse purchase result"
+    criteria:
+      - "Response contains purchase confirmation"
+      - "Purchased game numbers are included"
+      - "Transaction ID or receipt info available"
+
+  - id: TEST-PURCHASE-004
+    desc: "Should notify success via Telegram"
+    criteria:
+      - "Notification type = 'success'"
+      - "Message includes game count (5)"
+      - "Message includes total cost (5,000 KRW)"
+      - "Message includes lottery round number"
+
+  - id: TEST-PURCHASE-005
+    desc: "Should handle purchase failures gracefully"
+    criteria:
+      - "Network errors are caught"
+      - "Validation errors are caught"
+      - "Error notification sent to Telegram"
+      - "No partial purchases (atomic transaction)"
+
+dependencies:
+  governance: "workflow-orchestration-pattern, retry-pattern"
+  specs:
+    - SPEC-DEPOSIT-001
+    - SPEC-TELEGRAM-001
+  external_services:
+    - "DHLottery purchase ready endpoint"
+    - "DHLottery purchase execution endpoint"
+
+linked_tasks:
+  - TASK-005
+
+implementation_notes:
+  - "Purchase is atomic (all 5 games or none)"
+  - "Use auto-number generation mode"
+  - "Validate balance before execution"
+  - "Store purchase details for notification"
+  - "No retry for purchase failures (notify and stop)"
+
+data_model:
+  PurchaseRequest:
+    fields:
+      - name: "gameCount"
+        type: "number"
+        value: 5
+      - name: "mode"
+        type: "string"
+        value: "auto"
+      - name: "totalAmount"
+        type: "number"
+        value: 5000
+
+  PurchaseResult:
+    fields:
+      - name: "success"
+        type: "boolean"
+      - name: "gameNumbers"
+        type: "number[][]"
+        desc: "Array of 5 game number sets"
+      - name: "transactionId"
+        type: "string"
+      - name: "roundNumber"
+        type: "number"
+
+business_logic:
+  purchase_specs:
+    games_per_execution: 5
+    cost_per_game: 1000
+    total_cost: 5000
+    mode: "automatic"
+    currency: "KRW"
+
+error_scenarios:
+  - code: "PURCHASE_PREPARATION_FAILED"
+    desc: "Ready endpoint failed"
+    action: "Throw error and notify"
+
+  - code: "PURCHASE_EXECUTION_FAILED"
+    desc: "Execution endpoint failed"
+    action: "Throw PurchaseError and notify"
+
+  - code: "PURCHASE_INVALID_RESPONSE"
+    desc: "Response format unexpected"
+    action: "Log response and throw error"

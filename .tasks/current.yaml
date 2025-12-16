@@ -1,0 +1,6 @@
+# Current Active Task
+# Only one task should be active at a time
+
+current_task: null
+
+# This file will be populated when a task moves from backlog to active

@@ -1,0 +1,244 @@
+# Task Backlog
+# Tasks are ordered by priority (top = highest priority)
+
+tasks:
+  - id: TASK-001
+    title: "Implement HTTP client with session/cookie management"
+    spec_id: SPEC-SESSION-001
+    priority: 1
+    status: pending
+    description: |
+      Create HTTP client module that handles:
+      - Session initialization
+      - Cookie capture from Set-Cookie headers
+      - Cookie inclusion in subsequent requests
+      - Cookie update during session lifecycle
+    estimated_complexity: medium
+    dependencies: []
+    test_refs:
+      - TEST-SESSION-001
+      - TEST-SESSION-002
+      - TEST-SESSION-003
+    files_to_create:
+      - src/client/http.ts
+      - src/client/http.spec.ts
+      - src/types/http.types.ts
+
+  - id: TASK-002
+    title: "Implement DHLottery authentication"
+    spec_id: SPEC-AUTH-001
+    priority: 2
+    status: pending
+    description: |
+      Create authentication module:
+      - Login with credentials from Secrets
+      - Handle auth errors
+      - Update session cookies post-login
+      - Validate authentication status
+    estimated_complexity: medium
+    dependencies:
+      - TASK-001
+    test_refs:
+      - TEST-AUTH-001
+      - TEST-AUTH-002
+      - TEST-AUTH-003
+      - TEST-AUTH-004
+    files_to_create:
+      - src/dhlottery/auth.ts
+      - src/dhlottery/auth.spec.ts
+      - src/types/auth.types.ts
+
+  - id: TASK-003
+    title: "Implement account info retrieval"
+    spec_id: SPEC-ACCOUNT-001
+    priority: 3
+    status: pending
+    description: |
+      Create account info module:
+      - Fetch account page
+      - Parse deposit balance
+      - Parse current lottery round
+      - Validate parsed data
+    estimated_complexity: medium
+    dependencies:
+      - TASK-002
+    test_refs:
+      - TEST-ACCOUNT-001
+      - TEST-ACCOUNT-002
+      - TEST-ACCOUNT-003
+      - TEST-ACCOUNT-004
+      - TEST-ACCOUNT-005
+    files_to_create:
+      - src/dhlottery/account.ts
+      - src/dhlottery/account.spec.ts
+      - src/types/account.types.ts
+      - src/__fixtures__/account-page.html
+
+  - id: TASK-007
+    title: "Implement Telegram notification service"
+    spec_id: SPEC-TELEGRAM-001
+    priority: 4
+    status: pending
+    description: |
+      Create Telegram notification module:
+      - Send formatted messages to Telegram chat
+      - Support multiple message types (success, warning, error)
+      - Use credentials from Secrets
+      - Handle API failures gracefully
+    estimated_complexity: low
+    dependencies: []
+    test_refs:
+      - TEST-TELEGRAM-001
+      - TEST-TELEGRAM-002
+      - TEST-TELEGRAM-003
+      - TEST-TELEGRAM-004
+      - TEST-TELEGRAM-005
+      - TEST-TELEGRAM-006
+      - TEST-TELEGRAM-007
+    files_to_create:
+      - src/notify/telegram.ts
+      - src/notify/telegram.spec.ts
+      - src/types/notification.types.ts
+
+  - id: TASK-004
+    title: "Implement deposit check and charge initialization"
+    spec_id: SPEC-DEPOSIT-001
+    priority: 5
+    status: pending
+    description: |
+      Create deposit check module:
+      - Check balance against threshold (30,000 KRW)
+      - Initialize charge page if insufficient
+      - Integrate with Telegram notifications
+      - Return proceed/block decision
+    estimated_complexity: low
+    dependencies:
+      - TASK-003
+      - TASK-007
+    test_refs:
+      - TEST-DEPOSIT-001
+      - TEST-DEPOSIT-002
+      - TEST-DEPOSIT-003
+      - TEST-DEPOSIT-004
+      - TEST-DEPOSIT-005
+    files_to_create:
+      - src/dhlottery/charge.ts
+      - src/dhlottery/charge.spec.ts
+
+  - id: TASK-005
+    title: "Implement lottery purchase"
+    spec_id: SPEC-PURCHASE-001
+    priority: 6
+    status: pending
+    description: |
+      Create lottery purchase module:
+      - Call purchase ready endpoint
+      - Execute purchase with 5 games
+      - Parse purchase result
+      - Integrate with Telegram notifications
+    estimated_complexity: high
+    dependencies:
+      - TASK-004
+      - TASK-007
+    test_refs:
+      - TEST-PURCHASE-001
+      - TEST-PURCHASE-002
+      - TEST-PURCHASE-003
+      - TEST-PURCHASE-004
+      - TEST-PURCHASE-005
+    files_to_create:
+      - src/dhlottery/buy.ts
+      - src/dhlottery/buy.spec.ts
+      - src/types/purchase.types.ts
+
+  - id: TASK-006
+    title: "Implement winning number verification"
+    spec_id: SPEC-WINNING-001
+    priority: 7
+    status: pending
+    description: |
+      Create winning check module:
+      - Calculate previous week date range
+      - Fetch winning results page
+      - Parse winning table
+      - Filter for rank 1 wins only
+      - Integrate with Telegram notifications
+    estimated_complexity: medium
+    dependencies:
+      - TASK-007
+    test_refs:
+      - TEST-WINNING-001
+      - TEST-WINNING-002
+      - TEST-WINNING-003
+      - TEST-WINNING-004
+      - TEST-WINNING-005
+      - TEST-WINNING-006
+    files_to_create:
+      - src/dhlottery/check.ts
+      - src/dhlottery/check.spec.ts
+      - src/__fixtures__/winning-results.html
+
+  - id: TASK-008
+    title: "Implement main orchestration and Cloudflare Workers integration"
+    spec_id: null  # No specific spec (integration task)
+    priority: 8
+    status: pending
+    description: |
+      Create main entry point:
+      - Implement cron trigger handler
+      - Orchestrate workflow (session → auth → account → deposit → purchase → winning)
+      - Global error handling
+      - Integrate all modules
+    estimated_complexity: medium
+    dependencies:
+      - TASK-001
+      - TASK-002
+      - TASK-003
+      - TASK-004
+      - TASK-005
+      - TASK-006
+      - TASK-007
+    files_to_create:
+      - src/index.ts
+      - src/index.spec.ts
+
+  - id: TASK-009
+    title: "Set up project configuration"
+    spec_id: null
+    priority: 9
+    status: pending
+    description: |
+      Create project configuration files:
+      - package.json with dependencies
+      - tsconfig.json for TypeScript
+      - wrangler.toml for Cloudflare Workers
+      - vitest.config.ts for testing
+      - README.md with setup instructions
+    estimated_complexity: low
+    dependencies: []
+    files_to_create:
+      - package.json
+      - tsconfig.json
+      - wrangler.toml
+      - vitest.config.ts
+      - README.md
+      - .gitignore
+
+  - id: TASK-010
+    title: "Create constants and shared utilities"
+    spec_id: null
+    priority: 10
+    status: pending
+    description: |
+      Create shared constants and utilities:
+      - Business rule constants (MIN_DEPOSIT_AMOUNT, etc.)
+      - Date utilities for week calculations
+      - Error classes
+      - Type definitions
+    estimated_complexity: low
+    dependencies: []
+    files_to_create:
+      - src/constants.ts
+      - src/utils/date.ts
+      - src/utils/errors.ts
+      - src/types/index.ts
