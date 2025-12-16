@@ -2,32 +2,6 @@
 # Tasks are ordered by priority (top = highest priority)
 
 tasks:
-  - id: TASK-003
-    title: "Implement account info retrieval"
-    spec_id: SPEC-ACCOUNT-001
-    priority: 3
-    status: pending
-    description: |
-      Create account info module:
-      - Fetch account page
-      - Parse deposit balance
-      - Parse current lottery round
-      - Validate parsed data
-    estimated_complexity: medium
-    dependencies:
-      - TASK-002
-    test_refs:
-      - TEST-ACCOUNT-001
-      - TEST-ACCOUNT-002
-      - TEST-ACCOUNT-003
-      - TEST-ACCOUNT-004
-      - TEST-ACCOUNT-005
-    files_to_create:
-      - src/dhlottery/account.ts
-      - src/dhlottery/account.spec.ts
-      - src/types/account.types.ts
-      - src/__fixtures__/account-page.html
-
   - id: TASK-007
     title: "Implement Telegram notification service"
     spec_id: SPEC-TELEGRAM-001

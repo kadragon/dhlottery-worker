@@ -155,8 +155,55 @@ All 4 acceptance tests passed (14 test cases total):
 4. **Response Validation**: Always validate response structure before accessing nested properties
 5. **Error Wrapping**: Catch and wrap unexpected errors in domain-specific error types
 
+## TASK-003: Account Info Retrieval - Completed 2025-12-16
+
+### Overview
+Implemented account information retrieval with HTML parsing to extract deposit balance and current lottery round following TDD RED-GREEN-REFACTOR cycle.
+
+### Files Created
+- `src/types/account.types.ts`: AccountInfo interface (balance, currentRound)
+- `src/dhlottery/account.ts`: Account info implementation with HTML parsing (121 lines)
+- `src/dhlottery/account.spec.ts`: Test suite with 18 test cases
+- `src/__fixtures__/account-page.html`: Sample HTML fixture for testing
+
+### Implementation Details
+**HTML Parsing Strategy:**
+- Regex-based parsing for simple HTML patterns (no full DOM parser needed)
+- Balance pattern: `<dd><strong>N,NNN</strong>원</dd>`
+- Round pattern: `제<strong>NNNN</strong>회`
+- Comma removal before number parsing
+- Comprehensive validation of parsed values
+
+**Key Functions:**
+- `getAccountInfo(client)`: Main function fetching and parsing account data
+- `parseBalance(html)`: Extract and parse deposit balance with comma handling
+- `parseRound(html)`: Extract and parse lottery round number
+- `validateAccountInfo(balance, round)`: Validate parsed data (balance >= 0, round > 0)
+
+**Error Handling:**
+- `ACCOUNT_FETCH_FAILED`: HTTP request failure
+- `ACCOUNT_PARSE_BALANCE_FAILED`: Cannot extract or parse balance
+- `ACCOUNT_PARSE_ROUND_FAILED`: Cannot extract or parse round number
+- `ACCOUNT_INVALID_DATA`: Validation failure (negative balance or invalid round)
+
+### Test Coverage
+All 5 acceptance tests passed (18 test cases total):
+- **TEST-ACCOUNT-001**: Fetch account info page (3 tests)
+- **TEST-ACCOUNT-002**: Parse deposit balance correctly (5 tests)
+- **TEST-ACCOUNT-003**: Parse lottery round (3 tests)
+- **TEST-ACCOUNT-004**: Validate parsed data (4 tests)
+- **TEST-ACCOUNT-005**: Return structured account info (3 tests)
+
+### Learnings
+1. **Regex HTML Parsing**: Sufficient for simple patterns; avoided heavy DOM parser dependency
+2. **Comma Handling**: Korean number format uses commas (e.g., "45,000") - must remove before parseInt
+3. **Fixture-Based Testing**: HTML fixtures enable comprehensive parsing tests without live API calls
+4. **Validation Separation**: Separate parsing from validation for clearer error messages
+5. **Type Safety**: AccountInfo interface ensures type-safe data usage throughout application
+6. **Test Organization**: Group tests by acceptance criteria for clear traceability to specs
+
 ### Next Steps
-- Begin TASK-003: Account info retrieval module
-- Parse HTML pages to extract balance and lottery round
+- Begin TASK-007: Telegram notification service
+- Or TASK-004: Deposit check and charge initialization
 - Continue TDD cycle
-- Reuse HTTP client and authentication
+- Integrate all modules in main orchestration

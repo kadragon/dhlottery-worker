@@ -27,3 +27,18 @@ completed_tasks:
       - URLSearchParams for form encoding with proper URL encoding
       - Credentials from Cloudflare Workers Secrets (env.USER_ID, env.PASSWORD)
       - Ready for use in account info retrieval (TASK-003)
+
+  - id: TASK-003
+    title: "Implement account info retrieval"
+    spec_id: SPEC-ACCOUNT-001
+    completed_at: "2025-12-16 15:36:00+09:00"
+    outcome: "success"
+    notes: |
+      Successfully implemented account info retrieval with HTML parsing.
+      - Created 4 files: account.types.ts, account.ts, account.spec.ts, account-page.html (fixture)
+      - All 18 tests passed (TEST-ACCOUNT-001 through TEST-ACCOUNT-005)
+      - Regex-based HTML parsing for balance and lottery round extraction
+      - Proper comma handling in Korean number format
+      - Comprehensive validation (balance >= 0, round > 0)
+      - Fixture-based testing approach
+      - Ready for use in deposit check and lottery purchase (TASK-004, TASK-005)
