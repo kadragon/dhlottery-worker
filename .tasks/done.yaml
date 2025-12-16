@@ -58,3 +58,22 @@ completed_tasks:
       - Graceful error handling - logs errors but never throws (non-fatal design)
       - Optional details formatting for structured debugging information
       - Ready for integration in all user-facing modules (TASK-004, TASK-005, TASK-006)
+
+  - id: TASK-004
+    title: "Implement deposit check and charge initialization"
+    spec_id: SPEC-DEPOSIT-001
+    completed_at: "2025-12-16 20:24:00+09:00"
+    outcome: "success"
+    notes: |
+      Successfully implemented deposit check and charge initialization with Chrome MCP pre-verification.
+      - Created 4 files: constants.ts, deposit.types.ts, charge.ts, charge.spec.ts, .dev.vars
+      - All 14 tests passed (TEST-DEPOSIT-001 through TEST-DEPOSIT-005)
+      - Chrome MCP verification revealed actual endpoint differs from spec
+      - Actual system uses K-Bank virtual account (/kbank.do?method=kbankProcess) instead of NicePay
+      - Charge amount: 50,000 KRW (user specified)
+      - Balance check against MIN_DEPOSIT_AMOUNT (30,000 KRW) from constants
+      - Integration with TASK-003 (getAccountInfo) and TASK-007 (sendNotification)
+      - Fail-safe design: returns false (block purchase) on errors
+      - Korean number formatting (N,NNN원) for user-facing messages
+      - GET-only charge initialization (idempotent, no payment execution)
+      - Ready for use in lottery purchase pre-check (TASK-005)

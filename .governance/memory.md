@@ -261,7 +261,90 @@ All 7 acceptance tests passed (17 test cases total):
 - Used by TASK-006 (winning verification) for win notifications
 - Core dependency for all user-facing notifications
 
+## TASK-004: Deposit Check and Charge Initialization - Completed 2025-12-16
+
+### Overview
+Implemented deposit balance check and charge page initialization with Chrome MCP verification to discover actual endpoint following TDD RED-GREEN-REFACTOR cycle.
+
+### Files Created
+- `src/constants.ts`: Business rule constants (MIN_DEPOSIT_AMOUNT = 30,000 KRW)
+- `src/types/deposit.types.ts`: Deposit type definitions (DepositEnv, CHARGE_AMOUNT)
+- `src/dhlottery/charge.ts`: Deposit check implementation (91 lines)
+- `src/dhlottery/charge.spec.ts`: Test suite with 14 test cases
+- `.dev.vars`: Local development environment variables (gitignored)
+
+### Chrome MCP Verification - Critical Discovery
+**Pre-Implementation Verification Process:**
+1. Used Chrome DevTools Protocol (MCP) to verify actual charge flow
+2. Logged into DHLottery with test credentials
+3. Navigated through actual charge initialization flow
+4. Discovered **actual endpoint differs from specification**
+
+**Spec vs Reality:**
+- **Spec mentioned**: `/nicePay.do?method=nicePayInit` (NicePay payment gateway)
+- **Actual endpoint**: `/kbank.do?method=kbankProcess` (K-Bank virtual account)
+- **Charge amount**: 50,000 KRW (user specified, not in original spec)
+- **Virtual account**: Fixed virtual account system with bank transfer
+- **Order flow**: GET request to initialize, no POST payment execution
+
+### Implementation Details
+**Balance Check Logic:**
+- Fetch account info using `getAccountInfo()` from TASK-003
+- Compare balance against `MIN_DEPOSIT_AMOUNT` (30,000 KRW)
+- Return `true` if sufficient (>= 30,000), `false` if insufficient
+
+**Charge Initialization:**
+- URL: `https://www.dhlottery.co.kr/kbank.do?method=kbankProcess`
+- Parameters: PayMethod=VBANK, GoodsAmt=50000 (50,000 KRW)
+- GET request only (no payment execution)
+- Idempotent operation - can be called multiple times
+
+**Notification Integration:**
+- **Warning notification** when balance insufficient (type: 'warning')
+- **Error notification** when charge initialization fails (type: 'error')
+- Includes formatted balance details in Korean number format (N,NNN원)
+- Non-fatal - notifications never block execution
+
+**Key Functions:**
+- `checkDeposit(client, env)`: Main entry point returning boolean (proceed/block)
+- `initializeChargePage(client)`: Access charge page via GET request
+- `formatCurrency(amount)`: Format numbers with Korean thousands separator
+
+### Test Coverage
+All 5 acceptance tests passed (14 test cases total):
+- **TEST-DEPOSIT-001**: Allow purchase when balance sufficient (2 tests)
+- **TEST-DEPOSIT-002**: Block purchase when balance insufficient (2 tests)
+- **TEST-DEPOSIT-003**: Initialize charge page correctly (3 tests)
+- **TEST-DEPOSIT-004**: Notify user when balance low (3 tests)
+- **TEST-DEPOSIT-005**: Use correct minimum threshold (3 tests)
+- **Error handling**: Account fetch failures (1 test)
+
+### Learnings
+1. **Chrome MCP Verification**: Real-world verification prevented incorrect implementation based on outdated spec
+2. **Spec Drift**: Website implementations change over time - specs may become outdated
+3. **Pre-Implementation Verification**: Testing actual flows before coding saves refactor time
+4. **K-Bank Virtual Account**: DHLottery uses fixed virtual account system (not payment gateway)
+5. **GET-Only Initialization**: Charge initialization is idempotent GET request, not POST payment
+6. **User Input Integration**: Charge amount (50,000 KRW) came from user requirement during verification
+7. **Currency Formatting**: Korean number format with thousands separator for user-facing messages
+8. **Fail-Safe Design**: Returns false (block purchase) on any errors - prevents accidental purchases
+9. **Module Integration**: Successfully integrated with TASK-003 (account) and TASK-007 (telegram)
+10. **Environment Variables**: Used .dev.vars for local development credentials (properly gitignored)
+
+### Integration Points
+- Depends on TASK-003 (getAccountInfo) for balance retrieval ✓
+- Depends on TASK-007 (sendNotification) for user alerts ✓
+- Required by TASK-005 (lottery purchase) as pre-check
+- Uses constants.ts for MIN_DEPOSIT_AMOUNT threshold
+
+### Chrome MCP Workflow Benefits
+- Discovered actual endpoint before writing code
+- Verified charge amount (50,000 KRW) through real UI
+- Identified virtual account system (not payment gateway)
+- Prevented wasted implementation effort on wrong endpoint
+- **Lesson**: Always verify external integrations with actual system before coding
+
 ### Next Steps
-- Begin TASK-004: Deposit check and charge initialization (depends on TASK-007 ✓)
-- Continue TDD cycle
+- Begin TASK-005: Lottery purchase implementation (depends on TASK-004 ✓)
+- Continue TDD cycle with Chrome MCP verification for purchase flow
 - Integrate all modules in main orchestration

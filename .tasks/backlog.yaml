@@ -2,31 +2,6 @@
 # Tasks are ordered by priority (top = highest priority)
 
 tasks:
-  - id: TASK-004
-    title: "Implement deposit check and charge initialization"
-    spec_id: SPEC-DEPOSIT-001
-    priority: 5
-    status: pending
-    description: |
-      Create deposit check module:
-      - Check balance against threshold (30,000 KRW)
-      - Initialize charge page if insufficient
-      - Integrate with Telegram notifications
-      - Return proceed/block decision
-    estimated_complexity: low
-    dependencies:
-      - TASK-003
-      - TASK-007
-    test_refs:
-      - TEST-DEPOSIT-001
-      - TEST-DEPOSIT-002
-      - TEST-DEPOSIT-003
-      - TEST-DEPOSIT-004
-      - TEST-DEPOSIT-005
-    files_to_create:
-      - src/dhlottery/charge.ts
-      - src/dhlottery/charge.spec.ts
-
   - id: TASK-005
     title: "Implement lottery purchase"
     spec_id: SPEC-PURCHASE-001
