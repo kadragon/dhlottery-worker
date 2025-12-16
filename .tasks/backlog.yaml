@@ -2,32 +2,6 @@
 # Tasks are ordered by priority (top = highest priority)
 
 tasks:
-  - id: TASK-007
-    title: "Implement Telegram notification service"
-    spec_id: SPEC-TELEGRAM-001
-    priority: 4
-    status: pending
-    description: |
-      Create Telegram notification module:
-      - Send formatted messages to Telegram chat
-      - Support multiple message types (success, warning, error)
-      - Use credentials from Secrets
-      - Handle API failures gracefully
-    estimated_complexity: low
-    dependencies: []
-    test_refs:
-      - TEST-TELEGRAM-001
-      - TEST-TELEGRAM-002
-      - TEST-TELEGRAM-003
-      - TEST-TELEGRAM-004
-      - TEST-TELEGRAM-005
-      - TEST-TELEGRAM-006
-      - TEST-TELEGRAM-007
-    files_to_create:
-      - src/notify/telegram.ts
-      - src/notify/telegram.spec.ts
-      - src/types/notification.types.ts
-
   - id: TASK-004
     title: "Implement deposit check and charge initialization"
     spec_id: SPEC-DEPOSIT-001

@@ -42,3 +42,19 @@ completed_tasks:
       - Comprehensive validation (balance >= 0, round > 0)
       - Fixture-based testing approach
       - Ready for use in deposit check and lottery purchase (TASK-004, TASK-005)
+
+  - id: TASK-007
+    title: "Implement Telegram notification service"
+    spec_id: SPEC-TELEGRAM-001
+    completed_at: "2025-12-16 20:07:00+09:00"
+    outcome: "success"
+    notes: |
+      Successfully implemented Telegram notification service with multiple message types and graceful error handling.
+      - Created 3 files: notification.types.ts, telegram.ts, telegram.spec.ts
+      - All 17 tests passed (TEST-TELEGRAM-001 through TEST-TELEGRAM-007)
+      - Telegram Bot API integration with Markdown formatting
+      - Emoji indicators for different notification types (✅ success, ⚠️ warning, ❌ error)
+      - Credentials from Cloudflare Workers Secrets (env.TELEGRAM_BOT_TOKEN, env.TELEGRAM_CHAT_ID)
+      - Graceful error handling - logs errors but never throws (non-fatal design)
+      - Optional details formatting for structured debugging information
+      - Ready for integration in all user-facing modules (TASK-004, TASK-005, TASK-006)

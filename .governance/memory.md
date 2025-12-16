@@ -202,8 +202,66 @@ All 5 acceptance tests passed (18 test cases total):
 5. **Type Safety**: AccountInfo interface ensures type-safe data usage throughout application
 6. **Test Organization**: Group tests by acceptance criteria for clear traceability to specs
 
+## TASK-007: Telegram Notification Service - Completed 2025-12-16
+
+### Overview
+Implemented Telegram notification service with support for multiple message types (success, warning, error) and graceful error handling following TDD RED-GREEN-REFACTOR cycle.
+
+### Files Created
+- `src/types/notification.types.ts`: Notification type definitions (NotificationType, NotificationPayload, TelegramEnv, TelegramMessage)
+- `src/notify/telegram.ts`: Telegram notification implementation (79 lines)
+- `src/notify/telegram.spec.ts`: Test suite with 17 test cases
+
+### Implementation Details
+**Telegram Bot API Integration:**
+- Sends messages to `https://api.telegram.org/bot{token}/sendMessage`
+- Uses Markdown parse mode for formatted messages
+- Credentials from `env.TELEGRAM_BOT_TOKEN` and `env.TELEGRAM_CHAT_ID` (Cloudflare Workers Secrets)
+- Emoji indicators for different notification types (✅ success, ⚠️ warning, ❌ error)
+- Graceful error handling - logs errors but never throws
+
+**Message Formatting:**
+- Title with emoji prefix based on notification type
+- Main message body
+- Optional details object formatted as key-value pairs with indentation
+- Markdown formatting for readability
+
+**Key Functions:**
+- `sendTelegramNotification(env, payload)`: Main notification function with complete error handling
+- `formatMessage(payload)`: Format payload into Telegram Markdown message
+- `formatDetails(details)`: Format optional details object with proper indentation
+
+**Error Handling:**
+- Network errors: Caught and logged, never thrown
+- API errors (4xx/5xx): Response parsed and logged with status details
+- All failures are non-fatal - service continues execution
+
+### Test Coverage
+All 7 acceptance tests passed (17 test cases total):
+- **TEST-TELEGRAM-001**: Send formatted messages to Telegram chat (3 tests)
+- **TEST-TELEGRAM-002**: Support multiple message types with emoji indicators (3 tests)
+- **TEST-TELEGRAM-003**: Format message with title, message, and optional details (3 tests)
+- **TEST-TELEGRAM-004**: Use credentials from Secrets (2 tests)
+- **TEST-TELEGRAM-005**: Call correct Telegram API endpoint (2 tests)
+- **TEST-TELEGRAM-006**: Include parse_mode=Markdown in request (1 test)
+- **TEST-TELEGRAM-007**: Handle API failures gracefully without throwing (3 tests)
+
+### Learnings
+1. **Graceful Error Handling**: Notification failures should never block main workflow - log and continue
+2. **Markdown Formatting**: Telegram supports Markdown for rich text formatting in messages
+3. **Emoji Indicators**: Visual indicators improve message scanning in chat history
+4. **Optional Details**: Structured details formatting provides flexible debugging information
+5. **Secrets Management**: Bot token and chat ID sourced from environment, never hardcoded
+6. **Non-Fatal Design**: Notification service is auxiliary - failures must not crash main workflow
+7. **Testing Error Scenarios**: Mock fetch rejections and error responses to verify graceful handling
+
+### Integration Points
+- Used by TASK-004 (deposit check) for balance warnings
+- Used by TASK-005 (lottery purchase) for purchase confirmations
+- Used by TASK-006 (winning verification) for win notifications
+- Core dependency for all user-facing notifications
+
 ### Next Steps
-- Begin TASK-007: Telegram notification service
-- Or TASK-004: Deposit check and charge initialization
+- Begin TASK-004: Deposit check and charge initialization (depends on TASK-007 ✓)
 - Continue TDD cycle
 - Integrate all modules in main orchestration

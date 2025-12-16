@@ -2,5 +2,3 @@
 # Only one task should be active at a time
 
 current_task: null
-
-# Task will be populated when moved from backlog
