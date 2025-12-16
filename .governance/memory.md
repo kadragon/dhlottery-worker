@@ -112,7 +112,51 @@ All 3 acceptance tests passed (11 test cases total):
 4. **Stateless Design**: No persistent storage, cookies live only during execution
 5. **Testing Pattern**: Mock global fetch with vi.fn() for isolated testing
 
+## TASK-002: DHLottery Authentication - Completed 2025-12-16
+
+### Overview
+Implemented DHLottery authentication module with credential management from Cloudflare Workers Secrets following TDD RED-GREEN-REFACTOR cycle.
+
+### Files Created
+- `src/types/auth.types.ts`: Authentication type definitions
+- `src/utils/errors.ts`: Custom error classes (DHLotteryError, AuthenticationError, NetworkError)
+- `src/dhlottery/auth.ts`: Authentication implementation (95 lines)
+- `src/dhlottery/auth.spec.ts`: Test suite with 14 test cases
+
+### Implementation Details
+**Authentication Flow:**
+- Reads credentials from `env.USER_ID` and `env.PASSWORD` (Cloudflare Workers Secrets)
+- Sends POST request to `https://www.dhlottery.co.kr/userSsl.do?method=login`
+- Uses `application/x-www-form-urlencoded` content type with URLSearchParams
+- Validates response JSON structure and `resultCode` field
+- Throws `AuthenticationError` with specific error codes for different failures
+- Session cookies automatically managed by HTTP client
+
+**Error Handling:**
+- `AUTH_HTTP_ERROR`: Non-200 HTTP status
+- `AUTH_UNEXPECTED_RESPONSE`: Invalid JSON or missing fields
+- `AUTH_INVALID_CREDENTIALS`: resultCode !== "SUCCESS"
+- `AUTH_NETWORK_ERROR`: Network or other errors
+
+**Key Functions:**
+- `login(client, env)`: Main authentication function using HTTP client and environment secrets
+
+### Test Coverage
+All 4 acceptance tests passed (14 test cases total):
+- **TEST-AUTH-001**: Authenticate with valid credentials (3 tests)
+- **TEST-AUTH-002**: Reject invalid credentials (4 tests)
+- **TEST-AUTH-003**: Use credentials from Secrets (3 tests)
+- **TEST-AUTH-004**: Send proper login request format (4 tests)
+
+### Learnings
+1. **URLSearchParams Encoding**: Uses `+` for spaces (not `%20`) - standard for form encoding
+2. **Error Classification**: Multiple error codes help distinguish failure types
+3. **Secrets Management**: Credentials passed via env parameter, never hardcoded
+4. **Response Validation**: Always validate response structure before accessing nested properties
+5. **Error Wrapping**: Catch and wrap unexpected errors in domain-specific error types
+
 ### Next Steps
-- Begin TASK-002: DHLottery authentication module
-- Follow same TDD cycle
-- Reuse HTTP client for authenticated requests
+- Begin TASK-003: Account info retrieval module
+- Parse HTML pages to extract balance and lottery round
+- Continue TDD cycle
+- Reuse HTTP client and authentication

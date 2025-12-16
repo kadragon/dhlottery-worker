@@ -2,30 +2,6 @@
 # Tasks are ordered by priority (top = highest priority)
 
 tasks:
-  - id: TASK-002
-    title: "Implement DHLottery authentication"
-    spec_id: SPEC-AUTH-001
-    priority: 2
-    status: pending
-    description: |
-      Create authentication module:
-      - Login with credentials from Secrets
-      - Handle auth errors
-      - Update session cookies post-login
-      - Validate authentication status
-    estimated_complexity: medium
-    dependencies:
-      - TASK-001
-    test_refs:
-      - TEST-AUTH-001
-      - TEST-AUTH-002
-      - TEST-AUTH-003
-      - TEST-AUTH-004
-    files_to_create:
-      - src/dhlottery/auth.ts
-      - src/dhlottery/auth.spec.ts
-      - src/types/auth.types.ts
-
   - id: TASK-003
     title: "Implement account info retrieval"
     spec_id: SPEC-ACCOUNT-001
