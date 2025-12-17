@@ -116,3 +116,18 @@ completed_tasks:
       - Filters jackpot wins only (rank === 1) and sends Telegram success notification per win
       - Non-fatal behavior: fetch/parsing errors return empty results and do not throw
       - Ready for integration in main orchestration (TASK-008)
+
+  - id: TASK-008
+    title: "Implement main orchestration and Cloudflare Workers integration"
+    spec_id: SPEC-ORCH-001
+    completed_at: "2025-12-17 10:16:09+09:00"
+    outcome: "success"
+    notes: |
+      Implemented scheduled-only Cloudflare Workers entrypoint and workflow orchestration.
+      - Created spec: .spec/main-orchestration/spec.yaml (SPEC-ORCH-001)
+      - Created entrypoint: src/index.ts (scheduled handler + runWorkflow)
+      - Created tests: src/index.spec.ts (TEST-ORCH-001..003)
+      - Updated package.json test script to use `vitest run` (avoid watch-mode hangs in CI/non-interactive runs)
+      - Orchestrates: login → checkDeposit → (purchase if allowed) → checkWinning
+      - Non-throwing orchestration to reduce risk of unintended retries repurchasing tickets
+      - Sends Telegram error notification on fatal orchestration failures

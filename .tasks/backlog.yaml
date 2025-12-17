@@ -2,30 +2,6 @@
 # Tasks are ordered by priority (top = highest priority)
 
 tasks:
-  - id: TASK-008
-    title: "Implement main orchestration and Cloudflare Workers integration"
-    spec_id: null  # No specific spec (integration task)
-    priority: 8
-    status: pending
-    description: |
-      Create main entry point:
-      - Implement cron trigger handler
-      - Orchestrate workflow (session → auth → account → deposit → purchase → winning)
-      - Global error handling
-      - Integrate all modules
-    estimated_complexity: medium
-    dependencies:
-      - TASK-001
-      - TASK-002
-      - TASK-003
-      - TASK-004
-      - TASK-005
-      - TASK-006
-      - TASK-007
-    files_to_create:
-      - src/index.ts
-      - src/index.spec.ts
-
   - id: TASK-010
     title: "Create constants and shared utilities"
     spec_id: null

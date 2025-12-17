@@ -8,6 +8,7 @@
 
 ### Code Layout
 - `src/client/http.ts`: HttpClient with automatic cookie capture/attach.
+- `src/index.ts`: Scheduled-only entrypoint orchestrating the end-to-end workflow.
 - `src/dhlottery/auth.ts`: Login using Secrets (`USER_ID`, `PASSWORD`).
 - `src/dhlottery/account.ts`: Parse balance + current round from account HTML.
 - `src/dhlottery/charge.ts`: If balance < 30,000 KRW, init deposit page and warn (non-fatal).
@@ -42,6 +43,7 @@
 - TASK-004 (SPEC-DEPOSIT-001): Deposit threshold + K-Bank deposit init + notifications + tests.
 - TASK-005 (SPEC-PURCHASE-001): Two-phase purchase + notifications + tests.
 - TASK-006 (SPEC-WINNING-001): Previous-week range in KST, parse win list HTML, notify rank==1 only + tests.
+- TASK-008 (SPEC-ORCH-001): Scheduled-only Worker entrypoint + orchestration + tests.
 
 ## Next
-- TASK-008: Implement `src/index.ts` cron/orchestration integrating all modules with global error handling.
+- TASK-010: Shared utilities cleanup (consider: date utilities consolidation; add `src/types/index.ts` barrel if needed).

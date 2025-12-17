@@ -1,0 +1,63 @@
+spec_id: SPEC-ORCH-001
+title: "Main Orchestration (Cloudflare Workers scheduled)"
+version: "1.0.0"
+status: "draft"
+
+description: |
+  Provide the Cloudflare Workers entrypoint and orchestrate the end-to-end workflow:
+  session → login → deposit check → (optional) purchase → winning check → notifications.
+
+given_when_then:
+  - given: "A scheduled trigger fires in Cloudflare Workers"
+    when: "The worker scheduled handler runs"
+    then: "The workflow executes once with proper sequencing"
+
+  - given: "Deposit is below MIN_DEPOSIT_AMOUNT"
+    when: "Deposit check runs"
+    then: "Purchase is skipped and a warning is sent via Telegram"
+
+  - given: "A fatal error occurs before the workflow completes"
+    when: "The orchestration catches the error"
+    then: "An error notification is sent via Telegram and execution stops"
+
+acceptance_tests:
+  - id: TEST-ORCH-001
+    desc: "Should run the workflow in scheduled handler"
+    criteria:
+      - "Exports Cloudflare Workers default export with scheduled()"
+      - "scheduled() triggers orchestration execution (ctx.waitUntil)"
+      - "Workflow calls login → checkDeposit → purchaseLottery (if allowed) → checkWinning"
+
+  - id: TEST-ORCH-002
+    desc: "Should skip purchase when deposit is insufficient"
+    criteria:
+      - "checkDeposit returning false prevents purchaseLottery call"
+      - "checkWinning still runs after successful login"
+
+  - id: TEST-ORCH-003
+    desc: "Should notify on fatal orchestration errors"
+    criteria:
+      - "When login throws, sendNotification is called with type 'error'"
+      - "purchaseLottery is not called after a fatal precondition failure"
+
+dependencies:
+  governance: "workflow-orchestration-pattern, error-handling-pattern, security-patterns"
+  specs:
+    - SPEC-SESSION-001
+    - SPEC-AUTH-001
+    - SPEC-DEPOSIT-001
+    - SPEC-PURCHASE-001
+    - SPEC-WINNING-001
+    - SPEC-TELEGRAM-001
+  external_services:
+    - "DHLottery website"
+    - "Telegram Bot API"
+
+linked_tasks:
+  - TASK-008
+
+implementation_notes:
+  - "Entry point is scheduled-only (no fetch handler)."
+  - "Orchestration must not throw from scheduled handler to avoid unintended retries that could repurchase."
+  - "Use createHttpClient() for authenticated session and pass it to modules."
+  - "Derive PurchaseEnv from AuthEnv + TelegramEnv for purchaseLottery compatibility."
