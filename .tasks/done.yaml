@@ -100,3 +100,19 @@ completed_tasks:
       - Atomic transaction: all 5 games or nothing (no partial purchases)
       - Graceful error handling with PurchaseSuccess/PurchaseFailure discriminated union
       - Ready for integration in main orchestration (TASK-008)
+
+  - id: TASK-006
+    title: "Implement winning number verification"
+    spec_id: SPEC-WINNING-001
+    completed_at: "2025-12-17 09:50:00+09:00"
+    outcome: "success"
+    notes: |
+      Implemented weekly winning check module following TDD.
+      - Created 4 files: check.ts, check.spec.ts, winning.types.ts, winning-results.html (fixture)
+      - All 10 tests passed (TEST-WINNING-001 through TEST-WINNING-006)
+      - Calculates previous week range in KST (Mon 00:00 ~ Sun 23:59:59.999)
+      - Fetches purchase/win history page with date range params (searchStartDate/searchEndDate)
+      - Parses HTML table rows via regex/TD extraction (roundNumber via detailPop issueNo)
+      - Filters jackpot wins only (rank === 1) and sends Telegram success notification per win
+      - Non-fatal behavior: fetch/parsing errors return empty results and do not throw
+      - Ready for integration in main orchestration (TASK-008)

@@ -2,59 +2,6 @@
 # Tasks are ordered by priority (top = highest priority)
 
 tasks:
-  - id: TASK-005
-    title: "Implement lottery purchase"
-    spec_id: SPEC-PURCHASE-001
-    priority: 6
-    status: pending
-    description: |
-      Create lottery purchase module:
-      - Call purchase ready endpoint
-      - Execute purchase with 5 games
-      - Parse purchase result
-      - Integrate with Telegram notifications
-    estimated_complexity: high
-    dependencies:
-      - TASK-004
-      - TASK-007
-    test_refs:
-      - TEST-PURCHASE-001
-      - TEST-PURCHASE-002
-      - TEST-PURCHASE-003
-      - TEST-PURCHASE-004
-      - TEST-PURCHASE-005
-    files_to_create:
-      - src/dhlottery/buy.ts
-      - src/dhlottery/buy.spec.ts
-      - src/types/purchase.types.ts
-
-  - id: TASK-006
-    title: "Implement winning number verification"
-    spec_id: SPEC-WINNING-001
-    priority: 7
-    status: pending
-    description: |
-      Create winning check module:
-      - Calculate previous week date range
-      - Fetch winning results page
-      - Parse winning table
-      - Filter for rank 1 wins only
-      - Integrate with Telegram notifications
-    estimated_complexity: medium
-    dependencies:
-      - TASK-007
-    test_refs:
-      - TEST-WINNING-001
-      - TEST-WINNING-002
-      - TEST-WINNING-003
-      - TEST-WINNING-004
-      - TEST-WINNING-005
-      - TEST-WINNING-006
-    files_to_create:
-      - src/dhlottery/check.ts
-      - src/dhlottery/check.spec.ts
-      - src/__fixtures__/winning-results.html
-
   - id: TASK-008
     title: "Implement main orchestration and Cloudflare Workers integration"
     spec_id: null  # No specific spec (integration task)
@@ -79,28 +26,6 @@ tasks:
       - src/index.ts
       - src/index.spec.ts
 
-  - id: TASK-009
-    title: "Set up project configuration"
-    spec_id: null
-    priority: 9
-    status: pending
-    description: |
-      Create project configuration files:
-      - package.json with dependencies
-      - tsconfig.json for TypeScript
-      - wrangler.toml for Cloudflare Workers
-      - vitest.config.ts for testing
-      - README.md with setup instructions
-    estimated_complexity: low
-    dependencies: []
-    files_to_create:
-      - package.json
-      - tsconfig.json
-      - wrangler.toml
-      - vitest.config.ts
-      - README.md
-      - .gitignore
-
   - id: TASK-010
     title: "Create constants and shared utilities"
     spec_id: null
@@ -110,12 +35,10 @@ tasks:
       Create shared constants and utilities:
       - Business rule constants (MIN_DEPOSIT_AMOUNT, etc.)
       - Date utilities for week calculations
-      - Error classes
+      - Error classes (already exists: src/utils/errors.ts)
       - Type definitions
     estimated_complexity: low
     dependencies: []
     files_to_create:
-      - src/constants.ts
       - src/utils/date.ts
-      - src/utils/errors.ts
       - src/types/index.ts
