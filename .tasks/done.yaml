@@ -131,3 +131,21 @@ completed_tasks:
       - Orchestrates: login → checkDeposit → (purchase if allowed) → checkWinning
       - Non-throwing orchestration to reduce risk of unintended retries repurchasing tickets
       - Sends Telegram error notification on fatal orchestration failures
+
+  - id: TASK-010
+    title: "Create constants and shared utilities"
+    spec_id: SPEC-UTILS-001
+    completed_at: "2025-12-17 10:58:06+09:00"
+    outcome: "success"
+    test_refs:
+      - TEST-UTILS-001
+      - TEST-UTILS-002
+      - TEST-UTILS-003
+    notes: |
+      Centralized shared business constants and KST date utilities.
+      - Added spec: .spec/shared-utilities/spec.yaml (SPEC-UTILS-001)
+      - Added KST week-range utility: src/utils/date.ts (+ tests)
+      - Expanded shared constants: src/constants.ts (CHARGE_AMOUNT, purchase cost constants)
+      - Added types barrel: src/types/index.ts (+ compile-time test)
+      - Refactored: src/dhlottery/check.ts (delegate date math), src/dhlottery/charge.ts (use CHARGE_AMOUNT), src/types/*.ts (reuse constants)
+      - All tests pass (108)

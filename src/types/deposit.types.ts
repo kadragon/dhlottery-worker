@@ -3,8 +3,10 @@
  *
  * Trace:
  *   spec_id: SPEC-DEPOSIT-001
- *   task_id: TASK-004
+ *   task_id: TASK-004, TASK-010
  */
+
+import { CHARGE_AMOUNT } from '../constants';
 
 /**
  * Environment variables required for deposit check
@@ -14,7 +16,4 @@ export interface DepositEnv {
   TELEGRAM_CHAT_ID: string;
 }
 
-/**
- * Charge amount in KRW
- */
-export const CHARGE_AMOUNT = 50000;
+export { CHARGE_AMOUNT };

@@ -22,12 +22,7 @@
   "simple-git-hooks": {
     "pre-commit": "npm run check:fix && npm run typecheck"
   },
-  "keywords": [
-    "cloudflare-workers",
-    "lottery",
-    "automation",
-    "telegram-bot"
-  ],
+  "keywords": ["cloudflare-workers", "lottery", "automation", "telegram-bot"],
   "author": "",
   "license": "MIT",
   "devDependencies": {

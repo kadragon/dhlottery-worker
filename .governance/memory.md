@@ -44,6 +44,7 @@
 - TASK-005 (SPEC-PURCHASE-001): Two-phase purchase + notifications + tests.
 - TASK-006 (SPEC-WINNING-001): Previous-week range in KST, parse win list HTML, notify rank==1 only + tests.
 - TASK-008 (SPEC-ORCH-001): Scheduled-only Worker entrypoint + orchestration + tests.
+- TASK-010 (SPEC-UTILS-001): Shared constants + KST date utilities + types barrel + tests.
 
 ## Next
-- TASK-010: Shared utilities cleanup (consider: date utilities consolidation; add `src/types/index.ts` barrel if needed).
+- (none queued) Consider adding a backlog task to standardize imports via `src/types/index.ts` and reduce console noise in tests.

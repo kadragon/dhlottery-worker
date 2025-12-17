@@ -3,8 +3,10 @@
  *
  * Trace:
  *   spec_id: SPEC-PURCHASE-001
- *   task_id: TASK-005
+ *   task_id: TASK-005, TASK-010
  */
+
+import { COST_PER_GAME, GAMES_PER_PURCHASE, TOTAL_PURCHASE_COST } from '../constants';
 
 /**
  * Environment variables for lottery purchase
@@ -76,9 +78,9 @@ export type PurchaseOutcome = PurchaseSuccess | PurchaseFailure;
  * Business constants for lottery purchase
  */
 export const PURCHASE_CONSTANTS = {
-  GAME_COUNT: 5,
-  COST_PER_GAME: 1000,
-  TOTAL_COST: 5000,
+  GAME_COUNT: GAMES_PER_PURCHASE,
+  COST_PER_GAME,
+  TOTAL_COST: TOTAL_PURCHASE_COST,
   MODE: 'auto',
   SUCCESS_CODE: '100',
 } as const;

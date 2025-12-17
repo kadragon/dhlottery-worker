@@ -1,20 +1,4 @@
 # Task Backlog
 # Tasks are ordered by priority (top = highest priority)
 
-tasks:
-  - id: TASK-010
-    title: "Create constants and shared utilities"
-    spec_id: null
-    priority: 10
-    status: pending
-    description: |
-      Create shared constants and utilities:
-      - Business rule constants (MIN_DEPOSIT_AMOUNT, etc.)
-      - Date utilities for week calculations
-      - Error classes (already exists: src/utils/errors.ts)
-      - Type definitions
-    estimated_complexity: low
-    dependencies: []
-    files_to_create:
-      - src/utils/date.ts
-      - src/types/index.ts
+tasks: []

@@ -3,10 +3,10 @@
  *
  * Trace:
  *   spec_id: SPEC-DEPOSIT-001
- *   task_id: TASK-004
+ *   task_id: TASK-004, TASK-010
  */
 
-import { MIN_DEPOSIT_AMOUNT } from '../constants';
+import { CHARGE_AMOUNT, MIN_DEPOSIT_AMOUNT } from '../constants';
 import { sendNotification } from '../notify/telegram';
 import type { DepositEnv } from '../types/deposit.types';
 import type { HttpClient } from '../types/http.types';
@@ -17,8 +17,7 @@ import { getAccountInfo } from './account';
  * Discovered via Chrome MCP verification on 2025-12-16
  * Amount: 50,000 KRW
  */
-const CHARGE_INIT_URL =
-  'https://www.dhlottery.co.kr/kbank.do?method=kbankProcess&PayMethod=VBANK&VBankAccountName=%EB%8F%99%ED%96%89%EB%B3%B5%EA%B6%8C&LicenseKey=&VBankExpDate=&GoodsAmt=50000';
+const CHARGE_INIT_URL = `https://www.dhlottery.co.kr/kbank.do?method=kbankProcess&PayMethod=VBANK&VBankAccountName=%EB%8F%99%ED%96%89%EB%B3%B5%EA%B6%8C&LicenseKey=&VBankExpDate=&GoodsAmt=${CHARGE_AMOUNT}`;
 
 /**
  * Format number with thousands separator
@@ -100,7 +99,7 @@ export async function checkDeposit(client: HttpClient, env: DepositEnv): Promise
       details: {
         currentBalance: formatCurrency(accountInfo.balance),
         minimumRequired: formatCurrency(MIN_DEPOSIT_AMOUNT),
-        chargeAmount: formatCurrency(50000),
+        chargeAmount: formatCurrency(CHARGE_AMOUNT),
       },
     },
     env
