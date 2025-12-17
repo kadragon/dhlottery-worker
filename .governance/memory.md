@@ -344,7 +344,144 @@ All 5 acceptance tests passed (14 test cases total):
 - Prevented wasted implementation effort on wrong endpoint
 - **Lesson**: Always verify external integrations with actual system before coding
 
+## TASK-005: Lottery Purchase Implementation - Completed 2025-12-16
+
+### Overview
+Implemented lottery purchase module with automatic number generation for 5 games following TDD RED-GREEN-REFACTOR cycle, with Chrome MCP verification for actual API endpoints.
+
+### Files Created
+- `src/types/purchase.types.ts`: Purchase type definitions (85 lines)
+- `src/dhlottery/buy.ts`: Purchase implementation (177 lines)
+- `src/dhlottery/buy.spec.ts`: Test suite with 18 test cases (776 lines)
+
+### Chrome MCP Verification - API Discovery
+**Pre-Implementation Discovery Process:**
+1. Used Chrome DevTools Protocol to observe actual purchase workflow
+2. Manually executed full purchase flow (auto-generated 5 games)
+3. Captured network traffic to discover actual API endpoints
+4. Identified two-phase purchase protocol
+
+**Discovered Endpoints:**
+- **Phase 1 - Ready**: POST `/olotto/game/egovUserReadySocket.json`
+  - Response: `{ direct_yn, ready_ip, ready_time, ready_cnt }`
+  - Purpose: Initialize purchase session and get server ID
+- **Phase 2 - Execute**: POST `/olotto/game/execBuy.do`
+  - Request: URLSearchParams with round, direct (ready_ip), games, amounts, dates
+  - Response: `{ loginYn, result: { resultCode, resultMsg } }`
+  - Success code: "100"
+  - Error codes: "-7" (weekly limit exceeded), others for various failures
+
+**Discovered Error Code:**
+- **resultCode "-7"**: Weekly purchase limit exceeded (5,000 KRW/week maximum)
+- Message: "[온라인복권 주간 구매한도] 초과되었습니다."
+
+### Implementation Details
+
+**Two-Phase Purchase Protocol:**
+1. **preparePurchase()**: Call ready endpoint to initialize session
+   - Returns `ready_ip` used in execution phase
+   - Validates HTTP 200 response
+2. **executePurchase(readyResponse, roundNumber)**: Execute actual purchase
+   - Generates 5 game selections (A-E) with auto mode (genType "0")
+   - Uses `ready_ip` from phase 1 in `direct` parameter
+   - Sends form-encoded request with game parameters
+
+**Game Selection Format:**
+```typescript
+{
+  genType: "0",           // Auto-generated numbers
+  arrGameChoiceNum: null, // null for auto mode
+  alpabet: "A"|"B"|"C"|"D"|"E"  // Game identifier
+}
+```
+
+**Purchase Parameters:**
+- `round`: Current lottery round number from account info
+- `direct`: Server ID from ready endpoint (ready_ip)
+- `nBuyAmount`: 5000 (total purchase amount)
+- `param`: JSON.stringify(games) - 5 game selections
+- `gameCnt`: 5
+- `ROUND_DRAW_DATE`: Draw date (7 days from now)
+- `WAMT_PAY_TLMT_END_DT`: Payment limit end date (1 year from now)
+
+**Success/Failure Handling:**
+- **Success** (resultCode "100"):
+  - Return PurchaseSuccess with all purchase details
+  - Send Telegram success notification with Korean formatting
+  - Include round number, game count, total amount
+- **Business Error** (resultCode != "100"):
+  - Return PurchaseFailure with error code and message
+  - Send Telegram error notification
+  - Examples: Weekly limit exceeded, insufficient balance, etc.
+- **Network Error**:
+  - Catch and wrap in PurchaseFailure
+  - Send Telegram error notification
+  - Includes error message for debugging
+
+**Key Functions:**
+- `purchaseLottery(env)`: Main entry point returning PurchaseOutcome
+- `preparePurchase()`: Phase 1 - initialize session
+- `executePurchase(readyResponse, roundNumber)`: Phase 2 - execute purchase
+- `formatKoreanNumber(amount)`: Format numbers with thousands separator
+
+### Test Coverage
+All 5 acceptance test groups passed (18 test cases total):
+- **TEST-PURCHASE-001**: Purchase ready endpoint (3 tests)
+  - Calls ready endpoint before execution
+  - Validates successful response
+  - Uses ready_ip in execution phase
+- **TEST-PURCHASE-002**: Purchase execution parameters (3 tests)
+  - Executes with exactly 5 games
+  - Uses automatic number generation (genType "0", arrGameChoiceNum null)
+  - Sets total amount to 5,000 KRW
+- **TEST-PURCHASE-003**: Parse purchase result (2 tests)
+  - Recognizes success with resultCode "100"
+  - Includes all purchase details in response
+- **TEST-PURCHASE-004**: Telegram success notification (4 tests)
+  - Sends success notification on successful purchase
+  - Includes game count (5게임)
+  - Includes total cost (5,000원)
+  - Includes lottery round number (1203회)
+- **TEST-PURCHASE-005**: Handle purchase failures (6 tests)
+  - Network errors during ready endpoint
+  - Network errors during execution
+  - Purchase limit exceeded (resultCode "-7")
+  - Sends error notifications
+  - Atomic transaction (no partial purchases)
+
+### Test Fix Required
+**URL Encoding Issue:**
+- Initial test failure: Body is URL-encoded, but test checked for literal JSON strings
+- **Fix**: Added `decodeURIComponent()` before checking body content
+- Reason: execBuy.do uses `application/x-www-form-urlencoded`, so JSON in `param` field is URL-encoded
+
+### Learnings
+1. **Two-Phase Protocol**: Many payment/purchase systems use prepare-then-execute pattern
+2. **Session Coordination**: ready_ip from phase 1 required in phase 2 (server routing)
+3. **Weekly Limits**: DHLottery enforces 5,000 KRW weekly purchase limit per user
+4. **Success Code Discovery**: Chrome MCP helped discover resultCode "100" for success
+5. **Error Code Mapping**: Negative result codes indicate business rule violations
+6. **Form Encoding**: execBuy.do requires URLSearchParams (not JSON body)
+7. **Date Formatting**: API expects ISO date format (YYYY-MM-DD) for date fields
+8. **Atomic Transactions**: Purchase is all-or-nothing (5 games or nothing)
+9. **Korean Formatting**: User-facing messages need Korean number format (5,000원)
+10. **Test URL Encoding**: Remember to decode URL-encoded bodies in tests
+
+### Integration Points
+- Depends on TASK-003 (getAccountInfo) for round number ✓
+- Depends on TASK-007 (sendTelegramNotification) for purchase alerts ✓
+- Required by TASK-008 (main orchestration) as core purchase logic
+- Uses PURCHASE_CONSTANTS for business rules
+
+### Chrome MCP Workflow Benefits
+- Discovered two-phase purchase protocol before coding
+- Identified actual endpoint paths and parameter formats
+- Captured success code ("100") and error codes ("-7", etc.)
+- Verified weekly purchase limit enforcement
+- Prevented incorrect implementation based on assumptions
+- **Lesson**: Always verify complex workflows with actual system before implementing
+
 ### Next Steps
-- Begin TASK-005: Lottery purchase implementation (depends on TASK-004 ✓)
-- Continue TDD cycle with Chrome MCP verification for purchase flow
-- Integrate all modules in main orchestration
+- Begin TASK-006: Winning number verification (new module)
+- Then TASK-008: Main orchestration (integrate all modules)
+- All dependencies for purchase flow now complete (✓ TASK-001, ✓ TASK-002, ✓ TASK-003, ✓ TASK-004, ✓ TASK-007)

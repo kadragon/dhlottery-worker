@@ -77,3 +77,26 @@ completed_tasks:
       - Korean number formatting (N,NNN원) for user-facing messages
       - GET-only charge initialization (idempotent, no payment execution)
       - Ready for use in lottery purchase pre-check (TASK-005)
+
+  - id: TASK-005
+    title: "Implement lottery purchase"
+    spec_id: SPEC-PURCHASE-001
+    completed_at: "2025-12-16 21:07:00+09:00"
+    outcome: "success"
+    notes: |
+      Successfully implemented lottery purchase with two-phase protocol using Chrome MCP pre-verification.
+      - Created 3 files: purchase.types.ts, buy.ts, buy.spec.ts
+      - All 18 tests passed (TEST-PURCHASE-001 through TEST-PURCHASE-005)
+      - Chrome MCP verification discovered two-phase purchase protocol before coding
+      - Phase 1: POST /egovUserReadySocket.json (initialize session, get ready_ip)
+      - Phase 2: POST /execBuy.do (execute purchase with ready_ip)
+      - Success code: resultCode "100", error codes: "-7" (weekly limit), others
+      - Weekly purchase limit: 5,000 KRW enforced by DHLottery backend
+      - Auto-generation mode: genType "0" with arrGameChoiceNum null for 5 games (A-E)
+      - Form-encoded request body (application/x-www-form-urlencoded) with URLSearchParams
+      - Test fix: URL-decode body before assertions (execBuy.do encodes JSON in param field)
+      - Integration with TASK-003 (getAccountInfo for round number) and TASK-007 (Telegram notifications)
+      - Korean number formatting (5,000원) in user-facing notifications
+      - Atomic transaction: all 5 games or nothing (no partial purchases)
+      - Graceful error handling with PurchaseSuccess/PurchaseFailure discriminated union
+      - Ready for integration in main orchestration (TASK-008)
