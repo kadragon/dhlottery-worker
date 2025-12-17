@@ -3,13 +3,12 @@
  *
  * Trace:
  *   spec_id: SPEC-DEPOSIT-001
- *   task_id: TASK-004
+ *   task_id: TASK-004, TASK-011
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { checkDeposit } from './charge';
-import type { HttpClient } from '../types/http.types';
-import type { DepositEnv } from '../types/deposit.types';
+import type { DepositEnv, HttpClient } from '../types';
 import * as accountModule from './account';
 import * as telegramModule from '../notify/telegram';
 import { MIN_DEPOSIT_AMOUNT } from '../constants';

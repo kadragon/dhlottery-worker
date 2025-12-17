@@ -3,14 +3,10 @@
  *
  * Trace:
  *   spec_id: SPEC-TELEGRAM-001
- *   task_id: TASK-007
+ *   task_id: TASK-007, TASK-011
  */
 
-import type {
-  NotificationPayload,
-  TelegramEnv,
-  TelegramMessage,
-} from '../types/notification.types';
+import type { NotificationPayload, TelegramEnv, TelegramMessage } from '../types';
 
 /**
  * Get emoji based on notification type

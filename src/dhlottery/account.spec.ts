@@ -3,14 +3,14 @@
  *
  * Trace:
  *   spec_id: SPEC-ACCOUNT-001
- *   task_id: TASK-003
+ *   task_id: TASK-003, TASK-011
  */
 
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { getAccountInfo } from "./account";
 import { createHttpClient } from "../client/http";
 import { DHLotteryError } from "../utils/errors";
-import type { HttpResponse } from "../types/http.types";
+import type { HttpResponse } from "../types";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 

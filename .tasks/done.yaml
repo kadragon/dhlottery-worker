@@ -149,3 +149,30 @@ completed_tasks:
       - Added types barrel: src/types/index.ts (+ compile-time test)
       - Refactored: src/dhlottery/check.ts (delegate date math), src/dhlottery/charge.ts (use CHARGE_AMOUNT), src/types/*.ts (reuse constants)
       - All tests pass (108)
+
+  - id: TASK-011
+    title: "Standardize type imports via src/types/index.ts"
+    spec_id: SPEC-QOL-IMPORTS-001
+    completed_at: "2025-12-17 11:19:27+09:00"
+    outcome: "success"
+    test_refs:
+      - TEST-QOL-IMPORTS-001
+      - TEST-QOL-IMPORTS-002
+    notes: |
+      Refactored type-only imports in src/ to use the existing types barrel.
+      - Updated modules/tests to import types from ../types (or ./types) directory import
+      - Kept runtime imports (e.g. PURCHASE_CONSTANTS) unchanged
+      - All tests pass (108) and typecheck passes
+
+  - id: TASK-012
+    title: "Reduce console noise during tests"
+    spec_id: SPEC-LOGGING-001
+    completed_at: "2025-12-17 11:24:24+09:00"
+    outcome: "success"
+    test_refs:
+      - TEST-LOGGING-001
+    notes: |
+      Reduced test output noise by configuring Vitest to silence console output.
+      - Updated vitest config: set test.silent=true (output suppressed; calls still spy-able)
+      - No production runtime behavior changes
+      - All tests pass (108) and typecheck passes

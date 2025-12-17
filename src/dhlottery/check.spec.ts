@@ -3,15 +3,13 @@
  *
  * Trace:
  *   spec_id: SPEC-WINNING-001
- *   task_id: TASK-006
+ *   task_id: TASK-006, TASK-011
  */
 
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { HttpResponse } from "../types/http.types";
-import type { TelegramEnv } from "../types/notification.types";
-import type { HttpClient } from "../types/http.types";
+import type { HttpClient, HttpResponse, TelegramEnv } from "../types";
 import {
   calculatePreviousWeekRange,
   checkWinning,
@@ -260,4 +258,3 @@ describe("Winning Check", () => {
     });
   });
 });
-

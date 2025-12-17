@@ -3,7 +3,7 @@
  *
  * Trace:
  *   spec_id: SPEC-ORCH-001
- *   task_id: TASK-008
+ *   task_id: TASK-008, TASK-011
  */
 
 import type { ExecutionContext, ScheduledController } from '@cloudflare/workers-types';
@@ -13,9 +13,7 @@ import { purchaseLottery } from './dhlottery/buy';
 import { checkDeposit } from './dhlottery/charge';
 import { checkWinning } from './dhlottery/check';
 import { sendNotification } from './notify/telegram';
-import type { AuthEnv } from './types/auth.types';
-import type { TelegramEnv } from './types/notification.types';
-import type { PurchaseEnv } from './types/purchase.types';
+import type { AuthEnv, PurchaseEnv, TelegramEnv } from './types';
 
 export type WorkerEnv = AuthEnv & TelegramEnv;
 

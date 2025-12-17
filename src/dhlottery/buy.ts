@@ -3,20 +3,20 @@
  *
  * Trace:
  *   spec_id: SPEC-PURCHASE-001
- *   task_id: TASK-005
+ *   task_id: TASK-005, TASK-011
  *
  * Implements automatic lottery purchase with 5 games
  */
 
 import { sendNotification } from '../notify/telegram';
-import type { HttpClient } from '../types/http.types';
 import type {
   GameSelection,
+  HttpClient,
   PurchaseEnv,
   PurchaseOutcome,
   PurchaseReadyResponse,
   PurchaseResult,
-} from '../types/purchase.types';
+} from '../types';
 import { PURCHASE_CONSTANTS } from '../types/purchase.types';
 import { getAccountInfo } from './account';
 

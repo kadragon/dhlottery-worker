@@ -3,11 +3,10 @@
  *
  * Trace:
  *   spec_id: SPEC-ACCOUNT-001
- *   task_id: TASK-003
+ *   task_id: TASK-003, TASK-011
  */
 
-import type { AccountInfo } from '../types/account.types';
-import type { HttpClient } from '../types/http.types';
+import type { AccountInfo, HttpClient } from '../types';
 import { DHLotteryError } from '../utils/errors';
 
 /**

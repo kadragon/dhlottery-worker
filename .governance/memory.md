@@ -45,6 +45,8 @@
 - TASK-006 (SPEC-WINNING-001): Previous-week range in KST, parse win list HTML, notify rank==1 only + tests.
 - TASK-008 (SPEC-ORCH-001): Scheduled-only Worker entrypoint + orchestration + tests.
 - TASK-010 (SPEC-UTILS-001): Shared constants + KST date utilities + types barrel + tests.
+- TASK-011 (SPEC-QOL-IMPORTS-001): Standardized type-only imports to use the `src/types` barrel.
+- TASK-012 (SPEC-LOGGING-001): Silenced console output during Vitest runs (no runtime behavior changes).
 
 ## Next
-- (none queued) Consider adding a backlog task to standardize imports via `src/types/index.ts` and reduce console noise in tests.
+- (none queued) Consider adding a backlog task to reduce console noise in tests (e.g., wrap/spy console calls consistently).

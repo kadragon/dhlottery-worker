@@ -3,15 +3,14 @@
  *
  * Trace:
  *   spec_id: SPEC-AUTH-001
- *   task_id: TASK-002
+ *   task_id: TASK-002, TASK-011
  */
 
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { login } from "./auth";
 import { createHttpClient } from "../client/http";
 import { AuthenticationError } from "../utils/errors";
-import type { AuthEnv } from "../types/auth.types";
-import type { HttpResponse } from "../types/http.types";
+import type { AuthEnv, HttpResponse } from "../types";
 
 describe("DHLottery Authentication", () => {
   let mockHttpClient: ReturnType<typeof createHttpClient>;

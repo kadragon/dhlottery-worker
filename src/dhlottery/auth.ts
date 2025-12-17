@@ -3,11 +3,10 @@
  *
  * Trace:
  *   spec_id: SPEC-AUTH-001
- *   task_id: TASK-002
+ *   task_id: TASK-002, TASK-011
  */
 
-import type { AuthEnv } from '../types/auth.types';
-import type { HttpClient } from '../types/http.types';
+import type { AuthEnv, HttpClient } from '../types';
 import { AuthenticationError } from '../utils/errors';
 
 /**

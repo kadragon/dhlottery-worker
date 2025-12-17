@@ -3,12 +3,12 @@
  *
  * Trace:
  *   spec_id: SPEC-TELEGRAM-001
- *   task_id: TASK-007
+ *   task_id: TASK-007, TASK-011
  */
 
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { sendNotification } from "./telegram";
-import type { TelegramEnv } from "../types/notification.types";
+import type { TelegramEnv } from "../types";
 
 describe("Telegram Notification Service", () => {
   let mockFetch: ReturnType<typeof vi.fn>;

@@ -3,13 +3,12 @@
  *
  * Trace:
  *   spec_id: SPEC-ORCH-001
- *   task_id: TASK-008
+ *   task_id: TASK-008, TASK-011
  */
 
 import { describe, it, expect, beforeEach, vi, type Mock } from "vitest";
 import type { ExecutionContext, ScheduledController } from "@cloudflare/workers-types";
-import type { HttpClient } from "./types/http.types";
-import type { PurchaseOutcome } from "./types/purchase.types";
+import type { HttpClient, PurchaseOutcome } from "./types";
 
 vi.mock("./client/http", () => ({
   createHttpClient: vi.fn(),

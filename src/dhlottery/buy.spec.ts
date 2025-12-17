@@ -3,7 +3,7 @@
  *
  * Trace:
  *   spec_id: SPEC-PURCHASE-001
- *   task_id: TASK-005
+ *   task_id: TASK-005, TASK-011
  *
  * Tests lottery purchase functionality following TDD RED-GREEN-REFACTOR cycle
  */
@@ -14,9 +14,9 @@ import type {
 	PurchaseEnv,
 	PurchaseReadyResponse,
 	PurchaseResult,
-} from "../types/purchase.types";
-import type { AccountInfo } from "../types/account.types";
-import type { HttpClient } from "../types/http.types";
+  AccountInfo,
+  HttpClient,
+} from "../types";
 import { PURCHASE_CONSTANTS } from "../types/purchase.types";
 
 // Mock dependencies

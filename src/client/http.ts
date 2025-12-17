@@ -3,15 +3,10 @@
  *
  * Trace:
  *   spec_id: SPEC-SESSION-001
- *   task_id: TASK-001
+ *   task_id: TASK-001, TASK-011
  */
 
-import type {
-  CookieStore,
-  HttpClient,
-  HttpRequestOptions,
-  HttpResponse,
-} from '../types/http.types';
+import type { CookieStore, HttpClient, HttpRequestOptions, HttpResponse } from '../types';
 
 /**
  * Parse Set-Cookie header value to extract cookie name and value

@@ -3,13 +3,11 @@
  *
  * Trace:
  *   spec_id: SPEC-WINNING-001
- *   task_id: TASK-006, TASK-010
+ *   task_id: TASK-006, TASK-010, TASK-011
  */
 
 import { sendNotification } from '../notify/telegram';
-import type { HttpClient } from '../types/http.types';
-import type { TelegramEnv } from '../types/notification.types';
-import type { WinningResult } from '../types/winning.types';
+import type { HttpClient, TelegramEnv, WinningResult } from '../types';
 import { calculatePreviousWeekRangeKst } from '../utils/date';
 import type { PreviousWeekRange } from '../utils/date';
 import { DHLotteryError } from '../utils/errors';

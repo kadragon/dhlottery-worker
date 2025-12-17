@@ -1,0 +1,42 @@
+spec_id: SPEC-QOL-IMPORTS-001
+title: "Standardize type imports via src/types barrel"
+version: "1.0.0"
+status: "draft"
+
+description: |
+  Reduce repeated deep import paths (e.g. ../types/http.types) by standardizing type-only imports
+  to use the existing barrel file at src/types/index.ts.
+
+given_when_then:
+  - given: "A module consumes multiple shared types from src/types"
+    when: "It imports types for function signatures or tests"
+    then: "It imports from the src/types barrel (directory import) instead of individual *.types files"
+
+  - given: "Some exports in src/types are runtime values (e.g. PURCHASE_CONSTANTS)"
+    when: "A module needs a runtime value"
+    then: "It may keep importing directly from the source module (no forced runtime re-export)"
+
+acceptance_tests:
+  - id: TEST-QOL-IMPORTS-001
+    desc: "Type-only imports should use the types barrel"
+    criteria:
+      - "Update type-only imports in src/ to import from ../types (or ./types) directory"
+      - "No runtime behavior changes"
+
+  - id: TEST-QOL-IMPORTS-002
+    desc: "All existing tests remain green"
+    criteria:
+      - "vitest suite passes"
+      - "Type-checking remains strict (noImplicitAny/noUnusedLocals)"
+
+dependencies:
+  governance: "coding-style"
+  specs:
+    - SPEC-UTILS-001
+
+linked_tasks:
+  - TASK-011
+
+implementation_notes:
+  - "Use `import type { ... } from '../types'` (directory import) for type-only imports."
+  - "Do not introduce new path aliases in this task; keep changes minimal."

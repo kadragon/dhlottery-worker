@@ -3,13 +3,12 @@
  *
  * Trace:
  *   spec_id: SPEC-DEPOSIT-001
- *   task_id: TASK-004, TASK-010
+ *   task_id: TASK-004, TASK-010, TASK-011
  */
 
 import { CHARGE_AMOUNT, MIN_DEPOSIT_AMOUNT } from '../constants';
 import { sendNotification } from '../notify/telegram';
-import type { DepositEnv } from '../types/deposit.types';
-import type { HttpClient } from '../types/http.types';
+import type { DepositEnv, HttpClient } from '../types';
 import { getAccountInfo } from './account';
 
 /**
