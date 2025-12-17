@@ -1,8 +1,0 @@
-#!/usr/bin/env sh
-. "$(dirname -- "$0")/_/husky.sh"
-
-# Run Biome lint and format check
-npm run check:fix
-
-# Run TypeScript type checking
-npm run typecheck

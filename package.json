@@ -17,19 +17,26 @@
     "check": "biome check .",
     "check:fix": "biome check --write .",
     "precommit": "npm run check:fix && npm run typecheck",
-    "prepare": "husky"
+    "prepare": "npx simple-git-hooks"
   },
-  "keywords": ["cloudflare-workers", "lottery", "automation", "telegram-bot"],
+  "simple-git-hooks": {
+    "pre-commit": "npm run check:fix && npm run typecheck"
+  },
+  "keywords": [
+    "cloudflare-workers",
+    "lottery",
+    "automation",
+    "telegram-bot"
+  ],
   "author": "",
   "license": "MIT",
   "devDependencies": {
     "@biomejs/biome": "^1.9.4",
     "@cloudflare/workers-types": "^4.20241127.0",
     "@types/node": "^22.10.2",
-    "husky": "^9.1.7",
+    "simple-git-hooks": "^2.13.1",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8",
     "wrangler": "^3.95.0"
-  },
-  "dependencies": {}
+  }
 }
