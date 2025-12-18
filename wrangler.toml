@@ -1,6 +1,7 @@
 name = "dhlottery-worker"
 main = "src/index.ts"
 compatibility_date = "2024-12-16"
+compatibility_flags = ["nodejs_compat"]
 
 # Cron trigger: Every Monday at 10:00 AM KST (01:00 UTC)
 # KST = UTC+9, so 10:00 KST = 01:00 UTC

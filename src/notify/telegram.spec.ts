@@ -17,7 +17,7 @@ describe("Telegram Notification Service", () => {
   beforeEach(() => {
     // Mock global fetch
     mockFetch = vi.fn();
-    global.fetch = mockFetch;
+    global.fetch = mockFetch as any;
 
     // Create mock environment with Telegram credentials
     mockEnv = {
