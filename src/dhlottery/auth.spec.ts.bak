@@ -19,10 +19,7 @@ describe("DHLottery Authentication", () => {
   beforeEach(() => {
     // Create mock HTTP client
     mockHttpClient = {
-      cookies: {
-        // Pre-set JSESSIONID to satisfy initSession verification
-        JSESSIONID: 'mock-session-id',
-      },
+      cookies: {},
       fetch: vi.fn(),
       getCookieHeader: vi.fn(),
       clearCookies: vi.fn(),
@@ -62,7 +59,16 @@ describe("DHLottery Authentication", () => {
       json: async () => ({ result: loginResult }),
     } as unknown as HttpResponse;
 
-    return { sessionInitResponse, loginResponse };
+    // Redirect response (only for successful login)
+    const redirectResponse = {
+      status: 200,
+      statusText: "OK",
+      headers: new Headers(),
+      text: async () => "<!DOCTYPE html><html>...</html>",
+      json: async () => ({}),
+    } as unknown as HttpResponse;
+
+    return { sessionInitResponse, loginResponse, redirectResponse };
   };
 
   /**
@@ -77,7 +83,7 @@ describe("DHLottery Authentication", () => {
   describe("TEST-AUTH-001: Authenticate with valid credentials", () => {
     it("should successfully authenticate with valid credentials", async () => {
       // Arrange
-      const { sessionInitResponse, loginResponse } = createMockResponses({
+      const { sessionInitResponse, loginResponse, redirectResponse } = createMockResponses({
         resultCode: "SUCCESS",
         resultMsg: "로그인 성공",
       });
@@ -85,18 +91,17 @@ describe("DHLottery Authentication", () => {
       vi.mocked(mockHttpClient.fetch)
         .mockResolvedValueOnce(sessionInitResponse)
         .mockResolvedValueOnce(loginResponse)
-        ;
+        .mockResolvedValueOnce(redirectResponse);
 
       // Act
       await login(mockHttpClient, mockEnv);
 
-      // Assert - should be called 2 times (session init + login)
-      // Note: redirect is NOT followed to preserve session cookies
-      expect(mockHttpClient.fetch).toHaveBeenCalledTimes(2);
+      // Assert - should be called 3 times (session init + login + redirect)
+      expect(mockHttpClient.fetch).toHaveBeenCalledTimes(3);
 
       // Verify first call is session init
       const sessionCall = vi.mocked(mockHttpClient.fetch).mock.calls[0];
-      expect(sessionCall[0]).toContain("/gameResult.do?method=byWin&wiselog=H_C_1_1");
+      expect(sessionCall[0]).toContain("/common.do?method=main");
       // Note: method is explicitly set to 'GET' in initSession
 
       // Verify second call is login
@@ -107,20 +112,19 @@ describe("DHLottery Authentication", () => {
 
     it("should handle successful login with cookies", async () => {
       // Arrange
-      const { sessionInitResponse, loginResponse } = createMockResponses({
+      const { sessionInitResponse, loginResponse, redirectResponse } = createMockResponses({
         resultCode: "SUCCESS",
       });
 
       vi.mocked(mockHttpClient.fetch)
         .mockResolvedValueOnce(sessionInitResponse)
         .mockResolvedValueOnce(loginResponse)
-        ;
+        .mockResolvedValueOnce(redirectResponse);
 
       // Act
       await login(mockHttpClient, mockEnv);
 
       // Assert - should not throw
-      // Note: redirect is NOT followed to preserve session cookies
       expect(mockHttpClient.fetch).toHaveBeenCalledTimes(2);
     });
 
@@ -132,8 +136,7 @@ describe("DHLottery Authentication", () => {
 
       vi.mocked(mockHttpClient.fetch)
         .mockResolvedValueOnce(sessionInitResponse)
-        .mockResolvedValueOnce(loginResponse)
-        ;
+        .mockResolvedValueOnce(loginResponse);
 
       // Act & Assert - should not throw
       await expect(login(mockHttpClient, mockEnv)).resolves.not.toThrow();
@@ -158,8 +161,7 @@ describe("DHLottery Authentication", () => {
 
       vi.mocked(mockHttpClient.fetch)
         .mockResolvedValueOnce(sessionInitResponse)
-        .mockResolvedValueOnce(loginResponse)
-        ;
+        .mockResolvedValueOnce(loginResponse);
 
       // Act & Assert
       await expect(login(mockHttpClient, mockEnv)).rejects.toThrow(
@@ -177,8 +179,7 @@ describe("DHLottery Authentication", () => {
 
       vi.mocked(mockHttpClient.fetch)
         .mockResolvedValueOnce(sessionInitResponse)
-        .mockResolvedValueOnce(loginResponse)
-        ;
+        .mockResolvedValueOnce(loginResponse);
 
       // Act & Assert
       await expect(login(mockHttpClient, mockEnv)).rejects.toThrow(errorMessage);
@@ -281,8 +282,7 @@ describe("DHLottery Authentication", () => {
 
       vi.mocked(mockHttpClient.fetch)
         .mockResolvedValueOnce(sessionInitResponse)
-        .mockResolvedValueOnce(loginResponse)
-        ;
+        .mockResolvedValueOnce(loginResponse);
 
       // Act
       await login(mockHttpClient, mockEnv);
@@ -305,8 +305,7 @@ describe("DHLottery Authentication", () => {
 
       vi.mocked(mockHttpClient.fetch)
         .mockResolvedValueOnce(sessionInitResponse)
-        .mockResolvedValueOnce(loginResponse)
-        ;
+        .mockResolvedValueOnce(loginResponse);
 
       // Act
       await login(mockHttpClient, mockEnv);
@@ -329,8 +328,7 @@ describe("DHLottery Authentication", () => {
 
       vi.mocked(mockHttpClient.fetch)
         .mockResolvedValueOnce(sessionInitResponse)
-        .mockResolvedValueOnce(loginResponse)
-        ;
+        .mockResolvedValueOnce(loginResponse);
 
       // Act & Assert
       await expect(login(mockHttpClient, mockEnv)).resolves.not.toThrow();
@@ -354,8 +352,7 @@ describe("DHLottery Authentication", () => {
 
       vi.mocked(mockHttpClient.fetch)
         .mockResolvedValueOnce(sessionInitResponse)
-        .mockResolvedValueOnce(loginResponse)
-        ;
+        .mockResolvedValueOnce(loginResponse);
 
       // Act
       await login(mockHttpClient, mockEnv);
@@ -377,8 +374,7 @@ describe("DHLottery Authentication", () => {
 
       vi.mocked(mockHttpClient.fetch)
         .mockResolvedValueOnce(sessionInitResponse)
-        .mockResolvedValueOnce(loginResponse)
-        ;
+        .mockResolvedValueOnce(loginResponse);
 
       // Act
       await login(mockHttpClient, mockEnv);
@@ -401,8 +397,7 @@ describe("DHLottery Authentication", () => {
 
       vi.mocked(mockHttpClient.fetch)
         .mockResolvedValueOnce(sessionInitResponse)
-        .mockResolvedValueOnce(loginResponse)
-        ;
+        .mockResolvedValueOnce(loginResponse);
 
       // Act
       await login(mockHttpClient, mockEnv);
@@ -430,8 +425,7 @@ describe("DHLottery Authentication", () => {
 
       vi.mocked(mockHttpClient.fetch)
         .mockResolvedValueOnce(sessionInitResponse)
-        .mockResolvedValueOnce(loginResponse)
-        ;
+        .mockResolvedValueOnce(loginResponse);
 
       // Act
       await login(mockHttpClient, mockEnv);
@@ -453,8 +447,7 @@ describe("DHLottery Authentication", () => {
 
       vi.mocked(mockHttpClient.fetch)
         .mockResolvedValueOnce(sessionInitResponse)
-        .mockResolvedValueOnce(loginResponse)
-        ;
+        .mockResolvedValueOnce(loginResponse);
 
       // Act
       await login(mockHttpClient, mockEnv);

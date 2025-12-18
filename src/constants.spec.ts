@@ -18,7 +18,7 @@ import {
 
 describe('TEST-UTILS-002: Shared business constants', () => {
   it('should expose required constants with expected values', () => {
-    expect(MIN_DEPOSIT_AMOUNT).toBe(30000);
+    expect(MIN_DEPOSIT_AMOUNT).toBe(5000);
     expect(CHARGE_AMOUNT).toBe(50000);
     expect(GAMES_PER_PURCHASE).toBe(5);
     expect(COST_PER_GAME).toBe(1000);

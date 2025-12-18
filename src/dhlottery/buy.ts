@@ -8,6 +8,7 @@
  * Implements automatic lottery purchase with 5 games
  */
 
+import { USER_AGENT } from '../constants';
 import { sendNotification } from '../notify/telegram';
 import type {
   GameSelection,
@@ -25,15 +26,16 @@ const BASE_URL = 'https://ol.dhlottery.co.kr/olotto/game';
 /**
  * Prepares purchase session by calling ready endpoint
  */
-async function preparePurchase(): Promise<PurchaseReadyResponse> {
-  const response = await fetch(`${BASE_URL}/egovUserReadySocket.json`, {
+async function preparePurchase(client: HttpClient): Promise<PurchaseReadyResponse> {
+  const response = await client.fetch(`${BASE_URL}/egovUserReadySocket.json`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json; charset=UTF-8',
+      'User-Agent': USER_AGENT,
     },
   });
 
-  if (!response.ok) {
+  if (response.status !== 200) {
     throw new Error(`Purchase ready failed: ${response.status}`);
   }
 
@@ -44,6 +46,7 @@ async function preparePurchase(): Promise<PurchaseReadyResponse> {
  * Executes lottery purchase with auto-generated numbers
  */
 async function executePurchase(
+  client: HttpClient,
   readyResponse: PurchaseReadyResponse,
   roundNumber: number
 ): Promise<PurchaseResult> {
@@ -54,27 +57,37 @@ async function executePurchase(
     alpabet,
   }));
 
+  // n8n style: only send required parameters
   const params = new URLSearchParams({
     round: roundNumber.toString(),
     direct: readyResponse.ready_ip,
     nBuyAmount: PURCHASE_CONSTANTS.TOTAL_COST.toString(),
     param: JSON.stringify(games),
-    ROUND_DRAW_DATE: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString('en-CA'),
-    WAMT_PAY_TLMT_END_DT: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toLocaleDateString(
-      'en-CA'
-    ),
     gameCnt: PURCHASE_CONSTANTS.GAME_COUNT.toString(),
   });
 
-  const response = await fetch(`${BASE_URL}/execBuy.do`, {
+  console.log(
+    JSON.stringify({
+      level: 'debug',
+      module: 'buy',
+      message: 'Purchase parameters',
+      round: roundNumber,
+      direct: readyResponse.ready_ip,
+      nBuyAmount: PURCHASE_CONSTANTS.TOTAL_COST,
+      gameCnt: PURCHASE_CONSTANTS.GAME_COUNT,
+    })
+  );
+
+  const response = await client.fetch(`${BASE_URL}/execBuy.do`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+      'User-Agent': USER_AGENT,
     },
     body: params.toString(),
   });
 
-  if (!response.ok) {
+  if (response.status !== 200) {
     throw new Error(`Purchase execution failed: ${response.status}`);
   }
 
@@ -105,10 +118,10 @@ export async function purchaseLottery(
     const roundNumber = accountInfo.currentRound;
 
     // Step 1: Prepare purchase session
-    const readyResponse = await preparePurchase();
+    const readyResponse = await preparePurchase(client);
 
     // Step 2: Execute purchase
-    const purchaseResult = await executePurchase(readyResponse, roundNumber);
+    const purchaseResult = await executePurchase(client, readyResponse, roundNumber);
 
     // Step 3: Check result
     if (purchaseResult.result.resultCode === PURCHASE_CONSTANTS.SUCCESS_CODE) {
@@ -126,7 +139,7 @@ export async function purchaseLottery(
       await sendNotification(
         {
           type: 'success',
-          title: '로또 구매 완료',
+          title: 'Lottery Purchase Completed',
           message: `${roundNumber}회 로또 ${PURCHASE_CONSTANTS.GAME_COUNT}게임을 ${formatKoreanNumber(PURCHASE_CONSTANTS.TOTAL_COST)}원에 구매했습니다.`,
           details: {
             회차: `${roundNumber}회`,
@@ -151,7 +164,7 @@ export async function purchaseLottery(
     await sendNotification(
       {
         type: 'error',
-        title: '로또 구매 실패',
+        title: 'Lottery Purchase Failed',
         message: purchaseResult.result.resultMsg,
         details: {
           오류코드: purchaseResult.result.resultCode,
@@ -174,7 +187,7 @@ export async function purchaseLottery(
     await sendNotification(
       {
         type: 'error',
-        title: '로또 구매 실패',
+        title: 'Lottery Purchase Failed',
         message: `구매 중 오류가 발생했습니다: ${errorMessage}`,
       },
       env

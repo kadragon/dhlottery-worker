@@ -89,14 +89,28 @@ export async function sendNotification(
     // Check response
     if (!response.ok) {
       const errorData = await response.json();
-      console.error(`Telegram API error: ${response.status} ${response.statusText}`, errorData);
+      console.error(
+        JSON.stringify({
+          event: 'telegram_api_error',
+          status: response.status,
+          statusText: response.statusText,
+          errorData,
+          message: 'Telegram API error',
+        })
+      );
       return; // Do not retry, just log
     }
 
     // Success - no need to process response
   } catch (error) {
     // Log network errors or other failures
-    console.error('Failed to send Telegram notification:', error);
+    console.error(
+      JSON.stringify({
+        event: 'telegram_send_failed',
+        error: error instanceof Error ? error.message : String(error),
+        message: 'Failed to send Telegram notification',
+      })
+    );
     // Do not throw - allow main execution to continue
   }
 }

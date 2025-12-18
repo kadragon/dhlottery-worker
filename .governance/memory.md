@@ -10,15 +10,22 @@
 - `src/client/http.ts`: HttpClient with automatic cookie capture/attach.
 - `src/index.ts`: Scheduled-only entrypoint orchestrating the end-to-end workflow.
 - `src/dhlottery/auth.ts`: Login using Secrets (`USER_ID`, `PASSWORD`).
-- `src/dhlottery/account.ts`: Parse balance + current round from account HTML.
-- `src/dhlottery/charge.ts`: If balance < 30,000 KRW, init deposit page and warn (non-fatal).
+- `src/dhlottery/account.ts`: Parse balance from HTML, get current round via public API (getLottoNumber endpoint).
+- `src/dhlottery/charge.ts`: If balance < 5,000 KRW (exact purchase cost), init deposit page and warn (non-fatal).
 - `src/dhlottery/buy.ts`: Two-phase purchase protocol and notify outcome.
 - `src/dhlottery/check.ts`: Weekly winning check (previous Mon~Sun KST), notify jackpot only.
 - `src/notify/telegram.ts`: Telegram notifier (success/warning/error), never throws.
 - Tests: `src/**/*.spec.ts`, fixtures in `src/__fixtures__/`.
 
 ### Verified Endpoints / Protocol Notes
-- Login: `https://www.dhlottery.co.kr/userSsl.do?method=login`
+- Session Init: `https://dhlottery.co.kr/common.do?method=main` (GET)
+  - Must be called first to acquire initial session cookies before login
+  - Returns HTML page with Set-Cookie headers
+- Login: `https://www.dhlottery.co.kr/userSsl.do?method=login` (POST)
+  - Requires initial session cookies from session init
+  - Headers: Content-Type, User-Agent, X-Requested-With, Referer, Sec-Fetch-Site, Connection, sec-ch-ua, sec-ch-ua-mobile
+  - Form params: returnUrl, userId, password, checkSave, newsEventYn
+  - Response: JSON with `result.resultCode` ("SUCCESS" or "FAIL")
 - Account page: `https://www.dhlottery.co.kr/myPage.do?method=myPage`
   - Unauthenticated access redirects to login.
 - Deposit init (verified): `https://www.dhlottery.co.kr/kbank.do?method=kbankProcess`
@@ -47,6 +54,59 @@
 - TASK-010 (SPEC-UTILS-001): Shared constants + KST date utilities + types barrel + tests.
 - TASK-011 (SPEC-QOL-IMPORTS-001): Standardized type-only imports to use the `src/types` barrel.
 - TASK-012 (SPEC-LOGGING-001): Silenced console output during Vitest runs (no runtime behavior changes).
+- TASK-013 (SPEC-AUTH-001): Fixed authentication protocol to match DHLottery's requirements (session init + browser headers + form params).
+
+## Recent Improvements (2025-12-17 PM)
+- **HttpClient consistency**: Fixed `preparePurchase()` and `executePurchase()` to use HttpClient instead of global fetch (ensures session cookies are properly sent).
+- **Date calculation**: Added `getNextSaturdayKst()` utility for accurate lottery draw date calculation (replaces hardcoded Date.now() + 7 days).
+- **Notification standardization**: All notification titles now use English (Korean remains in message body for user-facing content).
+- **Environment validation**: Added `validateEnv()` function to check required environment variables at Worker startup.
+- **Structured logging**: Migrated all `console.log/error` calls to JSON format for better observability in Cloudflare Workers environment.
+- **Test coverage**: Added 5 new tests (getNextSaturdayKst tests, env validation test); total: 113 tests passing.
+
+## Recent Improvements (2025-12-18)
+- **Authentication protocol fix (TASK-013)**: Fixed "Failed to parse login response" error by implementing proper authentication flow based on n8n workflow analysis:
+  - Added `initSession()` function to acquire initial session cookies before login (GET to common.do?method=main)
+  - Added browser-like headers to login request (User-Agent, X-Requested-With, Referer, Sec-Fetch-Site, Connection, sec-ch-ua, sec-ch-ua-mobile)
+  - Added missing form parameters (returnUrl, checkSave, newsEventYn) to login request
+  - Fixed response handling: DHLottery returns HTML on successful login (check for `goNextPage` function), JSON on failure
+  - Prevented UID cookie clearing by NOT following redirect after successful login
+  - Updated SPEC-AUTH-001 to document two-phase authentication flow
+  - Updated all 16 auth tests to verify two-phase flow; all tests passing
+
+- **Account info improvements**: Fixed account balance parsing and round detection:
+  - Updated balance regex patterns to match actual HTML structure: `<td class="ta_right">N,NNN 원</td>`
+  - Changed round detection from HTML parsing to API-based approach using `common.do?method=getLottoNumber&drwNo=N`
+  - Implemented binary search with fallback to estimated round calculation (year - 2002) × 52
+  - Updated all 18 account tests to mock both account page HTML and lottery API responses; all tests passing
+
+- **Balance threshold adjustment (TASK-014)**: Reduced minimum deposit requirement from 30,000 KRW to 5,000 KRW:
+  - Changed `MIN_DEPOSIT_AMOUNT` constant from 30000 to 5000 (matches exact purchase cost: 5 games × 1,000 KRW)
+  - Removed safety buffer - system now allows purchase with exact amount needed
+  - Updated all charge tests (14 tests) and constants tests to use new threshold
+  - Updated notification messages to reflect new minimum requirement
+  - All 115 tests passing
+
+- **Purchase flow hardening (TASK-015)**: Addressed potential request rejection by standardizing `User-Agent` header:
+  - Created shared `USER_AGENT` constant in `src/constants.ts` (Chrome/91.0...).
+  - Applied `User-Agent` to all outbound requests: `auth.ts`, `buy.ts` (critical for purchase), `account.ts`, `charge.ts`, `check.ts`.
+  - Refactored `auth.spec.ts` to remove unused test variables.
+  - Updated charge.spec.ts to verify User-Agent presence.
+  - Ensured consistency with reference n8n workflow.
+
+- **Account retrieval robustness (TASK-016)**: Modified `getAccountInfo` to prevent `HTTP 302` redirects:
+  - Strategy change: Fetch Main Page (`common.do`) first to get round and stabilize session (mimicking browser redirect).
+  - Then Fetch My Page (`myPage.do`) for balance as requested.
+  - Added fallback: If My Page fails (302/Error), parse balance from Main Page header.
+  - Made balance regex stricter (requires '원' suffix) to avoid false positives.
+  - Updated tests to verify dual-fetch behavior and fallback logic.
+
+## Verified Workflow Behavior
+- **Schedule**: Runs every Monday 10:00 KST (cron: "0 1 * * 1")
+  - Monday execution purchases lottery for **upcoming Saturday** (5 days ahead)
+  - Monday execution checks **previous week's** winning results (Mon-Sun)
+- **Purchase flow**: login → checkDeposit → (if balance sufficient) purchaseLottery → checkWinning
+- **Non-fatal components**: Telegram notifications, charge initialization, and winning checks never crash the main workflow.
 
 ## Next
-- (none queued) Consider adding a backlog task to reduce console noise in tests (e.g., wrap/spy console calls consistently).
+- (none queued) All core features implemented and tested.

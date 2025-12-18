@@ -8,8 +8,12 @@ description: |
   stored in Cloudflare Workers Secrets.
 
 given_when_then:
-  - given: "Valid user credentials in Workers Secrets"
-    when: "Login request is sent to /userSsl.do?method=login"
+  - given: "No existing session"
+    when: "Initial session cookie is requested from /common.do?method=main"
+    then: "Session cookie is captured and stored"
+
+  - given: "Valid user credentials in Workers Secrets and session cookie"
+    when: "Login request is sent to /userSsl.do?method=login with proper headers"
     then: "User is authenticated and session is established"
 
   - given: "Invalid credentials"
@@ -28,6 +32,7 @@ acceptance_tests:
   - id: TEST-AUTH-001
     desc: "Should authenticate with valid credentials"
     criteria:
+      - "GET request to /common.do?method=main to acquire session cookie"
       - "POST request to /userSsl.do?method=login succeeds"
       - "Response indicates successful login"
       - "Session cookies are updated"
@@ -50,9 +55,10 @@ acceptance_tests:
   - id: TEST-AUTH-004
     desc: "Should send proper login request format"
     criteria:
-      - "Content-Type is application/x-www-form-urlencoded"
+      - "Content-Type is application/x-www-form-urlencoded; charset=UTF-8"
       - "Request method is POST"
-      - "Required form fields are included"
+      - "Required form fields are included (userId, password, returnUrl, checkSave, newsEventYn)"
+      - "Browser-like headers are included (User-Agent, X-Requested-With, Referer, etc.)"
 
 dependencies:
   governance: "error-handling-pattern, security-patterns"
@@ -65,10 +71,14 @@ linked_tasks:
   - TASK-002
 
 implementation_notes:
+  - "First acquire session cookie from /common.do?method=main (GET)"
   - "Use URLSearchParams for form encoding"
+  - "Include browser-like headers (User-Agent, X-Requested-With, Referer, etc.)"
+  - "Send form data with: userId, password, returnUrl, checkSave=off, newsEventYn (empty)"
   - "Validate response to confirm successful login"
   - "Update session cookies after login"
   - "Handle session expiry scenarios"
+  - "Parse response as JSON with fallback error handling"
 
 security_requirements:
   - "Credentials from Workers Secrets only"

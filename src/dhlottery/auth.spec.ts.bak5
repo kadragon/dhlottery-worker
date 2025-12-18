@@ -19,10 +19,7 @@ describe("DHLottery Authentication", () => {
   beforeEach(() => {
     // Create mock HTTP client
     mockHttpClient = {
-      cookies: {
-        // Pre-set JSESSIONID to satisfy initSession verification
-        JSESSIONID: 'mock-session-id',
-      },
+      cookies: {},
       fetch: vi.fn(),
       getCookieHeader: vi.fn(),
       clearCookies: vi.fn(),
@@ -37,7 +34,7 @@ describe("DHLottery Authentication", () => {
 
   /**
    * Helper function to create mock responses
-   * Returns session init response, login response, and redirect response
+   * Returns session init response and login response
    */
   const createMockResponses = (loginResult: { resultCode: string; resultMsg?: string }) => {
     const sessionInitResponse = {
@@ -90,13 +87,12 @@ describe("DHLottery Authentication", () => {
       // Act
       await login(mockHttpClient, mockEnv);
 
-      // Assert - should be called 2 times (session init + login)
-      // Note: redirect is NOT followed to preserve session cookies
+      // Assert - should be called 3 times (session init + login + redirect)
       expect(mockHttpClient.fetch).toHaveBeenCalledTimes(2);
 
       // Verify first call is session init
       const sessionCall = vi.mocked(mockHttpClient.fetch).mock.calls[0];
-      expect(sessionCall[0]).toContain("/gameResult.do?method=byWin&wiselog=H_C_1_1");
+      expect(sessionCall[0]).toContain("/common.do?method=main");
       // Note: method is explicitly set to 'GET' in initSession
 
       // Verify second call is login
@@ -120,7 +116,6 @@ describe("DHLottery Authentication", () => {
       await login(mockHttpClient, mockEnv);
 
       // Assert - should not throw
-      // Note: redirect is NOT followed to preserve session cookies
       expect(mockHttpClient.fetch).toHaveBeenCalledTimes(2);
     });
 

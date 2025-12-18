@@ -62,3 +62,36 @@ export function calculatePreviousWeekRangeKst(now: Date = new Date()): PreviousW
     endDate: formatKstDateYyyyMmDd(endOfPreviousWeek),
   };
 }
+
+/**
+ * Calculate next Saturday in KST
+ * Used for lottery draw date (draws happen every Saturday 20:00 KST)
+ *
+ * @param now - Current date (defaults to now)
+ * @returns YYYY-MM-DD format string for the next Saturday in KST
+ */
+export function getNextSaturdayKst(now: Date = new Date()): string {
+  if (Number.isNaN(now.getTime())) {
+    throw new DHLotteryError('Invalid date', 'INVALID_DATE');
+  }
+
+  // Convert to KST
+  const kstNow = new Date(now.getTime() + KST_OFFSET_MS);
+  const kstDayOfWeek = kstNow.getUTCDay(); // 0=Sun, 6=Sat
+
+  // Calculate days until next Saturday (6)
+  let daysUntilSaturday: number;
+  if (kstDayOfWeek === 6) {
+    // Today is Saturday - use today
+    daysUntilSaturday = 0;
+  } else if (kstDayOfWeek === 0) {
+    // Today is Sunday - 6 days until next Saturday
+    daysUntilSaturday = 6;
+  } else {
+    // Monday(1) to Friday(5) - calculate remaining days
+    daysUntilSaturday = 6 - kstDayOfWeek;
+  }
+
+  const nextSaturday = new Date(kstNow.getTime() + daysUntilSaturday * ONE_DAY_MS);
+  return formatKstDateYyyyMmDd(nextSaturday);
+}

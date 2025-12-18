@@ -29,7 +29,9 @@
     "@biomejs/biome": "^1.9.4",
     "@cloudflare/workers-types": "^4.20241127.0",
     "@types/node": "^22.10.2",
+    "dotenv": "^17.2.3",
     "simple-git-hooks": "^2.13.1",
+    "tsx": "^4.21.0",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8",
     "wrangler": "^3.95.0"

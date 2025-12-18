@@ -30,7 +30,7 @@ export interface HttpResponse {
   status: number;
   statusText: string;
   headers: Headers;
-  text: () => Promise<string>;
+  text: (encoding?: 'utf-8' | 'euc-kr') => Promise<string>;
   json: <T>() => Promise<T>;
 }
 

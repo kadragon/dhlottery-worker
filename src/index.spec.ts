@@ -125,4 +125,23 @@ describe("Main Orchestration - scheduled handler", () => {
     expect(checkDeposit).not.toHaveBeenCalled();
     expect(purchaseLottery).not.toHaveBeenCalled();
   });
+
+  it("TEST-ORCH-004: should throw error when required env variables are missing", async () => {
+    const invalidEnv = {
+      USER_ID: "test-user",
+      // PASSWORD is missing
+      TELEGRAM_BOT_TOKEN: "test-token",
+      TELEGRAM_CHAT_ID: "test-chat",
+    };
+
+    const { default: worker } = await import("./index");
+
+    const ctx = {
+      waitUntil: vi.fn(),
+    };
+
+    await expect(
+      worker.scheduled({} as ScheduledController, invalidEnv as unknown as WorkerEnv, ctx as unknown as ExecutionContext)
+    ).rejects.toThrow("Missing required environment variables");
+  });
 });

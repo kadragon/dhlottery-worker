@@ -7,23 +7,23 @@
  */
 
 import type { ExecutionContext, ScheduledController } from '@cloudflare/workers-types';
-import { createHttpClient } from './client/http';
-import { login } from './dhlottery/auth';
-import { purchaseLottery } from './dhlottery/buy';
-import { checkDeposit } from './dhlottery/charge';
-import { checkWinning } from './dhlottery/check';
+import { DHLotteryClient } from './dhlottery/client';
 import { sendNotification } from './notify/telegram';
-import type { AuthEnv, PurchaseEnv, TelegramEnv } from './types';
+import type { WorkerEnv } from './types';
 
-export type WorkerEnv = AuthEnv & TelegramEnv;
+export type { WorkerEnv } from './types';
 
-function toPurchaseEnv(env: WorkerEnv): PurchaseEnv {
-  return {
-    DHLOTTERY_USER_ID: env.USER_ID,
-    DHLOTTERY_USER_PW: env.PASSWORD,
-    TELEGRAM_BOT_TOKEN: env.TELEGRAM_BOT_TOKEN,
-    TELEGRAM_CHAT_ID: env.TELEGRAM_CHAT_ID,
-  };
+/**
+ * Validate required environment variables
+ * Throws an error if any required variable is missing
+ */
+function validateEnv(env: WorkerEnv): void {
+  const required = ['USER_ID', 'PASSWORD', 'TELEGRAM_BOT_TOKEN', 'TELEGRAM_CHAT_ID'] as const;
+  const missing = required.filter((key) => !env[key]);
+
+  if (missing.length > 0) {
+    throw new Error(`Missing required environment variables: ${missing.join(', ')}`);
+  }
 }
 
 async function notifyOrchestrationError(env: WorkerEnv, error: unknown): Promise<void> {
@@ -45,24 +45,24 @@ async function notifyOrchestrationError(env: WorkerEnv, error: unknown): Promise
  * Non-throwing by design to avoid unintended retries that could repurchase.
  */
 export async function runWorkflow(env: WorkerEnv, now: Date = new Date()): Promise<void> {
-  const client = createHttpClient();
+  const client = new DHLotteryClient(env);
 
   try {
-    await login(client, env);
+    await client.login();
 
     let canPurchase: boolean;
     try {
-      canPurchase = await checkDeposit(client, env);
+      canPurchase = await client.checkDeposit();
     } catch (error) {
       await notifyOrchestrationError(env, error);
       return;
     }
 
     if (canPurchase) {
-      await purchaseLottery(client, toPurchaseEnv(env));
+      await client.buy();
     }
 
-    await checkWinning(client, env, now);
+    await client.checkWinning(now);
   } catch (error) {
     await notifyOrchestrationError(env, error);
   }
@@ -74,6 +74,7 @@ export default {
     env: WorkerEnv,
     ctx: ExecutionContext
   ): Promise<void> {
+    validateEnv(env);
     ctx.waitUntil(runWorkflow(env));
   },
 };

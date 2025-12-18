@@ -26,3 +26,12 @@ export type {
   TelegramMessage,
 } from './notification.types';
 export type { WinningResult } from './winning.types';
+
+// Re-export for composed type
+import type { AuthEnv } from './auth.types';
+import type { TelegramEnv } from './notification.types';
+
+/**
+ * Worker environment combining all required env vars
+ */
+export type WorkerEnv = AuthEnv & TelegramEnv;

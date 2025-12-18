@@ -52,10 +52,12 @@ export function createHttpClient(): HttpClient {
         headers.Cookie = cookieHeader;
       }
 
-      // Make request
+      // Make request with manual redirect to preserve cookies
+      // Important: automatic redirect (follow) may lose cookies from intermediate responses
       const response = await fetch(url, {
         ...options,
         headers,
+        redirect: 'manual',
       });
 
       // Capture cookies from Set-Cookie headers
@@ -65,13 +67,22 @@ export function createHttpClient(): HttpClient {
         cookieStore[name] = value;
       }
 
+      // Get raw response body for custom decoding
+      const rawBody = await response.arrayBuffer();
+
       // Return response wrapper
       return {
         status: response.status,
         statusText: response.statusText,
         headers: response.headers,
-        text: () => response.text(),
-        json: <T>() => response.json() as Promise<T>,
+        text: async (encoding: 'utf-8' | 'euc-kr' = 'utf-8') => {
+          const decoder = new TextDecoder(encoding);
+          return decoder.decode(rawBody);
+        },
+        json: async <T>() => {
+          const text = await new TextDecoder('utf-8').decode(rawBody);
+          return JSON.parse(text) as T;
+        },
       };
     },
 

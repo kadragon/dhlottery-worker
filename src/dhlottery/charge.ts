@@ -6,7 +6,7 @@
  *   task_id: TASK-004, TASK-010, TASK-011
  */
 
-import { CHARGE_AMOUNT, MIN_DEPOSIT_AMOUNT } from '../constants';
+import { CHARGE_AMOUNT, MIN_DEPOSIT_AMOUNT, USER_AGENT } from '../constants';
 import { sendNotification } from '../notify/telegram';
 import type { DepositEnv, HttpClient } from '../types';
 import { getAccountInfo } from './account';
@@ -32,16 +32,31 @@ async function initializeChargePage(client: HttpClient): Promise<boolean> {
   try {
     const response = await client.fetch(CHARGE_INIT_URL, {
       method: 'GET',
+      headers: {
+        'User-Agent': USER_AGENT,
+      },
     });
 
     if (response.status !== 200) {
-      console.error(`Failed to initialize charge page: HTTP ${response.status}`);
+      console.error(
+        JSON.stringify({
+          event: 'charge_init_failed',
+          status: response.status,
+          message: 'Failed to initialize charge page',
+        })
+      );
       return false;
     }
 
     return true;
   } catch (error) {
-    console.error('Error initializing charge page:', error);
+    console.error(
+      JSON.stringify({
+        event: 'charge_init_error',
+        error: error instanceof Error ? error.message : String(error),
+        message: 'Error initializing charge page',
+      })
+    );
     return false;
   }
 }
@@ -65,7 +80,14 @@ export async function checkDeposit(client: HttpClient, env: DepositEnv): Promise
   }
 
   // Balance is insufficient - initialize charge and notify
-  console.log(`Insufficient balance: ${accountInfo.balance} < ${MIN_DEPOSIT_AMOUNT}`);
+  console.info(
+    JSON.stringify({
+      event: 'insufficient_balance',
+      balance: accountInfo.balance,
+      required: MIN_DEPOSIT_AMOUNT,
+      message: 'Insufficient balance detected',
+    })
+  );
 
   // Initialize charge page
   const chargeSuccess = await initializeChargePage(client);

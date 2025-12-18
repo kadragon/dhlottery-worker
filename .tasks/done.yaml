@@ -176,3 +176,100 @@ completed_tasks:
       - Updated vitest config: set test.silent=true (output suppressed; calls still spy-able)
       - No production runtime behavior changes
       - All tests pass (108) and typecheck passes
+
+  - id: TASK-013
+    title: "Fix authentication protocol to match DHLottery requirements"
+    spec_id: SPEC-AUTH-001
+    completed_at: "2025-12-18 09:18:48+09:00"
+    outcome: "success"
+    test_refs:
+      - TEST-AUTH-001
+      - TEST-AUTH-002
+      - TEST-AUTH-003
+      - TEST-AUTH-004
+    notes: |
+      Fixed "Failed to parse login response" error by implementing proper two-phase authentication flow.
+      - Root cause: Missing initial session cookies and browser-like headers required by DHLottery
+      - Based authentication flow on successful n8n workflow analysis
+      - Added initSession() function: GET to common.do?method=main to acquire initial session cookies
+      - Added browser-like headers: User-Agent, X-Requested-With, Referer, Sec-Fetch-Site, Connection, sec-ch-ua, sec-ch-ua-mobile
+      - Added missing form parameters: returnUrl, checkSave=off, newsEventYn (empty)
+      - Improved response parsing: text→JSON with detailed error messages
+      - Updated SPEC-AUTH-001: Added session init step and browser headers requirements
+      - Updated all 16 auth tests to verify two-phase flow (session init + login)
+      - All tests pass (115 total) and typecheck passes
+
+  - id: TASK-015
+    title: "Standardize User-Agent header across all requests"
+    spec_id: SPEC-PURCHASE-001
+    completed_at: "2025-12-18 15:45:00+09:00"
+    outcome: "success"
+    notes: |
+      Fixed potential purchase failures by ensuring all requests include a browser-like User-Agent header.
+      - Standardized User-Agent across all modules (auth, buy, account, charge, check) using a shared constant.
+      - Updated `src/dhlottery/buy.ts` to include User-Agent in both `preparePurchase` and `executePurchase` requests.
+      - Updated `src/dhlottery/account.ts`, `src/dhlottery/charge.ts`, `src/dhlottery/check.ts` to include User-Agent.
+      - Refactored `src/dhlottery/auth.ts` to use shared constant.
+      - Fixed tests to expect the new header (src/dhlottery/charge.spec.ts).
+      - Cleaned up unused variables in `src/dhlottery/auth.spec.ts`.
+      - All tests pass (113).
+
+  - id: TASK-016
+    title: "Refactor account retrieval to prevent 302 redirects"
+    spec_id: SPEC-ACCOUNT-001
+    completed_at: "2025-12-18 16:01:00+09:00"
+    outcome: "success"
+    test_refs:
+      - TEST-ACCOUNT-001
+      - TEST-ACCOUNT-002
+      - TEST-ACCOUNT-003
+    notes: |
+      Fixed HTTP 302 redirects during account info retrieval by mimicking browser behavior and handling redirects gracefully.
+      - Strategy update: Fetch Main Page (`common.do`) first to parse round and stabilize session.
+      - Then Fetch My Page (`myPage.do`) for balance as requested.
+      - Added fallback logic: If My Page fails (e.g., 302 Redirect), attempt to parse balance from the already-fetched Main Page HTML.
+      - Made balance parsing regex stricter (requiring '원' suffix) to avoid false positives during fallback.
+      - Updated `account.ts` and `account.spec.ts` (112 tests passing).
+
+  - id: TASK-017
+    title: "Fix session consistency in account retrieval"
+    spec_id: SPEC-ACCOUNT-001
+    completed_at: "2025-12-18 16:05:00+09:00"
+    outcome: "success"
+    notes: |
+      Addressed persistent 302 redirects by ensuring domain consistency and browser-like navigation.
+      - Updated `MAIN_PAGE_URL` to use `www.dhlottery.co.kr` (consistent with login and MyPage).
+      - Added `Referer` header to `myPage.do` request (mimicking navigation from Main Page).
+      - Verified test expectations for new URL structure.
+      - All tests pass (112).
+
+  - id: TASK-018
+    title: "Simplify login flow (stop following redirects)"
+    spec_id: SPEC-AUTH-001
+    completed_at: "2025-12-18 16:07:00+09:00"
+    outcome: "success"
+    test_refs:
+      - TEST-AUTH-001
+    notes: |
+      Simplified login process by treating 302 Redirect as success and NOT following it manually.
+      - Prevents session state issues caused by fetching `loginResult`.
+      - Relies on `getAccountInfo` fetching the main page to act as the post-login navigation.
+      - Matches n8n workflow behavior more closely.
+      - All 112 tests passing.
+
+  - id: TASK-019
+    title: "Refactor into Class-based DHLotteryClient"
+    spec_id: SPEC-ARCH-001
+    completed_at: "2025-12-18 16:15:00+09:00"
+    outcome: "success"
+    test_refs:
+      - TEST-ARCH-001
+      - TEST-ARCH-002
+      - TEST-ARCH-003
+    notes: |
+      Successfully refactored the codebase to use a `DHLotteryClient` class (Facade pattern).
+      - Created `src/dhlottery/client.ts` to encapsulate `HttpClient` and state.
+      - Wrapped functional modules (`auth`, `account`, `buy`, etc.) in client methods.
+      - Refactored `src/index.ts` to use `DHLotteryClient`, significantly cleaning up the entry point.
+      - Added unit tests for the client class (118 tests passing total).
+      - Aligns with the object-oriented structure of external reference libraries (like `roeniss/dhlottery-api`).

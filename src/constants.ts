@@ -8,10 +8,10 @@
 
 /**
  * Minimum deposit amount required for lottery purchase
- * - 5 games × 1,000 KRW = 5,000 KRW (base cost)
- * - 30,000 KRW threshold provides safety buffer
+ * Same as total purchase cost (no safety buffer)
+ * - 5 games × 1,000 KRW = 5,000 KRW
  */
-export const MIN_DEPOSIT_AMOUNT = 30000;
+export const MIN_DEPOSIT_AMOUNT = 5000;
 
 /**
  * Charge amount (manual deposit) in KRW
@@ -32,3 +32,9 @@ export const COST_PER_GAME = 1000;
  * Total purchase cost per run in KRW
  */
 export const TOTAL_PURCHASE_COST = GAMES_PER_PURCHASE * COST_PER_GAME;
+
+/**
+ * Browser-like User-Agent for requests
+ */
+export const USER_AGENT =
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.77 Safari/537.36';

@@ -11,7 +11,7 @@ import { checkDeposit } from './charge';
 import type { DepositEnv, HttpClient } from '../types';
 import * as accountModule from './account';
 import * as telegramModule from '../notify/telegram';
-import { MIN_DEPOSIT_AMOUNT } from '../constants';
+import { MIN_DEPOSIT_AMOUNT, USER_AGENT } from '../constants';
 
 // Mock modules
 vi.mock('./account');
@@ -90,9 +90,9 @@ describe('checkDeposit', () => {
 
   describe('TEST-DEPOSIT-002: Block purchase when balance is insufficient', () => {
     it('should return false when balance is less than MIN_DEPOSIT_AMOUNT', async () => {
-      // Given: Balance is 25,000 KRW (< 30,000)
+      // Given: Balance is 4,000 KRW (< 5,000)
       vi.mocked(accountModule.getAccountInfo).mockResolvedValue({
-        balance: 25000,
+        balance: 4000,
         currentRound: 1200,
       });
 
@@ -140,7 +140,7 @@ describe('checkDeposit', () => {
     it('should make GET request to K-Bank charge initialization endpoint', async () => {
       // Given: Insufficient balance
       vi.mocked(accountModule.getAccountInfo).mockResolvedValue({
-        balance: 10000,
+        balance: 3000,
         currentRound: 1200,
       });
 
@@ -159,14 +159,19 @@ describe('checkDeposit', () => {
       // Then: GET request to K-Bank charge endpoint
       expect(mockClient.fetch).toHaveBeenCalledWith(
         'https://www.dhlottery.co.kr/kbank.do?method=kbankProcess&PayMethod=VBANK&VBankAccountName=%EB%8F%99%ED%96%89%EB%B3%B5%EA%B6%8C&LicenseKey=&VBankExpDate=&GoodsAmt=50000',
-        { method: 'GET' }
+        {
+          method: 'GET',
+          headers: {
+            'User-Agent': USER_AGENT,
+          },
+        }
       );
     });
 
     it('should access charge page but not execute payment', async () => {
       // Given: Insufficient balance
       vi.mocked(accountModule.getAccountInfo).mockResolvedValue({
-        balance: 5000,
+        balance: 2000,
         currentRound: 1200,
       });
 
@@ -193,7 +198,7 @@ describe('checkDeposit', () => {
     it('should handle charge initialization failure gracefully', async () => {
       // Given: Insufficient balance and charge page fails
       vi.mocked(accountModule.getAccountInfo).mockResolvedValue({
-        balance: 10000,
+        balance: 3000,
         currentRound: 1200,
       });
 
@@ -225,9 +230,9 @@ describe('checkDeposit', () => {
 
   describe('TEST-DEPOSIT-004: Notify user when balance is low', () => {
     it('should send warning notification with current balance when insufficient', async () => {
-      // Given: Balance is 15,000 KRW (insufficient)
+      // Given: Balance is 4,000 KRW (insufficient)
       vi.mocked(accountModule.getAccountInfo).mockResolvedValue({
-        balance: 15000,
+        balance: 4000,
         currentRound: 1200,
       });
 
@@ -254,13 +259,13 @@ describe('checkDeposit', () => {
       // And: Message includes current balance
       const notificationCall = vi.mocked(telegramModule.sendNotification).mock.calls[0];
       const payload = notificationCall[0];
-      expect(payload.details).toHaveProperty('currentBalance', '15,000원');
+      expect(payload.details).toHaveProperty('currentBalance', '4,000원');
     });
 
     it('should request manual deposit in notification message', async () => {
       // Given: Insufficient balance
       vi.mocked(accountModule.getAccountInfo).mockResolvedValue({
-        balance: 5000,
+        balance: 2000,
         currentRound: 1200,
       });
 
@@ -285,7 +290,7 @@ describe('checkDeposit', () => {
     it('should include minimum required amount in notification', async () => {
       // Given: Insufficient balance
       vi.mocked(accountModule.getAccountInfo).mockResolvedValue({
-        balance: 20000,
+        balance: 4000,
         currentRound: 1200,
       });
 
@@ -304,7 +309,7 @@ describe('checkDeposit', () => {
       // Then: Notification includes minimum threshold
       const notificationCall = vi.mocked(telegramModule.sendNotification).mock.calls[0];
       const payload = notificationCall[0];
-      expect(payload.details).toHaveProperty('minimumRequired', '30,000원');
+      expect(payload.details).toHaveProperty('minimumRequired', '5,000원');
     });
   });
 
@@ -347,9 +352,9 @@ describe('checkDeposit', () => {
       expect(result).toBe(true);
     });
 
-    it('should verify threshold value is 30,000', () => {
-      // Then: Constant value is exactly 30,000
-      expect(MIN_DEPOSIT_AMOUNT).toBe(30000);
+    it('should verify threshold value is 5,000', () => {
+      // Then: Constant value is exactly 5,000 (same as purchase cost)
+      expect(MIN_DEPOSIT_AMOUNT).toBe(5000);
     });
   });
 

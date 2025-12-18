@@ -32,9 +32,20 @@ vi.mock("./account", () => ({
 const { sendNotification } = await import("../notify/telegram");
 const { getAccountInfo } = await import("./account");
 
+// Helper to create mock HttpClient
+function createMockClient(mockFetch: Mock): HttpClient {
+	return {
+		fetch: mockFetch as any,
+		getCookieHeader: () => '',
+		clearCookies: () => {},
+		cookies: {},
+	};
+}
+
 describe("Lottery Purchase - TEST-PURCHASE-001: Purchase ready endpoint", () => {
 	let mockEnv: PurchaseEnv;
 	let mockFetch: Mock;
+	let mockClient: HttpClient;
 
 	beforeEach(() => {
 		mockEnv = {
@@ -45,7 +56,7 @@ describe("Lottery Purchase - TEST-PURCHASE-001: Purchase ready endpoint", () => 
 		};
 
 		mockFetch = vi.fn();
-		global.fetch = mockFetch;
+		mockClient = createMockClient(mockFetch);
 		vi.clearAllMocks();
 	});
 
@@ -83,7 +94,7 @@ describe("Lottery Purchase - TEST-PURCHASE-001: Purchase ready endpoint", () => 
 				json: async () => mockPurchaseResult,
 			} as Response);
 
-		await purchaseLottery({} as HttpClient, mockEnv);
+		await purchaseLottery(mockClient, mockEnv);
 
 		expect(mockFetch).toHaveBeenCalledWith(
 			"https://ol.dhlottery.co.kr/olotto/game/egovUserReadySocket.json",
@@ -130,7 +141,7 @@ describe("Lottery Purchase - TEST-PURCHASE-001: Purchase ready endpoint", () => 
 				json: async () => mockPurchaseResult,
 			} as Response);
 
-		const result = await purchaseLottery({} as HttpClient, mockEnv);
+		const result = await purchaseLottery(mockClient, mockEnv);
 
 		expect(result.success).toBe(true);
 	});
@@ -169,7 +180,7 @@ describe("Lottery Purchase - TEST-PURCHASE-001: Purchase ready endpoint", () => 
 				json: async () => mockPurchaseResult,
 			} as Response);
 
-		await purchaseLottery({} as HttpClient, mockEnv);
+		await purchaseLottery(mockClient, mockEnv);
 
 		const execBuyCall = mockFetch.mock.calls.find((call) =>
 			call[0].includes("execBuy.do"),
@@ -182,6 +193,7 @@ describe("Lottery Purchase - TEST-PURCHASE-001: Purchase ready endpoint", () => 
 describe("Lottery Purchase - TEST-PURCHASE-002: Purchase execution with correct parameters", () => {
 	let mockEnv: PurchaseEnv;
 	let mockFetch: Mock;
+	let mockClient: HttpClient;
 
 	beforeEach(() => {
 		mockEnv = {
@@ -192,7 +204,7 @@ describe("Lottery Purchase - TEST-PURCHASE-002: Purchase execution with correct 
 		};
 
 		mockFetch = vi.fn();
-		global.fetch = mockFetch;
+		mockClient = createMockClient(mockFetch);
 		vi.clearAllMocks();
 	});
 
@@ -230,7 +242,7 @@ describe("Lottery Purchase - TEST-PURCHASE-002: Purchase execution with correct 
 				json: async () => mockPurchaseResult,
 			} as Response);
 
-		await purchaseLottery({} as HttpClient, mockEnv);
+		await purchaseLottery(mockClient, mockEnv);
 
 		const execBuyCall = mockFetch.mock.calls.find((call) =>
 			call[0].includes("execBuy.do"),
@@ -273,7 +285,7 @@ describe("Lottery Purchase - TEST-PURCHASE-002: Purchase execution with correct 
 				json: async () => mockPurchaseResult,
 			} as Response);
 
-		await purchaseLottery({} as HttpClient, mockEnv);
+		await purchaseLottery(mockClient, mockEnv);
 
 		const execBuyCall = mockFetch.mock.calls.find((call) =>
 			call[0].includes("execBuy.do"),
@@ -320,7 +332,7 @@ describe("Lottery Purchase - TEST-PURCHASE-002: Purchase execution with correct 
 				json: async () => mockPurchaseResult,
 			} as Response);
 
-		await purchaseLottery({} as HttpClient, mockEnv);
+		await purchaseLottery(mockClient, mockEnv);
 
 		const execBuyCall = mockFetch.mock.calls.find((call) =>
 			call[0].includes("execBuy.do"),
@@ -333,6 +345,7 @@ describe("Lottery Purchase - TEST-PURCHASE-002: Purchase execution with correct 
 describe("Lottery Purchase - TEST-PURCHASE-003: Parse purchase result", () => {
 	let mockEnv: PurchaseEnv;
 	let mockFetch: Mock;
+	let mockClient: HttpClient;
 
 	beforeEach(() => {
 		mockEnv = {
@@ -343,7 +356,7 @@ describe("Lottery Purchase - TEST-PURCHASE-003: Parse purchase result", () => {
 		};
 
 		mockFetch = vi.fn();
-		global.fetch = mockFetch;
+		mockClient = createMockClient(mockFetch);
 		vi.clearAllMocks();
 	});
 
@@ -381,7 +394,7 @@ describe("Lottery Purchase - TEST-PURCHASE-003: Parse purchase result", () => {
 				json: async () => mockPurchaseResult,
 			} as Response);
 
-		const result = await purchaseLottery({} as HttpClient, mockEnv);
+		const result = await purchaseLottery(mockClient, mockEnv);
 
 		expect(result.success).toBe(true);
 		if (result.success) {
@@ -425,7 +438,7 @@ describe("Lottery Purchase - TEST-PURCHASE-003: Parse purchase result", () => {
 				json: async () => mockPurchaseResult,
 			} as Response);
 
-		const result = await purchaseLottery({} as HttpClient, mockEnv);
+		const result = await purchaseLottery(mockClient, mockEnv);
 
 		expect(result.success).toBe(true);
 		if (result.success) {
@@ -438,6 +451,7 @@ describe("Lottery Purchase - TEST-PURCHASE-003: Parse purchase result", () => {
 describe("Lottery Purchase - TEST-PURCHASE-004: Telegram success notification", () => {
 	let mockEnv: PurchaseEnv;
 	let mockFetch: Mock;
+	let mockClient: HttpClient;
 
 	beforeEach(() => {
 		mockEnv = {
@@ -448,7 +462,7 @@ describe("Lottery Purchase - TEST-PURCHASE-004: Telegram success notification", 
 		};
 
 		mockFetch = vi.fn();
-		global.fetch = mockFetch;
+		mockClient = createMockClient(mockFetch);
 		vi.clearAllMocks();
 	});
 
@@ -486,12 +500,12 @@ describe("Lottery Purchase - TEST-PURCHASE-004: Telegram success notification", 
 				json: async () => mockPurchaseResult,
 			} as Response);
 
-		await purchaseLottery({} as HttpClient, mockEnv);
+		await purchaseLottery(mockClient, mockEnv);
 
 		expect(sendNotification).toHaveBeenCalledWith(
 			expect.objectContaining({
 				type: "success",
-				title: expect.stringContaining("구매 완료"),
+				title: "Lottery Purchase Completed",
 			}),
 			mockEnv,
 		);
@@ -531,7 +545,7 @@ describe("Lottery Purchase - TEST-PURCHASE-004: Telegram success notification", 
 				json: async () => mockPurchaseResult,
 			} as Response);
 
-		await purchaseLottery({} as HttpClient, mockEnv);
+		await purchaseLottery(mockClient, mockEnv);
 
 		const notificationCall = (sendNotification as Mock).mock.calls[0];
 		const message = notificationCall[0].message;
@@ -572,7 +586,7 @@ describe("Lottery Purchase - TEST-PURCHASE-004: Telegram success notification", 
 				json: async () => mockPurchaseResult,
 			} as Response);
 
-		await purchaseLottery({} as HttpClient, mockEnv);
+		await purchaseLottery(mockClient, mockEnv);
 
 		const notificationCall = (sendNotification as Mock).mock.calls[0];
 		const message = notificationCall[0].message;
@@ -613,7 +627,7 @@ describe("Lottery Purchase - TEST-PURCHASE-004: Telegram success notification", 
 				json: async () => mockPurchaseResult,
 			} as Response);
 
-		await purchaseLottery({} as HttpClient, mockEnv);
+		await purchaseLottery(mockClient, mockEnv);
 
 		const notificationCall = (sendNotification as Mock).mock.calls[0];
 		const message = notificationCall[0].message;
@@ -624,6 +638,7 @@ describe("Lottery Purchase - TEST-PURCHASE-004: Telegram success notification", 
 describe("Lottery Purchase - TEST-PURCHASE-005: Handle purchase failures", () => {
 	let mockEnv: PurchaseEnv;
 	let mockFetch: Mock;
+	let mockClient: HttpClient;
 
 	beforeEach(() => {
 		mockEnv = {
@@ -634,7 +649,7 @@ describe("Lottery Purchase - TEST-PURCHASE-005: Handle purchase failures", () =>
 		};
 
 		mockFetch = vi.fn();
-		global.fetch = mockFetch;
+		mockClient = createMockClient(mockFetch);
 		vi.clearAllMocks();
 	});
 
@@ -647,7 +662,7 @@ describe("Lottery Purchase - TEST-PURCHASE-005: Handle purchase failures", () =>
 
 		mockFetch.mockRejectedValueOnce(new Error("Network error"));
 
-		const result = await purchaseLottery({} as HttpClient, mockEnv);
+		const result = await purchaseLottery(mockClient, mockEnv);
 
 		expect(result.success).toBe(false);
 		if (!result.success) {
@@ -677,7 +692,7 @@ describe("Lottery Purchase - TEST-PURCHASE-005: Handle purchase failures", () =>
 			} as Response)
 			.mockRejectedValueOnce(new Error("Network error"));
 
-		const result = await purchaseLottery({} as HttpClient, mockEnv);
+		const result = await purchaseLottery(mockClient, mockEnv);
 
 		expect(result.success).toBe(false);
 		if (!result.success) {
@@ -719,7 +734,7 @@ describe("Lottery Purchase - TEST-PURCHASE-005: Handle purchase failures", () =>
 				json: async () => mockPurchaseResult,
 			} as Response);
 
-		const result = await purchaseLottery({} as HttpClient, mockEnv);
+		const result = await purchaseLottery(mockClient, mockEnv);
 
 		expect(result.success).toBe(false);
 		if (!result.success) {
@@ -737,12 +752,12 @@ describe("Lottery Purchase - TEST-PURCHASE-005: Handle purchase failures", () =>
 
 		mockFetch.mockRejectedValueOnce(new Error("Network error"));
 
-		await purchaseLottery({} as HttpClient, mockEnv);
+		await purchaseLottery(mockClient, mockEnv);
 
 		expect(sendNotification).toHaveBeenCalledWith(
 			expect.objectContaining({
 				type: "error",
-				title: expect.stringContaining("구매 실패"),
+				title: "Lottery Purchase Failed",
 			}),
 			mockEnv,
 		);
@@ -770,7 +785,7 @@ describe("Lottery Purchase - TEST-PURCHASE-005: Handle purchase failures", () =>
 			} as Response)
 			.mockRejectedValueOnce(new Error("Network error"));
 
-		const result = await purchaseLottery({} as HttpClient, mockEnv);
+		const result = await purchaseLottery(mockClient, mockEnv);
 
 		// Purchase should fail completely, not partially
 		expect(result.success).toBe(false);

@@ -6,6 +6,7 @@
  *   task_id: TASK-006, TASK-010, TASK-011
  */
 
+import { USER_AGENT } from '../constants';
 import { sendNotification } from '../notify/telegram';
 import type { HttpClient, TelegramEnv, WinningResult } from '../types';
 import { calculatePreviousWeekRangeKst } from '../utils/date';
@@ -130,13 +131,25 @@ export async function checkWinning(
     url.searchParams.set('searchEndDate', endDate);
     url.searchParams.set('nowPage', '1');
 
-    const response = await client.fetch(url.toString());
-    if (response.status !== 200) {
-      console.error(`Winning fetch failed: HTTP ${response.status}`);
+    const response = await client.fetch(url.toString(), {
+      headers: {
+        'User-Agent': USER_AGENT,
+      },
+    });
+    // Accept 200 OK or 3xx redirect
+    if (response.status !== 200 && (response.status < 300 || response.status >= 400)) {
+      console.error(
+        JSON.stringify({
+          event: 'winning_fetch_failed',
+          status: response.status,
+          message: 'Winning fetch failed',
+        })
+      );
       return [];
     }
 
-    const html = await response.text();
+    // Get HTML content with euc-kr encoding (server sends euc-kr)
+    const html = await response.text('euc-kr');
     const parsed = parseWinningResultsFromHtml(html);
     const jackpotWins = filterJackpotWins(parsed);
 
@@ -146,7 +159,7 @@ export async function checkWinning(
       await sendNotification(
         {
           type: 'success',
-          title: '로또 1등 당첨!',
+          title: 'Lottery Jackpot Win!',
           message: `${win.roundNumber}회차 로또 ${win.rank}등 당첨을 확인했습니다.`,
           details: {
             roundNumber: win.roundNumber,
@@ -164,7 +177,13 @@ export async function checkWinning(
     return jackpotWins;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    console.error('Winning check failed (non-fatal):', message);
+    console.error(
+      JSON.stringify({
+        event: 'winning_check_failed',
+        error: message,
+        message: 'Winning check failed (non-fatal)',
+      })
+    );
     return [];
   }
 }
