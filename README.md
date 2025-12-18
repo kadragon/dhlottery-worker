@@ -114,21 +114,22 @@ npm run deploy
 
 The service executes automatically every Monday at 10:00 AM KST:
 
-1. **Initialize session** → Capture cookies
-2. **Authenticate** → Login to DHLottery
-3. **Check account** → Fetch balance and lottery info
-4. **Verify deposit** → Ensure sufficient balance (≥30,000 KRW)
-5. **Purchase lottery** → Buy 5 games (5,000 KRW) if balance OK
-6. **Check winning** → Verify results from previous week
-7. **Notify** → Send Telegram message with results
+1. **Initialize session** → GET `common.do?method=main` to capture initial cookies
+2. **Authenticate** → POST login with session cookies and browser headers
+3. **Check account** → Fetch balance from My Page (`myPage.do`) and round from lottery API
+4. **Verify deposit** → Ensure sufficient balance (≥5,000 KRW)
+5. **Purchase lottery** → Two-phase purchase: ready socket → execute with auto-generated numbers
+6. **Check winning** → Verify previous week's results (Mon-Sun KST) for rank 1 jackpots
+7. **Notify** → Send Telegram message with purchase and winning results
 
 ## Business Rules
 
-- **Minimum deposit**: 30,000 KRW
+- **Minimum deposit**: 5,000 KRW (exact purchase cost)
 - **Purchase amount**: 5 games × 1,000 KRW = 5,000 KRW
-- **Purchase mode**: Automatic number generation
-- **Winning check**: Previous Monday-Sunday, rank 1 only
-- **Execution**: Weekly, Monday 10:00 KST
+- **Purchase mode**: Automatic number generation (genType "0")
+- **Winning check**: Previous Monday-Sunday (KST), rank 1 (jackpot) only
+- **Weekly limit**: DHLottery enforces 5,000 KRW/week per account
+- **Execution**: Every Monday 10:00 KST (purchases for upcoming Saturday draw)
 
 ## Security
 
@@ -139,34 +140,81 @@ The service executes automatically every Monday at 10:00 AM KST:
 
 ## Testing
 
-This project uses **Test-Driven Development (TDD)**:
+This project uses **Test-Driven Development (TDD)** and **Spec-Driven Development (SDD)**:
 
-1. Write tests first (RED)
-2. Implement minimal code to pass (GREEN)
-3. Refactor while keeping tests green (REFACTOR)
+1. Write specification in `.spec/` (Given-When-Then scenarios)
+2. Create tests first (RED)
+3. Implement minimal code to pass (GREEN)
+4. Refactor while keeping tests green (REFACTOR)
 
-All features are specified in `.spec/` directory with Given-When-Then scenarios and acceptance tests.
+### Test Coverage
+- **118 tests** covering all modules (auth, account, purchase, winning, notifications, utilities)
+- Fixture-based testing with real HTML samples from DHLottery
+- Mock HTTP client for deterministic test behavior
+- Isolated unit tests per module with spec traceability
+
+Run tests:
+```bash
+npm test                # Run all tests once
+npm run test:watch     # Run tests in watch mode
+```
 
 ## Maintenance
 
 ### Adding new features
 
-1. Create spec in `.spec/[feature-name]/spec.yaml`
-2. Add task to `.tasks/backlog.yaml`
-3. Move task to `.tasks/current.yaml`
-4. Implement following TDD cycle
-5. Update `.governance/memory.md` with learnings
+1. Create spec in `.spec/[feature-name]/spec.yaml` with GWT scenarios
+2. Add task to `.tasks/backlog.yaml` with spec_id reference
+3. Move task to `.tasks/current.yaml` 
+4. Implement following RED → GREEN → REFACTOR cycle
+5. Update `.governance/memory.md` with learnings and patterns
+6. Move task to `.tasks/done.yaml` with outcome notes
 
 ### Debugging
 
-Check Cloudflare Workers logs:
+View Cloudflare Workers logs:
 ```bash
 wrangler tail
+```
+
+Check local test execution:
+```bash
+npm test -- --reporter=verbose
+```
+
+Enable debug HTML save (for auth issues):
+```bash
+export DEBUG_HTML=1
 ```
 
 ## License
 
 MIT
+
+## Implementation Notes
+
+### Authentication Flow (Verified Dec 2025)
+- Requires two-phase authentication: session init + login
+- GET `common.do?method=main` first to acquire initial cookies
+- POST login with browser-like headers (User-Agent, X-Requested-With, Referer, etc.)
+- Success indicated by HTML response with `goNextPage` function (NOT JSON)
+- Prevents session loss by NOT following redirect after successful login
+
+### Account Info Retrieval
+- Fetches both Main Page and My Page to handle potential 302 redirects
+- Parses balance from HTML using regex (requires '원' suffix)
+- Determines current lottery round via fallback binary search + API call
+
+### Purchase Protocol
+- Two-phase atomic transaction: ready socket init → execute with round number
+- Auto-generates 5 games using genType "0"
+- Returns resultCode "100" on success, "-7" if hitting weekly limit
+- Non-fatal: failures logged and notified, do not crash workflow
+
+### Winning Check
+- Scans previous week's purchase history (Monday 00:00 ~ Sunday 23:59:59 KST)
+- Parses HTML table and filters rank 1 (jackpot) wins only
+- Non-fatal: parsing errors return empty, never crash workflow
 
 ## Disclaimer
 
