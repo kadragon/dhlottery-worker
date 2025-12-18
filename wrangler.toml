@@ -12,6 +12,18 @@ crons = ["0 1 * * 1"]
 [vars]
 # Add non-secret configuration here if needed
 
+[observability]
+enabled = true
+
+[observability.logs]
+enabled = true
+head_sampling_rate = 1
+invocation_logs = true
+persist = true
+
+[placement]
+mode = "smart"
+
 # Secrets (configure via CLI: wrangler secret put <NAME>)
 # Required secrets:
 # - USER_ID: DHLottery user ID
