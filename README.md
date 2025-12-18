@@ -216,6 +216,10 @@ MIT
 - Parses HTML table and filters rank 1 (jackpot) wins only
 - Non-fatal: parsing errors return empty, never crash workflow
 
+## References
+
+This project was developed with reference to [roeniss/dhlottery-api](https://github.com/roeniss/dhlottery-api), a comprehensive DHLottery API library.
+
 ## Disclaimer
 
 This is a personal automation tool for individual use only. Not for commercial purposes.
