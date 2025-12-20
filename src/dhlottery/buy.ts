@@ -2,8 +2,8 @@
  * Lottery Purchase Module
  *
  * Trace:
- *   spec_id: SPEC-PURCHASE-001
- *   task_id: TASK-005, TASK-011
+ *   spec_id: SPEC-PURCHASE-001, SPEC-REFACTOR-P2-ERROR-001
+ *   task_id: TASK-005, TASK-011, TASK-REFACTOR-P2-003
  *
  * Implements automatic lottery purchase with 5 games
  */
@@ -19,6 +19,7 @@ import type {
   PurchaseResult,
 } from '../types';
 import { PURCHASE_CONSTANTS } from '../types/purchase.types';
+import { PurchaseError } from '../utils/errors';
 import { getAccountInfo } from './account';
 
 const BASE_URL = 'https://ol.dhlottery.co.kr/olotto/game';
@@ -36,7 +37,7 @@ async function preparePurchase(client: HttpClient): Promise<PurchaseReadyRespons
   });
 
   if (response.status !== 200) {
-    throw new Error(`Purchase ready failed: ${response.status}`);
+    throw new PurchaseError(`Purchase ready failed: ${response.status}`, 'PURCHASE_READY_FAILED');
   }
 
   return await response.json();
@@ -88,7 +89,10 @@ async function executePurchase(
   });
 
   if (response.status !== 200) {
-    throw new Error(`Purchase execution failed: ${response.status}`);
+    throw new PurchaseError(
+      `Purchase execution failed: ${response.status}`,
+      'PURCHASE_EXECUTION_FAILED'
+    );
   }
 
   return await response.json();

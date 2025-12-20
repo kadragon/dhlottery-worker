@@ -1,0 +1,58 @@
+spec_id: SPEC-REFACTOR-P1-TYPE-001
+title: "Fix type safety for notification details field"
+category: refactoring
+phase: 1
+priority: medium
+
+given_when_then:
+  - given: "NotificationPayload.details is currently Record<string, unknown>"
+    when: "creating notification payloads with details"
+    then: "only JSON-serializable primitive values should be allowed (string | number | boolean | null | undefined)"
+
+  - given: "details field is optional"
+    when: "details contains non-serializable values (functions, symbols, circular refs)"
+    then: "TypeScript compiler should reject at compile-time"
+
+  - given: "notification payloads are sent to Telegram API as JSON"
+    when: "details are serialized"
+    then: "no runtime JSON serialization errors should occur"
+
+acceptance_tests:
+  - id: TEST-REFACTOR-P1-TYPE-001
+    desc: "Compiler accepts valid primitive values in details"
+    test: |
+      NotificationPayload with details containing string, number, boolean, null, undefined
+      should compile successfully
+
+  - id: TEST-REFACTOR-P1-TYPE-002
+    desc: "Compiler rejects non-serializable values in details"
+    test: |
+      NotificationPayload with details containing functions, symbols, or objects
+      should fail TypeScript compilation
+
+  - id: TEST-REFACTOR-P1-TYPE-003
+    desc: "Existing notification tests continue to pass"
+    test: |
+      All existing telegram.spec.ts tests should pass without modification,
+      ensuring backward compatibility with current usage patterns
+
+rationale: |
+  Current type Record<string, unknown> allows any value including non-serializable types.
+  This can cause runtime JSON.stringify() errors when sending to Telegram API.
+  Restricting to JSON primitives catches errors at compile-time and documents intent.
+
+impact:
+  - Breaking change: No (existing code uses primitive values only)
+  - Risk: Low (pure type-level change, no runtime behavior change)
+  - Testing: Type-level tests via tsd or manual compilation verification
+
+files_affected:
+  - src/types/notification.types.ts
+
+linked_tasks:
+  - TASK-REFACTOR-P1-002
+
+dependencies:
+  governance:
+    - coding-style.md: "Prefer strict types over permissive ones"
+    - patterns.md: "Type safety prevents runtime errors"

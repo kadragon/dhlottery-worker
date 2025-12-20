@@ -32,6 +32,13 @@ export class DHLotteryClient {
 
   /**
    * Get current account information (balance, round)
+   *
+   * Public API for external callers. Internal code (buy.ts, charge.ts) calls
+   * the getAccountInfo() function from the account module directly for better
+   * encapsulation and to avoid adding a dependency layer for internal flows.
+   * This method exists to provide a unified client interface for external API usage.
+   *
+   * @returns Account information with balance and current lottery round
    */
   async getAccountInfo(): Promise<AccountInfo> {
     return await getAccountInfo(this.client);

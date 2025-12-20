@@ -11,6 +11,7 @@ import { join } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { HttpClient, HttpResponse, TelegramEnv } from "../types";
 import {
+  WINNING_PATTERNS,
   calculatePreviousWeekRange,
   checkWinning,
   filterJackpotWins,
@@ -192,6 +193,97 @@ describe("Winning Check", () => {
       expect(JSON.stringify(payload)).toContain("1144");
       expect(JSON.stringify(payload)).toContain("1");
       expect(JSON.stringify(payload)).toContain("2000000000");
+    });
+  });
+
+  /**
+   * TEST-WINNING-007: Global regex lastIndex bug - multiple rows
+   *
+   * Criteria:
+   * - Parse multiple table rows correctly
+   * - Each row must have all cells extracted
+   * - Shared global regex must not interfere between rows
+   */
+  describe("TEST-WINNING-007: Global regex should not break multi-row parsing", () => {
+    it("should demonstrate why matchAll is needed instead of exec", () => {
+      // This test documents the global regex lastIndex bug that would occur
+      // if we used .exec() in a loop with a shared global regex.
+      // Our fix (using .matchAll()) avoids this issue entirely.
+
+      const regex = WINNING_PATTERNS.tableCell;
+      const row1 = '<td>A</td><td>B</td><td>C</td>';
+      const row2 = '<td>D</td><td>E</td><td>F</td>';
+
+      // Using .exec() with a global regex causes lastIndex to persist
+      const cells1: string[] = [];
+      let match1 = regex.exec(row1);
+      if (match1) cells1.push(match1[1] ?? '');
+      match1 = regex.exec(row1);
+      if (match1) cells1.push(match1[1] ?? '');
+      match1 = regex.exec(row1);
+      if (match1) cells1.push(match1[1] ?? '');
+
+      // lastIndex is now at the end of row1
+      const lastIndexAfterRow1 = regex.lastIndex;
+      expect(lastIndexAfterRow1).toBeGreaterThan(0);
+
+      // Using .exec() on row2 without reset causes partial matches
+      const cells2WithBug: string[] = [];
+      let match2 = regex.exec(row2);
+      if (match2) cells2WithBug.push(match2[1] ?? '');
+      match2 = regex.exec(row2);
+      if (match2) cells2WithBug.push(match2[1] ?? '');
+      match2 = regex.exec(row2);
+      if (match2) cells2WithBug.push(match2[1] ?? '');
+
+      // Demonstrates the bug: only partial matches due to stale lastIndex
+      expect(cells1).toEqual(['A', 'B', 'C']);
+      expect(cells2WithBug.length).toBeLessThan(3); // Bug reproduced
+
+      // The fix: using .matchAll() always works correctly
+      regex.lastIndex = 0; // Reset for clean test
+      const cells2Fixed = Array.from(row2.matchAll(regex), (m) => m[1] ?? '');
+      expect(cells2Fixed).toEqual(['D', 'E', 'F']); // Fix verified
+    });
+
+    it("should parse all cells from multiple rows without lastIndex interference", () => {
+      const multiRowHtml = `
+        <tr>
+          <td>2025-12-10</td>
+          <td>로또6/45</td>
+          <td><a href="javascript:detailPop('x','y','1140');">상세</a></td>
+          <td>5</td>
+          <td>1등 (일치 6개)</td>
+          <td>1,000,000,000원</td>
+          <td>2025-12-13</td>
+        </tr>
+        <tr>
+          <td>2025-12-11</td>
+          <td>로또6/45</td>
+          <td><a href="javascript:detailPop('x','y','1141');">상세</a></td>
+          <td>3</td>
+          <td>2등 (일치 5개)</td>
+          <td>50,000,000원</td>
+          <td>2025-12-14</td>
+        </tr>
+        <tr>
+          <td>2025-12-12</td>
+          <td>로또6/45</td>
+          <td><a href="javascript:detailPop('x','y','1142');">상세</a></td>
+          <td>2</td>
+          <td>3등 (일치 5개)</td>
+          <td>1,500,000원</td>
+          <td>2025-12-15</td>
+        </tr>
+      `;
+
+      const results = parseWinningResultsFromHtml(multiRowHtml);
+
+      // All 3 rows should be parsed, not just the first one
+      expect(results.length).toBe(3);
+      expect(results[0]?.roundNumber).toBe(1140);
+      expect(results[1]?.roundNumber).toBe(1141);
+      expect(results[2]?.roundNumber).toBe(1142);
     });
   });
 

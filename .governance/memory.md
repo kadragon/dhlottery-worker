@@ -108,5 +108,59 @@
 - **Purchase flow**: login → checkDeposit → (if balance sufficient) purchaseLottery → checkWinning
 - **Non-fatal components**: Telegram notifications, charge initialization, and winning checks never crash the main workflow.
 
+## Refactoring Plan (2025-12-20)
+
+Based on comprehensive code analysis (REFACTOR_ANALYSIS.md), initiated Phase 1+2 refactoring:
+
+### Phase 1: Quick Wins (~30 minutes)
+- **TASK-REFACTOR-P1-001**: Remove non-functional debug HTML write code (auth.ts:171-184)
+- **TASK-REFACTOR-P1-002**: Fix type safety for NotificationPayload.details (Record<string, any> → strict types)
+- **TASK-REFACTOR-P1-003**: Add PurchaseError class for consistent error handling
+- **TASK-REFACTOR-P1-004**: Document unused DHLotteryClient.getAccountInfo() method
+
+### Phase 2: Refactoring (~1 hour)
+- **TASK-REFACTOR-P2-001**: Extract regex patterns to named constants (BALANCE_PATTERNS, WINNING_PATTERNS)
+- **TASK-REFACTOR-P2-002**: Consolidate logging under conditional DEBUG flag
+- **TASK-REFACTOR-P2-003**: Update buy.ts error handling to use PurchaseError
+- **TASK-REFACTOR-P2-004**: Review and document session initialization URL strategy
+
+### Analysis Summary
+- **Overall Grade**: A- (Excellent)
+- **Security**: No vulnerabilities detected
+- **Code Quality**: 0 linting errors, 118 tests passing
+- **Architecture**: Clean separation of concerns, well-structured
+- **Issues**: 7 minor/moderate issues identified, all non-critical
+- **Improvements**: Focus on maintainability, consistency, and reducing production log noise
+
+All specs created under `.spec/refactor-phase1-*` and `.spec/refactor-phase2-*`.
+Tasks queued in `.tasks/backlog.yaml` ready for execution.
+
 ## Next
-- (none queued) All core features implemented and tested.
+- Execute TASK-REFACTOR-P1-001 to start Phase 1 refactoring
+- Follow TDD approach: update tests first, then implement changes
+
+## Recent Improvements (2025-12-20)
+- **TASK-REFACTOR-P1-001**: Removed non-functional debug HTML write block in `auth.ts` (previously attempted `/tmp/login-response.html` write via `node:fs`). No behavior changes expected.
+- **TASK-REFACTOR-P1-002**: Fixed type safety for `NotificationPayload.details` field. Changed from `Record<string, unknown>` to `Record<string, string | number | boolean | null | undefined>` to restrict to JSON-serializable primitives only. Prevents runtime JSON.stringify errors when sending to Telegram API. Pure type-level change, all 118 tests pass, backward compatible.
+- **TASK-REFACTOR-P1-003**: Added `PurchaseError` class in `src/utils/errors.ts`. Follows same pattern as `AuthenticationError` and `NetworkError`. Supports custom error codes (`PURCHASE_READY_FAILED`, `PURCHASE_EXECUTION_FAILED`). Created comprehensive test suite with 16 tests. All 134 tests pass. Ready for use in buy.ts refactoring (TASK-REFACTOR-P2-003).
+- **TASK-REFACTOR-P1-004**: Added comprehensive JSDoc documentation to `DHLotteryClient.getAccountInfo()` method in `src/dhlottery/client.ts`. Documentation explains method is public API for external callers while internal code (buy.ts, charge.ts) calls account module directly for better encapsulation. Added 5 new tests (TEST-REFACTOR-P1-DOC-001..003) to verify JSDoc comment exists and documents external API purpose. All 146 tests pass (1 unrelated auth test failing). Pure documentation improvement, no behavior changes.
+- **TASK-REFACTOR-P2-002**: Consolidated logging under conditional DEBUG flag in `auth.ts`. Wrapped all debug/info console.log() calls with `if (DEBUG)` condition while keeping console.error() unconditional. Applied DEBUG import from constants throughout. Reduces production log noise. Updated JSDoc trace to include SPEC-REFACTOR-P2-LOG-001. All 147 tests pass. Pure implementation improvement, backward compatible.
+- **TASK-REFACTOR-P2-003**: Replaced generic `Error` throws in `buy.ts` with `PurchaseError` class (dependency: TASK-REFACTOR-P1-003). Updated `preparePurchase()` line 40 to throw `PurchaseError` with code `PURCHASE_READY_FAILED`, and `executePurchase()` line 92 to throw with code `PURCHASE_EXECUTION_FAILED`. Added 4 new TDD tests verifying error messages include status codes. All 145 tests pass (2 skipped). No behavioral changes - errors still caught and converted to failure results in `purchaseLottery()` handler. Error classification now consistent with PurchaseError base class pattern.
+- **TASK-REFACTOR-P2-004**: Completed session initialization URL strategy investigation (SPEC-REFACTOR-P2-SESSION-001). Findings: Both `gameResult.do?method=byWin&wiselog=H_C_1_1` (current) and `common.do?method=main` (documented) are functionally equivalent for session initialization - both return HTTP 200 with Set-Cookie: JSESSIONID. Current implementation using gameResult.do is derived from reference implementation (n8n workflow). Recommendation: KEEP current implementation (stable, tested, no functional gain from changing). Action: Added comprehensive JSDoc documentation to auth.ts explaining the design choice, noting both URLs are equivalent, and documenting that common.do is a valid alternative. Updated spec file with complete investigation findings and test results. All 147 tests pass. Pure documentation improvement, zero risk.
+- **TASK-REFACTOR-P2-001**: Extracted hardcoded regex patterns from `account.ts` and `check.ts` into named constants for improved maintainability, testability, and self-documentation.
+  - **BALANCE_PATTERNS** object in `src/dhlottery/account.ts`: 3 patterns (mainPageHeader, myPageBalance, strongWithYuan) for parsing deposit balance from HTML
+  - **WINNING_PATTERNS** object in `src/dhlottery/check.ts`: 5 patterns (rowExtraction, tableCell, detailPopCall, digitExtraction, matchCount) for parsing lottery winning results
+  - Updated parsing functions to use pattern constants via Object.values() iteration instead of inline literal arrays
+  - Created `.spec/refactor-phase2-regex/spec.yaml` with full GWT acceptance tests
+  - All 25 account/check tests pass; no behavioral changes; patterns function identically to original inline literals
+  - Code is now more readable, maintainable, and self-documenting (pattern names explain their purpose)
+  - Constants are exported for potential external use and testing
+- **Spec Documentation Cleanup (2025-12-20)**: Removed duplicate specification files based on PR #2 review feedback from Gemini Code Assist.
+  - Deleted 4 redundant spec directories that described identical refactoring tasks:
+    - `.spec/refactor-phase1-error-classes/` (duplicate of refactor-phase1-error)
+    - `.spec/refactor-phase1-type-safety/` (duplicate of refactor-phase1-type)
+    - `.spec/refactor-phase2-log/` (duplicate of refactor-phase2-logging)
+    - `.spec/refactor-phase2-regex-constants/` (duplicate of refactor-phase2-regex)
+  - Kept more comprehensive versions with detailed GWT specs, acceptance tests, and rationale
+  - Resolved task reference inconsistency noted in review (TASK-REFACTOR-P2-004 vs P2-003)
+  - Result: Cleaner .spec directory, single source of truth for each refactoring task, better maintainability

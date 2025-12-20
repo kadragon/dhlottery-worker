@@ -1,0 +1,40 @@
+spec_id: SPEC-REFACTOR-P1-DOC-001
+title: "Document or remove unused getAccountInfo() method"
+priority: low
+phase: 1
+
+given_when_then:
+  - given: "DHLotteryClient.getAccountInfo() is defined but never called"
+    when: "buy.ts and charge.ts call getAccountInfo() directly (bypassing client)"
+    then: "the client method becomes dead code violating facade pattern"
+
+  - given: "we need to clarify the intention"
+    when: "we either remove it or document its purpose"
+    then: "the API contract becomes clear"
+
+acceptance_tests:
+  - id: TEST-REFACTOR-P1-DOC-001
+    desc: "decision should be made: remove method OR add JSDoc comment explaining it's for external use"
+
+  - id: TEST-REFACTOR-P1-DOC-002
+    desc: "if removed, all references should be checked (none expected)"
+
+  - id: TEST-REFACTOR-P1-DOC-003
+    desc: "if kept, JSDoc should explain: 'Public API for external callers (internal code calls directly)'"
+
+dependencies:
+  - file: "src/dhlottery/client.ts"
+  - file: "src/dhlottery/buy.ts"
+  - file: "src/dhlottery/charge.ts"
+  - governance: "coding-style.md"
+
+linked_tasks:
+  - TASK-REFACTOR-P1-004
+
+notes: |
+  Location: src/dhlottery/client.ts:36-38
+  Impact: Clarifies API contract
+  Effort: 5 minutes
+  Risk: None (either documentation or safe removal)
+
+  Recommendation: Keep with JSDoc comment explaining it's intended for external API

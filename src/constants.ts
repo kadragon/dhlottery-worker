@@ -2,9 +2,15 @@
  * Business rule constants for DHLottery worker
  *
  * Trace:
- *   spec_id: SPEC-DEPOSIT-001, SPEC-UTILS-001
- *   task_id: TASK-004, TASK-010
+ *   spec_id: SPEC-DEPOSIT-001, SPEC-UTILS-001, SPEC-REFACTOR-P2-LOG-001
+ *   task_id: TASK-004, TASK-010, TASK-REFACTOR-P2-002
  */
+
+/**
+ * Debug flag for conditional logging
+ * Set to true to enable console.log() output, false to suppress (production)
+ */
+export const DEBUG = false;
 
 /**
  * Minimum deposit amount required for lottery purchase

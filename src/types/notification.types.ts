@@ -2,8 +2,8 @@
  * Notification Types
  *
  * Trace:
- *   spec_id: SPEC-TELEGRAM-001
- *   task_id: TASK-007
+ *   spec_id: SPEC-TELEGRAM-001, SPEC-REFACTOR-P1-TYPE-001
+ *   task_id: TASK-007, TASK-REFACTOR-P1-002
  */
 
 /**
@@ -18,7 +18,7 @@ export interface NotificationPayload {
   type: NotificationType;
   title: string;
   message: string;
-  details?: Record<string, unknown>;
+  details?: Record<string, string | number | boolean | null | undefined>;
 }
 
 /**

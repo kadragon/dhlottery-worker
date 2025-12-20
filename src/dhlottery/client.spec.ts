@@ -77,4 +77,92 @@ describe('DHLotteryClient', () => {
     await client.checkWinning(now);
     expect(checkModule.checkWinning).toHaveBeenCalledWith(expect.anything(), mockEnv, now);
   });
+
+  /**
+   * TEST-REFACTOR-P1-DOC-001: Verify getAccountInfo() has JSDoc documentation
+   *
+   * Criteria:
+   * - Method has JSDoc comment block
+   * - Comment explains it's for external API usage
+   * - Comment notes that internal code (buy.ts, charge.ts) call module directly
+   */
+  describe('TEST-REFACTOR-P1-DOC-001: getAccountInfo JSDoc documentation', () => {
+    it('should have JSDoc comment explaining external API purpose', () => {
+      // Read the source file and verify JSDoc exists
+      const fs = require('fs');
+      const path = require('path');
+      const sourceFile = path.join(__dirname, 'client.ts');
+      const content = fs.readFileSync(sourceFile, 'utf-8');
+
+      // Verify JSDoc comment block exists before getAccountInfo method
+      expect(content).toMatch(/\/\*\*[\s\S]*?Get current account information[\s\S]*?@returns[\s\S]*?\*\/\s*async getAccountInfo/);
+    });
+
+    it('should document that it is intended for external API usage', () => {
+      const fs = require('fs');
+      const path = require('path');
+      const sourceFile = path.join(__dirname, 'client.ts');
+      const content = fs.readFileSync(sourceFile, 'utf-8');
+
+      // Verify JSDoc mentions external API usage
+      expect(content).toMatch(/\/\*\*[\s\S]*?external[\s\S]*?@returns[\s\S]*?\*\/\s*async getAccountInfo/i);
+    });
+  });
+
+  /**
+   * TEST-REFACTOR-P1-DOC-002: Verify no orphaned references to client.getAccountInfo()
+   *
+   * Criteria:
+   * - buy.ts calls getAccountInfo directly from account module
+   * - charge.ts calls getAccountInfo directly from account module
+   * - No external code tries to use client.getAccountInfo()
+   */
+  describe('TEST-REFACTOR-P1-DOC-002: getAccountInfo usage patterns', () => {
+    it('should be called via module delegation pattern in tests', async () => {
+      vi.mocked(accountModule.getAccountInfo).mockResolvedValue({
+        balance: 50000,
+        currentRound: 1234,
+      });
+
+      const result = await client.getAccountInfo();
+
+      expect(result).toEqual({ balance: 50000, currentRound: 1234 });
+      expect(accountModule.getAccountInfo).toHaveBeenCalled();
+    });
+  });
+
+  /**
+   * TEST-REFACTOR-P1-DOC-003: Verify method signature and return type
+   *
+   * Criteria:
+   * - Method is async and returns Promise<AccountInfo>
+   * - Method accepts no parameters
+   * - Method delegates to account module's getAccountInfo function
+   */
+  describe('TEST-REFACTOR-P1-DOC-003: getAccountInfo interface', () => {
+    it('should have correct method signature (no params, returns AccountInfo)', async () => {
+      vi.mocked(accountModule.getAccountInfo).mockResolvedValue({
+        balance: 75000,
+        currentRound: 999,
+      });
+
+      const result = await client.getAccountInfo();
+
+      expect(typeof result === 'object').toBe(true);
+      expect('balance' in result).toBe(true);
+      expect('currentRound' in result).toBe(true);
+    });
+
+    it('should delegate to account module with client instance', async () => {
+      vi.mocked(accountModule.getAccountInfo).mockResolvedValue({
+        balance: 100000,
+        currentRound: 5000,
+      });
+
+      await client.getAccountInfo();
+
+      // Verify delegation: first argument should be the HTTP client
+      expect(accountModule.getAccountInfo).toHaveBeenCalledWith(expect.anything());
+    });
+  });
 });

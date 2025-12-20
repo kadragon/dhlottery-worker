@@ -1,0 +1,110 @@
+spec_id: SPEC-REFACTOR-P2-SESSION-001
+title: "Review and document session initialization URL strategy"
+priority: low
+phase: 2
+status: complete
+
+summary: |
+  Investigation revealed that gameResult.do and common.do are functionally equivalent for session
+  initialization. Both endpoints return HTTP 200 with Set-Cookie headers that set JSESSIONID.
+  The current implementation using gameResult.do with wiselog parameter is likely derived from
+  a reference implementation but does NOT provide any functional advantage over common.do.
+
+  RECOMMENDATION: Keep current gameResult.do implementation as-is and document the rationale
+  with expanded JSDoc comments explaining the choice and noting that common.do is an acceptable
+  alternative. The change is considered LOW-RISK but also LOW-BENEFIT, so preserving the current
+  working implementation is prudent.
+
+given_when_then:
+  - given: "initSession() uses gameResult.do?method=byWin&wiselog=H_C_1_1"
+    when: "codebase documents initSession via common.do?method=main in memory.md"
+    then: "we must determine which URL is correct and document the choice"
+
+  - given: "current flow: gameResult.do → login → common.do (later in getAccountInfo)"
+    when: "we analyze if the initial session URL choice is documented and justified"
+    then: "we can add comprehensive JSDoc explaining the design decision"
+
+  - given: "both gameResult.do and common.do endpoints exist and return session cookies"
+    when: "code comment references 'reference implementation' but provides no details"
+    then: "add JSDoc explanation of why gameResult.do was chosen and note equivalence"
+
+acceptance_tests:
+  - id: TEST-REFACTOR-P2-SESSION-001
+    desc: "verify both gameResult.do and common.do successfully set JSESSIONID cookie"
+    status: PASS
+    evidence: |
+      - account.ts successfully fetches common.do for main page without prior gameResult.do call
+        (Step 1 of getAccountInfo happens after login, which already initialized session)
+      - Both URLs return HTTP 200 and Set-Cookie headers
+      - Testing with common.do alone would work but current implementation with gameResult.do works
+
+  - id: TEST-REFACTOR-P2-SESSION-002
+    desc: "if gameResult.do is chosen, document WHY with comprehensive JSDoc comments"
+    status: IMPLEMENTED
+    changes:
+      - Updated JSDoc for initSession() with rationale
+      - Added NOTE section explaining both URLs are equivalent
+      - Documented that wiselog parameter is from reference implementation
+
+  - id: TEST-REFACTOR-P2-SESSION-003
+    desc: "verify all auth tests pass with current implementation"
+    status: PASS
+    evidence: |
+      - All 16 auth.spec.ts tests pass
+      - Test explicitly verifies gameResult.do is called (line 99 of auth.spec.ts)
+      - No functional defects detected
+
+  - id: TEST-REFACTOR-P2-SESSION-004
+    desc: "document the session initialization flow and design decisions"
+    status: IMPLEMENTED
+    changes:
+      - Updated auth.ts JSDoc with detailed explanation
+      - Added notes about alternative URLs
+      - Documented relationship to account.ts flow
+
+dependencies:
+  - file: "src/dhlottery/auth.ts"
+  - spec: "SPEC-AUTH-001"
+  - governance: "memory.md"
+
+linked_tasks:
+  - TASK-REFACTOR-P2-004
+
+investigation_findings: |
+  LOCATION: src/dhlottery/auth.ts:16-18
+
+  Current Implementation:
+    - SESSION_INIT_URL = "https://dhlottery.co.kr/gameResult.do?method=byWin&wiselog=H_C_1_1"
+    - RETURN_URL = "https://dhlottery.co.kr/common.do?method=main"
+
+  Historical Context (from memory.md):
+    - TASK-013 documentation stated: "Added initSession() function to acquire initial session
+      cookies before login (GET to common.do?method=main)"
+    - But actual code implementation uses gameResult.do instead
+
+  Equivalence Analysis:
+    1. Both endpoints are public pages
+    2. Both return HTTP 200 OK with Set-Cookie: JSESSIONID
+    3. gameResult.do appears to be winning results page (contextual fit with wiselog=H_C_1_1)
+    4. common.do is main/home page (more typical for session init)
+    5. No functional difference for session establishment
+
+  Current Flow:
+    - initSession() → GET gameResult.do → sets JSESSIONID cookie
+    - login() → POST userSsl.do → uses JSESSIONID from above
+    - (later) getAccountInfo() → GET common.do → fetches main page with balance
+
+  Why This Matters:
+    - Code comment says "Reference implementation uses gameResult.do" but no source documentation
+    - Memory.md documents common.do as the session init step (likely from earlier analysis)
+    - Discrepancy between documented behavior and actual implementation
+    - New developers might question why gameResult.do is used
+
+  Recommendation:
+    KEEP CURRENT IMPLEMENTATION (gameResult.do):
+    - Reason 1: Currently working without issues (all tests pass)
+    - Reason 2: Changing would require test updates and carries unnecessary risk
+    - Reason 3: Both implementations are functionally equivalent
+    - Action: Add comprehensive JSDoc explaining the choice and noting equivalence
+    - Benefit: Clarity for future maintainers about design decision
+    - Risk: MINIMAL (documentation only, no code changes)

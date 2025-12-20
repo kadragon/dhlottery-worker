@@ -1,0 +1,47 @@
+spec_id: SPEC-REFACTOR-P2-ERROR-001
+title: "Update error handling in buy.ts to use PurchaseError"
+priority: medium
+phase: 2
+
+given_when_then:
+  - given: "buy.ts uses generic Error class with just status codes"
+    when: "purchase operations fail"
+    then: "errors lack specific error codes and context"
+
+  - given: "PurchaseError class has been created (SPEC-REFACTOR-P1-ERROR-001)"
+    when: "we replace generic Error throws in buy.ts with PurchaseError"
+    then: "purchase errors become consistently classified with specific error codes"
+
+acceptance_tests:
+  - id: TEST-REFACTOR-P2-ERROR-001
+    desc: "buy.ts:39 should throw PurchaseError with code PURCHASE_READY_FAILED"
+
+  - id: TEST-REFACTOR-P2-ERROR-002
+    desc: "buy.ts:91 should throw PurchaseError with code PURCHASE_EXECUTION_FAILED"
+
+  - id: TEST-REFACTOR-P2-ERROR-003
+    desc: "error messages should include context (not just status code)"
+
+  - id: TEST-REFACTOR-P2-ERROR-004
+    desc: "all existing purchase tests should pass with new error class"
+
+dependencies:
+  - spec: "SPEC-REFACTOR-P1-ERROR-001"
+  - file: "src/dhlottery/buy.ts"
+  - file: "src/utils/errors.ts"
+  - governance: "patterns.md"
+
+linked_tasks:
+  - TASK-REFACTOR-P2-003
+
+notes: |
+  Location: src/dhlottery/buy.ts
+  Lines to update:
+    - Line 39: throw new Error(`Purchase ready failed: ${response.status}`)
+      → throw new PurchaseError(`Purchase ready failed: ${response.status}`, 'PURCHASE_READY_FAILED')
+    - Line 91: throw new Error(`Purchase execution failed: ${response.status}`)
+      → throw new PurchaseError(`Purchase execution failed: ${response.status}`, 'PURCHASE_EXECUTION_FAILED')
+
+  Impact: Consistent error classification
+  Effort: 10 minutes
+  Risk: Low (error class inheritance maintains compatibility)

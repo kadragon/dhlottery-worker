@@ -1,17 +1,40 @@
 /**
  * DHLottery Authentication Module
  *
+ * Implements two-phase authentication flow:
+ * 1. Session initialization: GET gameResult.do to acquire JSESSIONID cookie
+ * 2. User login: POST credentials to userSsl.do with browser-like headers
+ *
+ * Session URL strategy documented in SPEC-REFACTOR-P2-SESSION-001:
+ * - Current implementation uses gameResult.do (from reference implementation)
+ * - Alternative common.do also works (both are functionally equivalent)
+ * - Rationale: Preserving reference implementation choice, changing carries low benefit/high risk
+ * - See memory.md (TASK-013) for historical context and design evolution
+ *
  * Trace:
- *   spec_id: SPEC-AUTH-001
- *   task_id: TASK-002, TASK-011
+ *   spec_id: SPEC-AUTH-001, SPEC-REFACTOR-P2-LOG-001, SPEC-REFACTOR-P2-SESSION-001
+ *   task_id: TASK-002, TASK-011, TASK-REFACTOR-P2-002, TASK-REFACTOR-P2-004
  */
 
-import { USER_AGENT } from '../constants';
+import { DEBUG, USER_AGENT } from '../constants';
 import type { AuthEnv, HttpClient } from '../types';
 import { AuthenticationError } from '../utils/errors';
 
 /**
  * DHLottery endpoints
+ *
+ * SESSION_INIT_URL: gameResult.do vs common.do
+ *   - Uses gameResult.do (winning results page) with wiselog=H_C_1_1 parameter
+ *   - Both gameResult.do and common.do return HTTP 200 with Set-Cookie: JSESSIONID
+ *   - gameResult.do chosen from reference implementation (n8n workflow)
+ *   - common.do would be more semantically appropriate (home page) but gameResult.do works
+ *   - Design decision: Keep current implementation (stable, proven, no functional gain from changing)
+ *   - Future refactoring: common.do is valid drop-in replacement if needed
+ *
+ * RETURN_URL: Used in login form to specify where browser should navigate after login
+ *   - Points to common.do?method=main (home page)
+ *   - We do NOT follow this redirect to preserve session cookies
+ *   - getAccountInfo() fetches this URL later to stabilize session
  */
 const SESSION_INIT_URL = 'https://dhlottery.co.kr/gameResult.do?method=byWin&wiselog=H_C_1_1';
 const LOGIN_URL = 'https://www.dhlottery.co.kr/userSsl.do?method=login';
@@ -28,11 +51,25 @@ interface DHLotteryLoginResponse {
 }
 
 /**
- * Initialize session by requesting default session URL to acquire initial cookies
- * Reference implementation uses gameResult.do to get JSESSIONID
+ * Initialize session by requesting gameResult.do to acquire JSESSIONID cookie
+ *
+ * Design notes:
+ *   - MUST be called before login() to establish session with JSESSIONID
+ *   - Uses gameResult.do (winning results page) - derived from reference implementation
+ *   - Returns HTTP 200 with Set-Cookie: JSESSIONID header
+ *   - Alternative: common.do?method=main also works (verified in SPEC-REFACTOR-P2-SESSION-001)
+ *   - Verification: Throws error if JSESSIONID is not set after the request
+ *
+ * Historical context:
+ *   - TASK-013 (2025-12-18): Implemented two-phase authentication flow
+ *   - Initial spec mentioned common.do, but implementation uses gameResult.do
+ *   - gameResult.do is stable, tested, and proven to work in production
+ *   - No functional advantage to changing, so kept for consistency
  *
  * @param client - HTTP client with cookie management
- * @throws {AuthenticationError} If session initialization fails
+ * @throws {AuthenticationError} If session initialization fails or JSESSIONID is not set
+ *
+ * Trace: SPEC-REFACTOR-P2-SESSION-001 (session URL strategy investigation)
  */
 async function initSession(client: HttpClient): Promise<void> {
   try {
@@ -52,15 +89,17 @@ async function initSession(client: HttpClient): Promise<void> {
       );
     }
 
-    console.log(
-      JSON.stringify({
-        level: 'debug',
-        module: 'auth',
-        message: 'Session initialized',
-        cookies: client.cookies,
-        status: response.status,
-      })
-    );
+    if (DEBUG) {
+      console.log(
+        JSON.stringify({
+          level: 'debug',
+          module: 'auth',
+          message: 'Session initialized',
+          cookies: client.cookies,
+          status: response.status,
+        })
+      );
+    }
 
     // Verify JSESSIONID is set (critical for login)
     if (!client.cookies.JSESSIONID) {
@@ -125,30 +164,34 @@ export async function login(client: HttpClient, env: AuthEnv): Promise<void> {
     }
 
     // Debug: Check Set-Cookie headers from login response
-    console.log(
-      JSON.stringify({
-        level: 'debug',
-        module: 'auth',
-        message: 'Login response received',
-        status: response.status,
-        setCookie: response.headers.getSetCookie(),
-        cookies: client.cookies,
-      })
-    );
+    if (DEBUG) {
+      console.log(
+        JSON.stringify({
+          level: 'debug',
+          module: 'auth',
+          message: 'Login response received',
+          status: response.status,
+          setCookie: response.headers.getSetCookie(),
+          cookies: client.cookies,
+        })
+      );
+    }
 
     // 302 redirect = success
     if (response.status >= 300 && response.status < 400) {
       const location = response.headers.get('location');
-      console.log(
-        JSON.stringify({
-          level: 'info',
-          module: 'auth',
-          message: 'Login successful - received redirect',
-          status: response.status,
-          location,
-          cookies: client.cookies,
-        })
-      );
+      if (DEBUG) {
+        console.log(
+          JSON.stringify({
+            level: 'info',
+            module: 'auth',
+            message: 'Login successful - received redirect',
+            status: response.status,
+            location,
+            cookies: client.cookies,
+          })
+        );
+      }
 
       // Do NOT follow the redirect manually.
       // n8n workflow uses the original session cookie for subsequent requests.
@@ -167,32 +210,17 @@ export async function login(client: HttpClient, env: AuthEnv): Promise<void> {
       // The response contains JavaScript that redirects to returnUrl or /common.do?method=main
       // Verify it's a success page by checking for goNextPage function
       if (responseText.includes('goNextPage')) {
-        // Debug: Save login response HTML
-        if (typeof process !== 'undefined' && process.env.DEBUG_HTML) {
-          try {
-            const fs = await import('node:fs');
-            await fs.promises.writeFile('/tmp/login-response.html', responseText, 'utf-8');
-            console.log(
-              JSON.stringify({
-                level: 'debug',
-                module: 'auth',
-                message: 'Login response HTML saved to /tmp/login-response.html',
-              })
-            );
-          } catch (_e) {
-            // Ignore
-          }
+        if (DEBUG) {
+          console.log(
+            JSON.stringify({
+              level: 'info',
+              module: 'auth',
+              message: 'Login successful - session cookies established',
+              cookies: client.cookies,
+              cookieHeader: client.getCookieHeader(),
+            })
+          );
         }
-
-        console.log(
-          JSON.stringify({
-            level: 'info',
-            module: 'auth',
-            message: 'Login successful - session cookies established',
-            cookies: client.cookies,
-            cookieHeader: client.getCookieHeader(),
-          })
-        );
 
         // DO NOT follow redirect - session cookies (WMONID, JSESSIONID) are already set
         // Following redirect may cause session loss
@@ -228,13 +256,15 @@ export async function login(client: HttpClient, env: AuthEnv): Promise<void> {
     }
 
     // JSON success response (if it exists)
-    console.log(
-      JSON.stringify({
-        level: 'info',
-        module: 'auth',
-        message: 'Login successful (JSON response)',
-      })
-    );
+    if (DEBUG) {
+      console.log(
+        JSON.stringify({
+          level: 'info',
+          module: 'auth',
+          message: 'Login successful (JSON response)',
+        })
+      );
+    }
   } catch (error) {
     // Re-throw AuthenticationError as-is
     if (error instanceof AuthenticationError) {

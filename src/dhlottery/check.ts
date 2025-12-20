@@ -2,8 +2,8 @@
  * Winning Check Module
  *
  * Trace:
- *   spec_id: SPEC-WINNING-001
- *   task_id: TASK-006, TASK-010, TASK-011
+ *   spec_id: SPEC-WINNING-001, SPEC-REFACTOR-P2-LOG-001
+ *   task_id: TASK-006, TASK-010, TASK-011, TASK-REFACTOR-P2-002
  */
 
 import { USER_AGENT } from '../constants';
@@ -14,6 +14,31 @@ import type { PreviousWeekRange } from '../utils/date';
 import { DHLotteryError } from '../utils/errors';
 
 const WINNING_LIST_URL = 'https://www.dhlottery.co.kr/myPage.do?method=lottoBuyList';
+
+/**
+ * Winning result parsing regex patterns
+ *
+ * Matches various HTML elements in the lottery winning results page:
+ * - Table rows: <tr>...</tr>
+ * - Table cells: <td>...</td>
+ * - JavaScript function calls: detailPop('arg1', 'arg2', 'roundNumber')
+ * - Match counts: "N개" (N matches)
+ * - Prize amounts: numeric digits
+ *
+ * Trace: spec_id: SPEC-REFACTOR-P2-REGEX-001, task_id: TASK-REFACTOR-P2-001
+ */
+export const WINNING_PATTERNS = {
+  // Extracts table rows from HTML
+  rowExtraction: /<tr\b[\s\S]*?<\/tr>/gi,
+  // Extracts table cell content
+  tableCell: /<td\b[^>]*>([\s\S]*?)<\/td>/gi,
+  // Extracts round number from detailPop function call
+  detailPopCall: /detailPop\(\s*'[^']*'\s*,\s*'[^']*'\s*,\s*'(\d+)'\s*\)/i,
+  // Extracts first digit sequence (rank number)
+  digitExtraction: /(\d+)/,
+  // Extracts match count with Korean counter "N개"
+  matchCount: /(\d+)\s*개/,
+} as const;
 
 export type { PreviousWeekRange };
 
@@ -36,15 +61,19 @@ function stripHtmlTags(input: string): string {
     .trim();
 }
 
+/**
+ * Extract text from table cells in a row
+ *
+ * Uses String.matchAll to avoid global regex lastIndex bugs.
+ * The shared global regex WINNING_PATTERNS.tableCell would otherwise
+ * retain lastIndex across calls, causing rows after the first to be
+ * partially or completely skipped.
+ *
+ * Trace: spec_id: SPEC-REFACTOR-P2-REGEX-001, task_id: TASK-REFACTOR-P2-001
+ */
 function extractTdTexts(rowHtml: string): string[] {
-  const cells: string[] = [];
-  const tdRegex = /<td\b[^>]*>([\s\S]*?)<\/td>/gi;
-  while (true) {
-    const match = tdRegex.exec(rowHtml);
-    if (!match) break;
-    cells.push(stripHtmlTags(match[1] ?? ''));
-  }
-  return cells;
+  const matches = rowHtml.matchAll(WINNING_PATTERNS.tableCell);
+  return Array.from(matches, (m) => stripHtmlTags(m[1] ?? ''));
 }
 
 /**
@@ -52,9 +81,11 @@ function extractTdTexts(rowHtml: string): string[] {
  *
  * Expected row structure (indices):
  * 0: buyDate, 1: gameName, 2: detail/info, 3: count, 4: result, 5: prize, 6: drawDate
+ *
+ * Trace: spec_id: SPEC-REFACTOR-P2-REGEX-001, task_id: TASK-REFACTOR-P2-001
  */
 export function parseWinningResultsFromHtml(html: string): WinningResult[] {
-  const rows = html.match(/<tr\b[\s\S]*?<\/tr>/gi) ?? [];
+  const rows = html.match(WINNING_PATTERNS.rowExtraction) ?? [];
   const results: WinningResult[] = [];
 
   for (const row of rows) {
@@ -65,17 +96,17 @@ export function parseWinningResultsFromHtml(html: string): WinningResult[] {
     if (cells.length < 6) continue;
 
     // Round number is typically present in detailPop third arg (issueNo).
-    const issueMatch = row.match(/detailPop\(\s*'[^']*'\s*,\s*'[^']*'\s*,\s*'(\d+)'\s*\)/i);
+    const issueMatch = row.match(WINNING_PATTERNS.detailPopCall);
     const roundNumberStr = issueMatch?.[1];
     const roundNumber = roundNumberStr ? Number.parseInt(roundNumberStr, 10) : Number.NaN;
 
     // Result cell: first number is treated as rank (robust to encoding issues).
     const resultCell = cells[4] ?? '';
-    const rankMatch = resultCell.match(/(\d+)/);
+    const rankMatch = resultCell.match(WINNING_PATTERNS.digitExtraction);
     const rankStr = rankMatch?.[1];
     const rank = rankStr ? Number.parseInt(rankStr, 10) : Number.NaN;
 
-    const matchCountMatch = resultCell.match(/(\d+)\s*개/);
+    const matchCountMatch = resultCell.match(WINNING_PATTERNS.matchCount);
     const matchCountStr = matchCountMatch?.[1];
     const matchCount = matchCountStr ? Number.parseInt(matchCountStr, 10) : undefined;
 
