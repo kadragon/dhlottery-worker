@@ -2,8 +2,8 @@
  * Custom Error Classes
  *
  * Trace:
- *   spec_id: SPEC-AUTH-001
- *   task_id: TASK-002
+ *   spec_id: SPEC-AUTH-001, SPEC-REFACTOR-P1-ERROR-001
+ *   task_id: TASK-002, TASK-REFACTOR-P1-003
  */
 
 /**
@@ -36,5 +36,15 @@ export class NetworkError extends DHLotteryError {
   constructor(message: string, code = 'NETWORK_ERROR') {
     super(message, code);
     this.name = 'NetworkError';
+  }
+}
+
+/**
+ * Purchase error
+ */
+export class PurchaseError extends DHLotteryError {
+  constructor(message: string, code = 'PURCHASE_ERROR') {
+    super(message, code);
+    this.name = 'PurchaseError';
   }
 }

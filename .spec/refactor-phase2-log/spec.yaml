@@ -1,0 +1,76 @@
+spec_id: SPEC-REFACTOR-P2-LOG-001
+title: "Consolidate logging under conditional DEBUG flag"
+
+description: |
+  Add DEBUG constant to control console.log() output across the codebase.
+  All debug/info console.log() calls should be wrapped with if (DEBUG) condition.
+  console.error() calls must remain unconditional to ensure errors are always visible.
+  This reduces production log noise and observability overhead.
+
+given_when_then:
+  - given: "DEBUG constant is added to src/constants.ts"
+    when: "code is executed in production"
+    then: "console.log() calls should be skipped (logs are suppressed)"
+
+  - given: "DEBUG constant is false"
+    when: "a console.log() call is encountered"
+    then: "output should be wrapped with 'if (DEBUG)' condition"
+
+  - given: "a console.error() call exists"
+    when: "code is executed"
+    then: "console.error() should be called unconditionally (always executes)"
+
+  - given: "DEBUG constant is true"
+    when: "console.log() calls are encountered"
+    then: "logs should be visible for debugging"
+
+acceptance_tests:
+  - id: TEST-REFACTOR-P2-LOG-001
+    desc: "DEBUG constant defined in constants.ts"
+    criteria:
+      - DEBUG constant exported from src/constants.ts
+      - Type is boolean
+      - Default value is false (suppress logs in production)
+
+  - id: TEST-REFACTOR-P2-LOG-002
+    desc: "All console.log() calls wrapped with if (DEBUG) condition"
+    criteria:
+      - auth.ts: 5 console.log() calls wrapped with if (DEBUG)
+      - account.ts: 4 console.log() calls wrapped with if (DEBUG)
+      - charge.ts: 1 console.info() call wrapped with if (DEBUG)
+      - check.ts: 0 console.log() calls (no debug logs in this file)
+      - No unwrapped console.log() calls remain in affected files
+
+  - id: TEST-REFACTOR-P2-LOG-003
+    desc: "console.error() calls remain unconditional"
+    criteria:
+      - account.ts: console.log() call at line 145 logs error (wrapped)
+      - charge.ts: console.error() calls (2) remain unconditional
+      - check.ts: console.error() calls (2) remain unconditional
+      - Test coverage: error handling works without DEBUG flag
+
+  - id: TEST-REFACTOR-P2-LOG-004
+    desc: "All 134+ tests pass with refactored logging"
+    criteria:
+      - Full test suite passes
+      - No behavioral changes to core logic
+      - Tests verify conditional logging works correctly
+
+dependencies:
+  - governance: "TASK-REFACTOR-P1-001, TASK-REFACTOR-P1-002, TASK-REFACTOR-P1-003"
+
+linked_tasks:
+  - TASK-REFACTOR-P2-002
+
+affected_files:
+  - src/constants.ts (add DEBUG constant)
+  - src/dhlottery/auth.ts (wrap 5 console.log calls)
+  - src/dhlottery/account.ts (wrap 4 console.log calls)
+  - src/dhlottery/charge.ts (wrap 1 console.info call)
+  - src/dhlottery/check.ts (0 console.log calls)
+
+notes: |
+  - Wrap with: if (DEBUG) { console.log(...) }
+  - Keep console.error() unconditional
+  - console.warn() in account.ts (line 96) should be wrapped since it's informational
+  - No test code modifications needed - tests verify behavior works

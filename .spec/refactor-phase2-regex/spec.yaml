@@ -1,0 +1,133 @@
+spec_id: SPEC-REFACTOR-P2-REGEX-001
+title: "Extract Regex Patterns to Named Constants"
+version: "1.0.0"
+status: "active"
+
+description: |
+  Refactor hardcoded regex patterns in account.ts and check.ts into
+  named constant objects (BALANCE_PATTERNS and WINNING_PATTERNS) for
+  improved maintainability, testability, and self-documentation.
+
+given_when_then:
+  - given: "Regex patterns are scattered as inline literals in parsing functions"
+    when: "Code is reviewed for maintainability"
+    then: "Patterns should be extracted to named constants with descriptive names"
+
+  - given: "Balance parsing logic uses multiple regex patterns"
+    when: "Constants are created and applied"
+    then: "BALANCE_PATTERNS object exports all balance-related patterns with clear names"
+
+  - given: "Winning result parsing logic uses multiple regex patterns"
+    when: "Constants are created and applied"
+    then: "WINNING_PATTERNS object exports all winning-related patterns with clear names"
+
+  - given: "Patterns are moved to named constants"
+    when: "Tests are executed"
+    then: "All existing tests continue to pass without behavior changes"
+
+  - given: "Named pattern constants are in place"
+    when: "Code is reviewed"
+    then: "Each pattern has a descriptive name and optional comment explaining its purpose"
+
+acceptance_tests:
+  - id: TEST-REFACTOR-P2-REGEX-001
+    desc: "Should create BALANCE_PATTERNS constant with all balance regex patterns"
+    criteria:
+      - "BALANCE_PATTERNS object exists and is exported from account.ts"
+      - "Contains at least 3 named patterns: mainPageHeader, myPageBalance, strongWithYuan"
+      - "Each pattern is a RegExp with appropriate flags (i for case-insensitive)"
+      - "Patterns match all variations of balance HTML formats"
+
+  - id: TEST-REFACTOR-P2-REGEX-002
+    desc: "Should create WINNING_PATTERNS constant with all winning regex patterns"
+    criteria:
+      - "WINNING_PATTERNS object exists and is exported from check.ts"
+      - "Contains named patterns: rowExtraction, tableCell, detailPopCall, digitExtraction, matchCount"
+      - "Each pattern captures the appropriate HTML elements"
+      - "Patterns correctly extract round numbers, ranks, and prize amounts"
+
+  - id: TEST-REFACTOR-P2-REGEX-003
+    desc: "Should update parseBalance() to use BALANCE_PATTERNS"
+    criteria:
+      - "parseBalance() iterates over BALANCE_PATTERNS object instead of inline array"
+      - "Pattern lookup by key provides self-documentation"
+      - "All existing balance parsing tests still pass"
+      - "Function behavior remains identical to original"
+
+  - id: TEST-REFACTOR-P2-REGEX-004
+    desc: "Should update parseWinningResultsFromHtml() to use WINNING_PATTERNS"
+    criteria:
+      - "parseWinningResultsFromHtml() uses WINNING_PATTERNS for regex matching"
+      - "Pattern names clearly indicate their purpose (detailPopCall, digitExtraction, etc.)"
+      - "All existing winning parsing tests still pass"
+      - "Function behavior remains identical to original"
+
+  - id: TEST-REFACTOR-P2-REGEX-005
+    desc: "Should maintain backward compatibility with all existing tests"
+    criteria:
+      - "All existing account.spec.ts tests pass (18 tests)"
+      - "All existing check.spec.ts tests pass (21 tests)"
+      - "No test modifications required (tests verify behavior, not implementation)"
+      - "Full test suite passes (all 134+ tests)"
+
+dependencies:
+  governance: "regex-pattern-naming, constant-organization"
+  specs: []
+  external_services: []
+
+linked_tasks:
+  - TASK-REFACTOR-P2-001
+
+implementation_notes:
+  - "Extract patterns as RegExp objects, not strings"
+  - "Use descriptive constant names that explain pattern purpose"
+  - "Add JSDoc comments to constants explaining each pattern"
+  - "Maintain pattern order to match original function logic"
+  - "Use object notation for BALANCE_PATTERNS and WINNING_PATTERNS"
+  - "Consider using `as const` for object keys if using key-based iteration"
+  - "Tests should verify pattern behavior through existing test suite, not pattern structure"
+
+data_model:
+  BALANCE_PATTERNS:
+    type: "Object<string, RegExp>"
+    fields:
+      - name: "mainPageHeader"
+        pattern: "/<li[^>]*class=\"money\"[^>]*>[\s\S]*?<strong>([\d,]+)<\/strong>/i"
+        description: "Matches balance in main page header"
+      - name: "myPageBalance"
+        pattern: "/<td[^>]*class=\"ta_right\"[^>]*>\s*([\d,]+)\s+/i"
+        description: "Matches balance in my page balance table"
+      - name: "strongWithYuan"
+        pattern: "/<strong>([\d,]+)<\/strong>\s*원/"
+        description: "Matches balance in strong tag with Korean won suffix"
+
+  WINNING_PATTERNS:
+    type: "Object<string, RegExp>"
+    fields:
+      - name: "rowExtraction"
+        pattern: "/<tr\b[\s\S]*?<\/tr>/gi"
+        description: "Extracts table rows from HTML"
+      - name: "tableCell"
+        pattern: "/<td\b[^>]*>([\s\S]*?)<\/td>/gi"
+        description: "Extracts table cell content"
+      - name: "detailPopCall"
+        pattern: "/detailPop\(\s*'[^']*'\s*,\s*'[^']*'\s*,\s*'(\d+)'\s*\)/i"
+        description: "Extracts round number from detailPop function call"
+      - name: "digitExtraction"
+        pattern: "/(\d+)/"
+        description: "Extracts first digit sequence (rank number)"
+      - name: "matchCount"
+        pattern: "/(\d+)\s*개/"
+        description: "Extracts match count with Korean counter"
+
+error_scenarios:
+  - code: "N/A (Refactoring task)"
+    desc: "No new error scenarios - this is a pure refactoring"
+    action: "Ensure all existing error handling behavior preserved"
+
+success_criteria:
+  - "No test failures after pattern extraction"
+  - "Code is more readable and maintainable"
+  - "Patterns have clear, descriptive names"
+  - "All pattern behavior verified by existing test suite"
+  - "No runtime behavior changes"

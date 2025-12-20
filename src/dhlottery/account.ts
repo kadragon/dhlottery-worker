@@ -2,11 +2,11 @@
  * Account Information Retrieval Module
  *
  * Trace:
- *   spec_id: SPEC-ACCOUNT-001
- *   task_id: TASK-003, TASK-011
+ *   spec_id: SPEC-ACCOUNT-001, SPEC-REFACTOR-P2-LOG-001
+ *   task_id: TASK-003, TASK-011, TASK-REFACTOR-P2-002
  */
 
-import { USER_AGENT } from '../constants';
+import { DEBUG, USER_AGENT } from '../constants';
 import type { AccountInfo, HttpClient } from '../types';
 import { DHLotteryError } from '../utils/errors';
 
@@ -17,6 +17,25 @@ import { DHLotteryError } from '../utils/errors';
  */
 const MAIN_PAGE_URL = 'https://www.dhlottery.co.kr/common.do?method=main';
 const MY_PAGE_URL = 'https://www.dhlottery.co.kr/myPage.do?method=myPage';
+
+/**
+ * Balance parsing regex patterns
+ *
+ * Matches various HTML structures where deposit balance appears:
+ * - Main page header: <li class="money">...<strong>N,NNN</strong>원</li>
+ * - My page table: <td class="ta_right">N,NNN ...</td>
+ * - General format: <strong>N,NNN</strong>원
+ *
+ * Trace: spec_id: SPEC-REFACTOR-P2-REGEX-001, task_id: TASK-REFACTOR-P2-001
+ */
+export const BALANCE_PATTERNS = {
+  // Main Page Header (<li class="money"><a href="..."><strong>N,NNN</strong>원</a></li>)
+  mainPageHeader: /<li[^>]*class="money"[^>]*>[\s\S]*?<strong>([\d,]+)<\/strong>/i,
+  // My Page Balance Table (<td class="ta_right" colspan="3">N,NNN ...</td>)
+  myPageBalance: /<td[^>]*class="ta_right"[^>]*>\s*([\d,]+)\s+/i,
+  // Strong tag with Korean won suffix (<strong>N,NNN</strong>원)
+  strongWithYuan: /<strong>([\d,]+)<\/strong>\s*원/,
+} as const;
 
 /**
  * Fetch and parse account information
@@ -36,15 +55,17 @@ const MY_PAGE_URL = 'https://www.dhlottery.co.kr/myPage.do?method=myPage';
 export async function getAccountInfo(client: HttpClient): Promise<AccountInfo> {
   // Step 1: Fetch Main Page
   // This is required to get the current round and "finalize" the login session
-  console.log(
-    JSON.stringify({
-      level: 'debug',
-      module: 'account',
-      message: 'Fetching main page',
-      url: MAIN_PAGE_URL,
-      cookies: client.cookies, // Log cookies to debug session state
-    })
-  );
+  if (DEBUG) {
+    console.log(
+      JSON.stringify({
+        level: 'debug',
+        module: 'account',
+        message: 'Fetching main page',
+        url: MAIN_PAGE_URL,
+        cookies: client.cookies, // Log cookies to debug session state
+      })
+    );
+  }
 
   const mainResponse = await client.fetch(MAIN_PAGE_URL, {
     headers: {
@@ -66,14 +87,16 @@ export async function getAccountInfo(client: HttpClient): Promise<AccountInfo> {
 
   // Step 2: Fetch My Page for Balance
   // User explicitly requested to use myPage for balance
-  console.log(
-    JSON.stringify({
-      level: 'debug',
-      module: 'account',
-      message: 'Fetching my page',
-      url: MY_PAGE_URL,
-    })
-  );
+  if (DEBUG) {
+    console.log(
+      JSON.stringify({
+        level: 'debug',
+        module: 'account',
+        message: 'Fetching my page',
+        url: MY_PAGE_URL,
+      })
+    );
+  }
 
   let balance: number;
 
@@ -93,14 +116,16 @@ export async function getAccountInfo(client: HttpClient): Promise<AccountInfo> {
       throw new Error(`HTTP ${myPageResponse.status}`);
     }
   } catch (error) {
-    console.warn(
-      JSON.stringify({
-        level: 'warning',
-        module: 'account',
-        message: 'Failed to fetch My Page, falling back to Main Page balance',
-        error: error instanceof Error ? error.message : String(error),
-      })
-    );
+    if (DEBUG) {
+      console.warn(
+        JSON.stringify({
+          level: 'warning',
+          module: 'account',
+          message: 'Failed to fetch My Page, falling back to Main Page balance',
+          error: error instanceof Error ? error.message : String(error),
+        })
+      );
+    }
 
     // Fallback: Try to parse balance from Main Page header
     balance = parseBalance(mainHtml);
@@ -119,21 +144,13 @@ export async function getAccountInfo(client: HttpClient): Promise<AccountInfo> {
  * Parse deposit balance from HTML
  * Actual format: <td class="ta_right" colspan="3">N,NNN 원</td>
  * Note: HTML is EUC-KR encoded, so we match the pattern without Korean characters
+ *
+ * Trace: spec_id: SPEC-REFACTOR-P2-REGEX-001, task_id: TASK-REFACTOR-P2-001
  */
 function parseBalance(html: string): number {
-  // Try multiple regex patterns to match different HTML structures
-  const patterns = [
-    // Pattern 1: Main Page Header (<li class="money"><a href="..."><strong>N,NNN</strong>원</a></li>)
-    /<li[^>]*class="money"[^>]*>[\s\S]*?<strong>([\d,]+)<\/strong>/i,
-    // Pattern 2: <td class="ta_right" colspan="3">N,NNN (space before closing)
-    /<td[^>]*class="ta_right"[^>]*>\s*([\d,]+)\s+/i,
-    // Pattern 3: <strong>N,NNN</strong> (deposit amount in other locations)
-    // Made stricter: requires '원' suffix or context to avoid matching random numbers like round
-    /<strong>([\d,]+)<\/strong>\s*원/,
-  ];
-
+  // Try multiple regex patterns to match different HTML structures using BALANCE_PATTERNS
   let match: RegExpMatchArray | null = null;
-  for (const pattern of patterns) {
+  for (const pattern of Object.values(BALANCE_PATTERNS)) {
     match = html.match(pattern);
     if (match) {
       break;
@@ -142,14 +159,16 @@ function parseBalance(html: string): number {
 
   if (!match) {
     // Debug: Log context for troubleshooting
-    console.log(
-      JSON.stringify({
-        level: 'error',
-        module: 'account',
-        message: 'Balance regex did not match any pattern',
-        htmlSample: html.substring(1400, 1500),
-      })
-    );
+    if (DEBUG) {
+      console.log(
+        JSON.stringify({
+          level: 'error',
+          module: 'account',
+          message: 'Balance regex did not match any pattern',
+          htmlSample: html.substring(1400, 1500),
+        })
+      );
+    }
 
     throw new DHLotteryError(
       'Failed to parse balance from account page',
@@ -189,15 +208,17 @@ function parseRound(html: string): number {
     if (match) {
       const round = Number.parseInt(match[1], 10);
       if (!Number.isNaN(round) && round > 0) {
-        console.log(
-          JSON.stringify({
-            level: 'info',
-            module: 'account',
-            message: 'Found current round from HTML',
-            round,
-            pattern: pattern.source,
-          })
-        );
+        if (DEBUG) {
+          console.log(
+            JSON.stringify({
+              level: 'info',
+              module: 'account',
+              message: 'Found current round from HTML',
+              round,
+              pattern: pattern.source,
+            })
+          );
+        }
 
         // Return next round (current + 1 for upcoming purchase)
         return round + 1;

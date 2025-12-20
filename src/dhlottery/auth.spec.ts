@@ -2,8 +2,8 @@
  * DHLottery Authentication Tests
  *
  * Trace:
- *   spec_id: SPEC-AUTH-001
- *   task_id: TASK-002, TASK-011
+ *   spec_id: SPEC-AUTH-001, SPEC-REFACTOR-P2-LOG-001
+ *   task_id: TASK-002, TASK-011, TASK-REFACTOR-P2-002
  */
 
 import { describe, it, expect, beforeEach, vi } from "vitest";
@@ -466,6 +466,63 @@ describe("DHLottery Authentication", () => {
       expect(url).toContain("dhlottery.co.kr");
       expect(url).toContain("/userSsl.do");
       expect(url).toContain("method=login");
+    });
+  });
+
+  /**
+   * TEST-REFACTOR-P2-LOG-002: Conditional logging with DEBUG flag
+   *
+   * Criteria:
+   * - console.log calls are wrapped with if (DEBUG) condition
+   * - When DEBUG is false, console.log should not be called
+   * - Error handling still works correctly
+   */
+  describe("TEST-REFACTOR-P2-LOG-002: Conditional logging with DEBUG flag", () => {
+    let consoleLogSpy: ReturnType<typeof vi.spyOn>;
+
+    beforeEach(() => {
+      consoleLogSpy = vi.spyOn(console, 'log');
+    });
+
+    it("should skip console.log calls when DEBUG is false", async () => {
+      // Arrange
+      const { sessionInitResponse, loginResponse } = createMockResponses({
+        resultCode: "SUCCESS",
+      });
+
+      vi.mocked(mockHttpClient.fetch)
+        .mockResolvedValueOnce(sessionInitResponse)
+        .mockResolvedValueOnce(loginResponse);
+
+      // Act
+      await login(mockHttpClient, mockEnv);
+
+      // Assert - console.log should NOT be called since DEBUG is false
+      expect(consoleLogSpy).not.toHaveBeenCalled();
+    });
+
+    it("should not affect error handling when DEBUG is false", async () => {
+      // Arrange
+      const { sessionInitResponse } = createMockResponses({
+        resultCode: "SUCCESS",
+      });
+
+      const errorResponse = {
+        status: 500,
+        statusText: "Internal Server Error",
+        headers: new Headers(),
+        text: async () => "Server Error",
+        json: async () => ({}),
+      } as unknown as HttpResponse;
+
+      vi.mocked(mockHttpClient.fetch)
+        .mockResolvedValueOnce(sessionInitResponse)
+        .mockResolvedValueOnce(errorResponse);
+
+      // Act & Assert - error should still be thrown
+      await expect(login(mockHttpClient, mockEnv)).rejects.toThrow(
+        AuthenticationError,
+      );
     });
   });
 });

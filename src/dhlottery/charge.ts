@@ -2,11 +2,11 @@
  * Deposit Check and Charge Initialization Module
  *
  * Trace:
- *   spec_id: SPEC-DEPOSIT-001
- *   task_id: TASK-004, TASK-010, TASK-011
+ *   spec_id: SPEC-DEPOSIT-001, SPEC-REFACTOR-P2-LOG-001
+ *   task_id: TASK-004, TASK-010, TASK-011, TASK-REFACTOR-P2-002
  */
 
-import { CHARGE_AMOUNT, MIN_DEPOSIT_AMOUNT, USER_AGENT } from '../constants';
+import { CHARGE_AMOUNT, DEBUG, MIN_DEPOSIT_AMOUNT, USER_AGENT } from '../constants';
 import { sendNotification } from '../notify/telegram';
 import type { DepositEnv, HttpClient } from '../types';
 import { getAccountInfo } from './account';
@@ -80,14 +80,16 @@ export async function checkDeposit(client: HttpClient, env: DepositEnv): Promise
   }
 
   // Balance is insufficient - initialize charge and notify
-  console.info(
-    JSON.stringify({
-      event: 'insufficient_balance',
-      balance: accountInfo.balance,
-      required: MIN_DEPOSIT_AMOUNT,
-      message: 'Insufficient balance detected',
-    })
-  );
+  if (DEBUG) {
+    console.info(
+      JSON.stringify({
+        event: 'insufficient_balance',
+        balance: accountInfo.balance,
+        required: MIN_DEPOSIT_AMOUNT,
+        message: 'Insufficient balance detected',
+      })
+    );
+  }
 
   // Initialize charge page
   const chargeSuccess = await initializeChargePage(client);

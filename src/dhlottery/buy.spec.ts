@@ -42,6 +42,157 @@ function createMockClient(mockFetch: Mock): HttpClient {
 	};
 }
 
+describe("Lottery Purchase - TEST-REFACTOR-P2-ERROR-001: Purchase ready error handling", () => {
+	let mockEnv: PurchaseEnv;
+	let mockFetch: Mock;
+	let mockClient: HttpClient;
+
+	beforeEach(() => {
+		mockEnv = {
+			DHLOTTERY_USER_ID: "testuser",
+			DHLOTTERY_USER_PW: "testpass",
+			TELEGRAM_BOT_TOKEN: "test-token",
+			TELEGRAM_CHAT_ID: "test-chat",
+		};
+
+		mockFetch = vi.fn();
+		mockClient = createMockClient(mockFetch);
+		vi.clearAllMocks();
+	});
+
+	it("should throw PurchaseError with PURCHASE_READY_FAILED code when ready endpoint fails", async () => {
+		const mockAccountInfo: AccountInfo = {
+			balance: 50000,
+			currentRound: 1203,
+		};
+		(getAccountInfo as Mock).mockResolvedValue(mockAccountInfo);
+
+		// Mock ready endpoint returning non-200 status
+		mockFetch.mockResolvedValueOnce({
+			ok: false,
+			status: 500,
+			json: async () => ({}),
+		} as Response);
+
+		const result = await purchaseLottery(mockClient, mockEnv);
+
+		// Should catch the error and return failure result
+		expect(result.success).toBe(false);
+		if (!result.success) {
+			expect(result.error).toContain("Purchase ready failed");
+		}
+	});
+
+	it("should include status code in error message", async () => {
+		const mockAccountInfo: AccountInfo = {
+			balance: 50000,
+			currentRound: 1203,
+		};
+		(getAccountInfo as Mock).mockResolvedValue(mockAccountInfo);
+
+		mockFetch.mockResolvedValueOnce({
+			ok: false,
+			status: 503,
+			json: async () => ({}),
+		} as Response);
+
+		const result = await purchaseLottery(mockClient, mockEnv);
+
+		expect(result.success).toBe(false);
+		if (!result.success) {
+			expect(result.error).toContain("503");
+		}
+	});
+});
+
+describe("Lottery Purchase - TEST-REFACTOR-P2-ERROR-002: Purchase execution error handling", () => {
+	let mockEnv: PurchaseEnv;
+	let mockFetch: Mock;
+	let mockClient: HttpClient;
+
+	beforeEach(() => {
+		mockEnv = {
+			DHLOTTERY_USER_ID: "testuser",
+			DHLOTTERY_USER_PW: "testpass",
+			TELEGRAM_BOT_TOKEN: "test-token",
+			TELEGRAM_CHAT_ID: "test-chat",
+		};
+
+		mockFetch = vi.fn();
+		mockClient = createMockClient(mockFetch);
+		vi.clearAllMocks();
+	});
+
+	it("should throw PurchaseError with PURCHASE_EXECUTION_FAILED code when execution fails", async () => {
+		const mockAccountInfo: AccountInfo = {
+			balance: 50000,
+			currentRound: 1203,
+		};
+		(getAccountInfo as Mock).mockResolvedValue(mockAccountInfo);
+
+		const mockReadyResponse: PurchaseReadyResponse = {
+			direct_yn: "N",
+			ready_ip: "INTCOM2",
+			ready_time: "0",
+			ready_cnt: "0",
+		};
+
+		// Mock ready succeeds, execution fails
+		mockFetch
+			.mockResolvedValueOnce({
+				ok: true,
+				status: 200,
+				json: async () => mockReadyResponse,
+			} as Response)
+			.mockResolvedValueOnce({
+				ok: false,
+				status: 500,
+				json: async () => ({}),
+			} as Response);
+
+		const result = await purchaseLottery(mockClient, mockEnv);
+
+		expect(result.success).toBe(false);
+		if (!result.success) {
+			expect(result.error).toContain("Purchase execution failed");
+		}
+	});
+
+	it("should include status code in execution error message", async () => {
+		const mockAccountInfo: AccountInfo = {
+			balance: 50000,
+			currentRound: 1203,
+		};
+		(getAccountInfo as Mock).mockResolvedValue(mockAccountInfo);
+
+		const mockReadyResponse: PurchaseReadyResponse = {
+			direct_yn: "N",
+			ready_ip: "INTCOM2",
+			ready_time: "0",
+			ready_cnt: "0",
+		};
+
+		mockFetch
+			.mockResolvedValueOnce({
+				ok: true,
+				status: 200,
+				json: async () => mockReadyResponse,
+			} as Response)
+			.mockResolvedValueOnce({
+				ok: false,
+				status: 502,
+				json: async () => ({}),
+			} as Response);
+
+		const result = await purchaseLottery(mockClient, mockEnv);
+
+		expect(result.success).toBe(false);
+		if (!result.success) {
+			expect(result.error).toContain("502");
+		}
+	});
+});
+
 describe("Lottery Purchase - TEST-PURCHASE-001: Purchase ready endpoint", () => {
 	let mockEnv: PurchaseEnv;
 	let mockFetch: Mock;
