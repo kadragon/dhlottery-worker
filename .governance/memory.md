@@ -155,3 +155,12 @@ Tasks queued in `.tasks/backlog.yaml` ready for execution.
   - All 25 account/check tests pass; no behavioral changes; patterns function identically to original inline literals
   - Code is now more readable, maintainable, and self-documenting (pattern names explain their purpose)
   - Constants are exported for potential external use and testing
+- **Spec Documentation Cleanup (2025-12-20)**: Removed duplicate specification files based on PR #2 review feedback from Gemini Code Assist.
+  - Deleted 4 redundant spec directories that described identical refactoring tasks:
+    - `.spec/refactor-phase1-error-classes/` (duplicate of refactor-phase1-error)
+    - `.spec/refactor-phase1-type-safety/` (duplicate of refactor-phase1-type)
+    - `.spec/refactor-phase2-log/` (duplicate of refactor-phase2-logging)
+    - `.spec/refactor-phase2-regex-constants/` (duplicate of refactor-phase2-regex)
+  - Kept more comprehensive versions with detailed GWT specs, acceptance tests, and rationale
+  - Resolved task reference inconsistency noted in review (TASK-REFACTOR-P2-004 vs P2-003)
+  - Result: Cleaner .spec directory, single source of truth for each refactoring task, better maintainability
