@@ -1,0 +1,36 @@
+spec_id: SPEC-REFACTOR-P1-TYPE-001
+title: "Improve type safety for notification details field"
+priority: medium
+phase: 1
+
+given_when_then:
+  - given: "NotificationPayload.details field accepts Record<string, any>"
+    when: "non-serializable values (functions, circular refs) are passed"
+    then: "runtime JSON serialization may fail"
+
+  - given: "we restrict details to JSON-serializable types"
+    when: "details field is typed as Record<string, string | number | boolean | null | undefined>"
+    then: "TypeScript prevents passing non-serializable values at compile time"
+
+acceptance_tests:
+  - id: TEST-REFACTOR-P1-TYPE-001
+    desc: "NotificationPayload.details should be Record<string, string | number | boolean | null | undefined>"
+
+  - id: TEST-REFACTOR-P1-TYPE-002
+    desc: "all existing notification tests should pass with stricter type"
+
+  - id: TEST-REFACTOR-P1-TYPE-003
+    desc: "attempting to pass non-serializable values should cause TypeScript error"
+
+dependencies:
+  - file: "src/types/notification.types.ts"
+  - governance: "coding-style.md"
+
+linked_tasks:
+  - TASK-REFACTOR-P1-002
+
+notes: |
+  Location: src/types/notification.types.ts
+  Impact: Prevents runtime errors, improves type safety
+  Effort: 5 minutes
+  Risk: Low (existing code already uses serializable values)

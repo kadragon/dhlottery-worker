@@ -1,0 +1,57 @@
+spec_id: SPEC-REFACTOR-P2-SESSION-001
+title: "Review and document session initialization URL strategy"
+priority: low
+phase: 2
+
+given_when_then:
+  - given: "initSession() uses gameResult.do?method=byWin&wiselog=H_C_1_1"
+    when: "the actual session establishment might work with common.do?method=main"
+    then: "we should verify if gameResult.do is necessary or can be simplified"
+
+  - given: "current flow: gameResult.do → login → common.do"
+    when: "we analyze if common.do alone can establish session"
+    then: "we can potentially simplify to: common.do → login"
+
+acceptance_tests:
+  - id: TEST-REFACTOR-P2-SESSION-001
+    desc: "research reference implementation (n8n workflow) to verify URL necessity"
+
+  - id: TEST-REFACTOR-P2-SESSION-002
+    desc: "if gameResult.do is required, add JSDoc comment explaining why"
+
+  - id: TEST-REFACTOR-P2-SESSION-003
+    desc: "if common.do alone works, refactor initSession() to use it"
+
+  - id: TEST-REFACTOR-P2-SESSION-004
+    desc: "all auth tests should pass after changes"
+
+dependencies:
+  - file: "src/dhlottery/auth.ts"
+  - spec: "SPEC-AUTH-001"
+  - governance: "memory.md"
+
+linked_tasks:
+  - TASK-REFACTOR-P2-004
+
+notes: |
+  Location: src/dhlottery/auth.ts:16
+  Current behavior:
+    1. initSession() → GET gameResult.do (acquire JSESSIONID)
+    2. login() → POST userSsl.do
+    3. getAccountInfo() → GET common.do (later)
+
+  Questions:
+    - Why gameResult.do instead of common.do for session init?
+    - Can we consolidate to single URL?
+
+  memory.md shows:
+    - Session Init: common.do?method=main is documented as first step
+    - But code uses gameResult.do
+
+  Investigation needed:
+    - Check n8n workflow reference
+    - Test if common.do alone establishes proper session
+
+  Impact: Potential simplification
+  Effort: 10 minutes (verification) + 10 minutes (refactor if applicable)
+  Risk: Medium (need to verify against actual DHLottery behavior)

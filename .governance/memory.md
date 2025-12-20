@@ -108,5 +108,33 @@
 - **Purchase flow**: login → checkDeposit → (if balance sufficient) purchaseLottery → checkWinning
 - **Non-fatal components**: Telegram notifications, charge initialization, and winning checks never crash the main workflow.
 
+## Refactoring Plan (2025-12-20)
+
+Based on comprehensive code analysis (REFACTOR_ANALYSIS.md), initiated Phase 1+2 refactoring:
+
+### Phase 1: Quick Wins (~30 minutes)
+- **TASK-REFACTOR-P1-001**: Remove non-functional debug HTML write code (auth.ts:171-184)
+- **TASK-REFACTOR-P1-002**: Fix type safety for NotificationPayload.details (Record<string, any> → strict types)
+- **TASK-REFACTOR-P1-003**: Add PurchaseError class for consistent error handling
+- **TASK-REFACTOR-P1-004**: Document unused DHLotteryClient.getAccountInfo() method
+
+### Phase 2: Refactoring (~1 hour)
+- **TASK-REFACTOR-P2-001**: Extract regex patterns to named constants (BALANCE_PATTERNS, WINNING_PATTERNS)
+- **TASK-REFACTOR-P2-002**: Consolidate logging under conditional DEBUG flag
+- **TASK-REFACTOR-P2-003**: Update buy.ts error handling to use PurchaseError
+- **TASK-REFACTOR-P2-004**: Review and document session initialization URL strategy
+
+### Analysis Summary
+- **Overall Grade**: A- (Excellent)
+- **Security**: No vulnerabilities detected
+- **Code Quality**: 0 linting errors, 118 tests passing
+- **Architecture**: Clean separation of concerns, well-structured
+- **Issues**: 7 minor/moderate issues identified, all non-critical
+- **Improvements**: Focus on maintainability, consistency, and reducing production log noise
+
+All specs created under `.spec/refactor-phase1-*` and `.spec/refactor-phase2-*`.
+Tasks queued in `.tasks/backlog.yaml` ready for execution.
+
 ## Next
-- (none queued) All core features implemented and tested.
+- Execute TASK-REFACTOR-P1-001 to start Phase 1 refactoring
+- Follow TDD approach: update tests first, then implement changes
