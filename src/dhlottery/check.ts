@@ -64,17 +64,16 @@ function stripHtmlTags(input: string): string {
 /**
  * Extract text from table cells in a row
  *
+ * Uses String.matchAll to avoid global regex lastIndex bugs.
+ * The shared global regex WINNING_PATTERNS.tableCell would otherwise
+ * retain lastIndex across calls, causing rows after the first to be
+ * partially or completely skipped.
+ *
  * Trace: spec_id: SPEC-REFACTOR-P2-REGEX-001, task_id: TASK-REFACTOR-P2-001
  */
 function extractTdTexts(rowHtml: string): string[] {
-  const cells: string[] = [];
-  const tdRegex = WINNING_PATTERNS.tableCell;
-  while (true) {
-    const match = tdRegex.exec(rowHtml);
-    if (!match) break;
-    cells.push(stripHtmlTags(match[1] ?? ''));
-  }
-  return cells;
+  const matches = rowHtml.matchAll(WINNING_PATTERNS.tableCell);
+  return Array.from(matches, (m) => stripHtmlTags(m[1] ?? ''));
 }
 
 /**
