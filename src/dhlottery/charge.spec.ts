@@ -6,9 +6,9 @@
  *   task_id: TASK-004, TASK-011
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { checkDeposit } from './charge';
-import type { DepositEnv, HttpClient } from '../types';
+import type { HttpClient } from '../types';
 import * as accountModule from './account';
 import * as telegramModule from '../notify/telegram';
 import { MIN_DEPOSIT_AMOUNT, USER_AGENT } from '../constants';
@@ -19,9 +19,12 @@ vi.mock('../notify/telegram');
 
 describe('checkDeposit', () => {
   let mockClient: HttpClient;
-  let mockEnv: DepositEnv;
 
   beforeEach(() => {
+    // Mock process.env
+    vi.stubEnv('TELEGRAM_BOT_TOKEN', 'test-token');
+    vi.stubEnv('TELEGRAM_CHAT_ID', 'test-chat-id');
+
     // Reset all mocks
     vi.clearAllMocks();
 
@@ -32,12 +35,10 @@ describe('checkDeposit', () => {
       getCookieHeader: vi.fn(() => ''),
       clearCookies: vi.fn(),
     } as unknown as HttpClient;
+  });
 
-    // Create mock environment
-    mockEnv = {
-      TELEGRAM_BOT_TOKEN: 'test-token',
-      TELEGRAM_CHAT_ID: 'test-chat-id',
-    };
+  afterEach(() => {
+    vi.unstubAllEnvs();
   });
 
   describe('TEST-DEPOSIT-001: Allow purchase when balance is sufficient', () => {
@@ -49,7 +50,7 @@ describe('checkDeposit', () => {
       });
 
       // When: Deposit check is performed
-      const result = await checkDeposit(mockClient, mockEnv);
+      const result = await checkDeposit(mockClient);
 
       // Then: Function returns true (proceed with purchase)
       expect(result).toBe(true);
@@ -72,7 +73,7 @@ describe('checkDeposit', () => {
       });
 
       // When: Deposit check is performed
-      const result = await checkDeposit(mockClient, mockEnv);
+      const result = await checkDeposit(mockClient);
 
       // Then: Function returns true
       expect(result).toBe(true);
@@ -106,7 +107,7 @@ describe('checkDeposit', () => {
       });
 
       // When: Deposit check is performed
-      const result = await checkDeposit(mockClient, mockEnv);
+      const result = await checkDeposit(mockClient);
 
       // Then: Function returns false (block purchase)
       expect(result).toBe(false);
@@ -129,7 +130,7 @@ describe('checkDeposit', () => {
       });
 
       // When: Deposit check is performed
-      const result = await checkDeposit(mockClient, mockEnv);
+      const result = await checkDeposit(mockClient);
 
       // Then: Function returns false
       expect(result).toBe(false);
@@ -154,7 +155,7 @@ describe('checkDeposit', () => {
       });
 
       // When: Deposit check is performed
-      await checkDeposit(mockClient, mockEnv);
+      await checkDeposit(mockClient);
 
       // Then: GET request to K-Bank charge endpoint
       expect(mockClient.fetch).toHaveBeenCalledWith(
@@ -185,7 +186,7 @@ describe('checkDeposit', () => {
       });
 
       // When: Charge initialization happens
-      await checkDeposit(mockClient, mockEnv);
+      await checkDeposit(mockClient);
 
       // Then: Only GET request (no POST for payment execution)
       expect(mockClient.fetch).toHaveBeenCalledTimes(1);
@@ -212,7 +213,7 @@ describe('checkDeposit', () => {
       });
 
       // When: Deposit check is performed
-      const result = await checkDeposit(mockClient, mockEnv);
+      const result = await checkDeposit(mockClient);
 
       // Then: Still returns false (fail-safe)
       expect(result).toBe(false);
@@ -223,7 +224,6 @@ describe('checkDeposit', () => {
           type: 'error',
           title: expect.stringContaining('Charge'),
         }),
-        mockEnv
       );
     });
   });
@@ -246,14 +246,13 @@ describe('checkDeposit', () => {
       });
 
       // When: Deposit check is performed
-      await checkDeposit(mockClient, mockEnv);
+      await checkDeposit(mockClient);
 
       // Then: Telegram notification sent with 'warning' type
       expect(telegramModule.sendNotification).toHaveBeenCalledWith(
         expect.objectContaining({
           type: 'warning',
         }),
-        mockEnv
       );
 
       // And: Message includes current balance
@@ -279,7 +278,7 @@ describe('checkDeposit', () => {
       });
 
       // When: Deposit check is performed
-      await checkDeposit(mockClient, mockEnv);
+      await checkDeposit(mockClient);
 
       // Then: Notification message requests manual deposit
       const notificationCall = vi.mocked(telegramModule.sendNotification).mock.calls[0];
@@ -304,7 +303,7 @@ describe('checkDeposit', () => {
       });
 
       // When: Deposit check is performed
-      await checkDeposit(mockClient, mockEnv);
+      await checkDeposit(mockClient);
 
       // Then: Notification includes minimum threshold
       const notificationCall = vi.mocked(telegramModule.sendNotification).mock.calls[0];
@@ -332,7 +331,7 @@ describe('checkDeposit', () => {
       });
 
       // When: Deposit check is performed
-      const result = await checkDeposit(mockClient, mockEnv);
+      const result = await checkDeposit(mockClient);
 
       // Then: Should block purchase (threshold not met)
       expect(result).toBe(false);
@@ -346,7 +345,7 @@ describe('checkDeposit', () => {
       });
 
       // When: Deposit check is performed
-      const result = await checkDeposit(mockClient, mockEnv);
+      const result = await checkDeposit(mockClient);
 
       // Then: Should allow purchase (exact match)
       expect(result).toBe(true);
@@ -365,7 +364,7 @@ describe('checkDeposit', () => {
       vi.mocked(accountModule.getAccountInfo).mockRejectedValue(error);
 
       // When/Then: Should throw error (fail-safe)
-      await expect(checkDeposit(mockClient, mockEnv)).rejects.toThrow('Network error');
+      await expect(checkDeposit(mockClient)).rejects.toThrow('Network error');
 
       // And: No notification sent (error propagates)
       expect(telegramModule.sendNotification).not.toHaveBeenCalled();

@@ -6,14 +6,13 @@
  *   task_id: TASK-019
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { DHLotteryClient } from './client';
 import * as authModule from './auth';
 import * as accountModule from './account';
 import * as chargeModule from './charge';
 import * as buyModule from './buy';
 import * as checkModule from './check';
-import type { WorkerEnv } from '../types';
 
 // Mock dependencies
 vi.mock('./auth');
@@ -31,16 +30,19 @@ vi.mock('../client/http', () => ({
 
 describe('DHLotteryClient', () => {
   let client: DHLotteryClient;
-  let mockEnv: WorkerEnv;
 
   beforeEach(() => {
-    mockEnv = {
-      USER_ID: 'test_user',
-      PASSWORD: 'test_password',
-      TELEGRAM_BOT_TOKEN: 'test_token',
-      TELEGRAM_CHAT_ID: 'test_chat_id',
-    };
-    client = new DHLotteryClient(mockEnv);
+    // Mock process.env
+    vi.stubEnv('USER_ID', 'test_user');
+    vi.stubEnv('PASSWORD', 'test_password');
+    vi.stubEnv('TELEGRAM_BOT_TOKEN', 'test_token');
+    vi.stubEnv('TELEGRAM_CHAT_ID', 'test_chat_id');
+
+    client = new DHLotteryClient();
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
   });
 
   it('TEST-ARCH-001: should instantiate correctly', () => {
@@ -49,7 +51,7 @@ describe('DHLotteryClient', () => {
 
   it('TEST-ARCH-002: should delegate login to auth module', async () => {
     await client.login();
-    expect(authModule.login).toHaveBeenCalledWith(expect.anything(), mockEnv);
+    expect(authModule.login).toHaveBeenCalledWith(expect.anything());
   });
 
   it('TEST-ARCH-002: should delegate getAccountInfo to account module', async () => {
@@ -59,23 +61,18 @@ describe('DHLotteryClient', () => {
 
   it('TEST-ARCH-002: should delegate checkDeposit to charge module', async () => {
     await client.checkDeposit();
-    expect(chargeModule.checkDeposit).toHaveBeenCalledWith(expect.anything(), mockEnv);
+    expect(chargeModule.checkDeposit).toHaveBeenCalledWith(expect.anything());
   });
 
   it('TEST-ARCH-002: should delegate buy to buy module', async () => {
     await client.buy();
-    expect(buyModule.purchaseLottery).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({
-        DHLOTTERY_USER_ID: mockEnv.USER_ID,
-      })
-    );
+    expect(buyModule.purchaseLottery).toHaveBeenCalledWith(expect.anything());
   });
 
   it('TEST-ARCH-002: should delegate checkWinning to check module', async () => {
     const now = new Date();
     await client.checkWinning(now);
-    expect(checkModule.checkWinning).toHaveBeenCalledWith(expect.anything(), mockEnv, now);
+    expect(checkModule.checkWinning).toHaveBeenCalledWith(expect.anything(), now);
   });
 
   /**

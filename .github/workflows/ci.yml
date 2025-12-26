@@ -32,6 +32,3 @@ jobs:
 
       - name: Test
         run: npm run test
-
-      - name: Build with Wrangler
-        run: npm run deploy -- --dry-run

@@ -2,8 +2,8 @@
  * Lottery Purchase Module
  *
  * Trace:
- *   spec_id: SPEC-PURCHASE-001, SPEC-REFACTOR-P2-ERROR-001
- *   task_id: TASK-005, TASK-011, TASK-REFACTOR-P2-003
+ *   spec_id: SPEC-PURCHASE-001, SPEC-REFACTOR-P2-ERROR-001, SPEC-GHACTION-001
+ *   task_id: TASK-005, TASK-011, TASK-REFACTOR-P2-003, TASK-GHACTION-001
  *
  * Implements automatic lottery purchase with 5 games
  */
@@ -13,7 +13,6 @@ import { sendNotification } from '../notify/telegram';
 import type {
   GameSelection,
   HttpClient,
-  PurchaseEnv,
   PurchaseOutcome,
   PurchaseReadyResponse,
   PurchaseResult,
@@ -109,13 +108,9 @@ function formatKoreanNumber(amount: number): string {
  * Purchases lottery tickets with automatic number generation
  *
  * @param client - HTTP client with active session
- * @param env - Environment variables including credentials and Telegram config
  * @returns Purchase outcome with success/failure details
  */
-export async function purchaseLottery(
-  client: HttpClient,
-  env: PurchaseEnv
-): Promise<PurchaseOutcome> {
+export async function purchaseLottery(client: HttpClient): Promise<PurchaseOutcome> {
   try {
     // Get current lottery round number
     const accountInfo = await getAccountInfo(client);
@@ -140,19 +135,16 @@ export async function purchaseLottery(
       };
 
       // Send success notification
-      await sendNotification(
-        {
-          type: 'success',
-          title: 'Lottery Purchase Completed',
-          message: `${roundNumber}회 로또 ${PURCHASE_CONSTANTS.GAME_COUNT}게임을 ${formatKoreanNumber(PURCHASE_CONSTANTS.TOTAL_COST)}원에 구매했습니다.`,
-          details: {
-            회차: `${roundNumber}회`,
-            게임수: `${PURCHASE_CONSTANTS.GAME_COUNT}게임`,
-            결제금액: `${formatKoreanNumber(PURCHASE_CONSTANTS.TOTAL_COST)}원`,
-          },
+      await sendNotification({
+        type: 'success',
+        title: 'Lottery Purchase Completed',
+        message: `${roundNumber}회 로또 ${PURCHASE_CONSTANTS.GAME_COUNT}게임을 ${formatKoreanNumber(PURCHASE_CONSTANTS.TOTAL_COST)}원에 구매했습니다.`,
+        details: {
+          회차: `${roundNumber}회`,
+          게임수: `${PURCHASE_CONSTANTS.GAME_COUNT}게임`,
+          결제금액: `${formatKoreanNumber(PURCHASE_CONSTANTS.TOTAL_COST)}원`,
         },
-        env
-      );
+      });
 
       return successResult;
     }
@@ -165,17 +157,14 @@ export async function purchaseLottery(
     };
 
     // Send error notification
-    await sendNotification(
-      {
-        type: 'error',
-        title: 'Lottery Purchase Failed',
-        message: purchaseResult.result.resultMsg,
-        details: {
-          오류코드: purchaseResult.result.resultCode,
-        },
+    await sendNotification({
+      type: 'error',
+      title: 'Lottery Purchase Failed',
+      message: purchaseResult.result.resultMsg,
+      details: {
+        오류코드: purchaseResult.result.resultCode,
       },
-      env
-    );
+    });
 
     return failureResult;
   } catch (error) {
@@ -188,14 +177,11 @@ export async function purchaseLottery(
     };
 
     // Send error notification
-    await sendNotification(
-      {
-        type: 'error',
-        title: 'Lottery Purchase Failed',
-        message: `구매 중 오류가 발생했습니다: ${errorMessage}`,
-      },
-      env
-    );
+    await sendNotification({
+      type: 'error',
+      title: 'Lottery Purchase Failed',
+      message: `구매 중 오류가 발생했습니다: ${errorMessage}`,
+    });
 
     return failureResult;
   }

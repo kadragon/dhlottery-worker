@@ -1,0 +1,112 @@
+spec_id: SPEC-GHACTION-001
+title: "GitHub Actions Migration (Cloudflare Worker → GitHub Actions)"
+version: "1.0.0"
+status: "active"
+
+description: |
+  Migrate from Cloudflare Worker scheduled cron to GitHub Actions scheduled workflow.
+  This migration removes Cloudflare Worker platform dependency while maintaining
+  all core functionality (automated lottery purchase, winning check, notifications).
+
+rationale: |
+  Cloudflare Worker free tier has a limit of 5 cron triggers. To free up
+  cron slots for other projects, we migrate to GitHub Actions which provides
+  unlimited scheduled workflows for public repositories.
+
+given_when_then:
+  - given: "A scheduled workflow trigger fires on GitHub Actions"
+    when: "The workflow runs on schedule (every Monday 10:00 KST)"
+    then: "The lottery workflow executes with same behavior as Cloudflare Worker"
+
+  - given: "Environment variables are stored in GitHub Secrets"
+    when: "The workflow accesses credentials (USER_ID, PASSWORD, tokens)"
+    then: "Credentials are securely loaded from GitHub Secrets into process.env"
+
+  - given: "The codebase no longer depends on Cloudflare Workers runtime"
+    when: "Dependencies and types are cleaned up"
+    then: "No Cloudflare Worker types or runtime APIs remain in the code"
+
+  - given: "Tests run in standard Node.js environment"
+    when: "npm run test is executed"
+    then: "All tests pass without Cloudflare Worker runtime dependencies"
+
+acceptance_tests:
+  - id: TEST-GHACTION-001
+    desc: "Should create GitHub Actions workflow file with scheduled trigger"
+    criteria:
+      - "Workflow file exists at .github/workflows/lottery.yml"
+      - "Workflow triggers on schedule: '0 1 * * 1' (every Monday 01:00 UTC = 10:00 KST)"
+      - "Workflow loads environment variables from GitHub Secrets"
+
+  - id: TEST-GHACTION-002
+    desc: "Should refactor WorkerEnv to use process.env"
+    criteria:
+      - "Remove WorkerEnv interface from types"
+      - "Replace env parameter passing with direct process.env access"
+      - "Update all modules (auth, account, charge, buy, check, notify) to read from process.env"
+
+  - id: TEST-GHACTION-003
+    desc: "Should remove Cloudflare Worker dependencies"
+    criteria:
+      - "Remove @cloudflare/workers-types from package.json dependencies"
+      - "Remove wrangler from package.json dependencies"
+      - "Remove wrangler.toml configuration file"
+      - "Remove Cloudflare-specific imports (ExecutionContext, ScheduledController)"
+
+  - id: TEST-GHACTION-004
+    desc: "Should update CI workflow to remove Wrangler steps"
+    criteria:
+      - "Remove 'Build with Wrangler' step from ci.yml"
+      - "Keep all other CI steps (lint, format, typecheck, test)"
+
+  - id: TEST-GHACTION-005
+    desc: "Should update documentation to reflect GitHub Actions deployment"
+    criteria:
+      - "Update .governance/env.yaml to document GitHub Actions platform"
+      - "Update .governance/memory.md to document migration"
+      - "Update README if exists to document new deployment method"
+
+  - id: TEST-GHACTION-006
+    desc: "Should maintain all existing functionality"
+    criteria:
+      - "All 147 existing tests pass after migration"
+      - "runWorkflow() function remains unchanged (core logic)"
+      - "No behavioral changes to lottery purchase, winning check, or notifications"
+
+dependencies:
+  governance: "platform-migration-pattern, environment-variable-pattern"
+  specs:
+    - SPEC-ORCH-001  # Main orchestration (needs refactoring)
+  external_services:
+    - "GitHub Actions"
+    - "DHLottery website"
+    - "Telegram Bot API"
+
+linked_tasks:
+  - TASK-GHACTION-001
+
+implementation_notes:
+  - "Entry point changes from Cloudflare scheduled() to direct Node.js script execution"
+  - "Environment variables change from Cloudflare Secrets to GitHub Secrets"
+  - "Deployment changes from 'wrangler deploy' to 'git push' (auto-run on schedule)"
+  - "Keep runWorkflow() function intact - only change how it's invoked"
+  - "Use tsx or node --loader for TypeScript execution in GitHub Actions"
+
+migration_steps:
+  1. "Create .github/workflows/lottery.yml with scheduled trigger"
+  2. "Create new entry point (src/run.ts) that calls runWorkflow() with process.env"
+  3. "Refactor all env parameter passing to use process.env directly"
+  4. "Remove WorkerEnv type and Cloudflare Worker imports"
+  5. "Remove wrangler and @cloudflare/workers-types from package.json"
+  6. "Remove wrangler.toml"
+  7. "Update .github/workflows/ci.yml (remove Wrangler build step)"
+  8. "Update .governance/env.yaml and memory.md"
+  9. "Run all tests to verify no regressions"
+  10. "Commit and push to trigger first GitHub Actions run"
+
+rollback_plan: |
+  If migration fails, rollback is straightforward:
+  1. Revert git commits to restore Cloudflare Worker setup
+  2. Re-run 'wrangler deploy' to restore cron trigger
+  3. Delete .github/workflows/lottery.yml
+  4. GitHub Actions migration is additive - no data loss risk

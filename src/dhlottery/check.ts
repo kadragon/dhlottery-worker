@@ -2,13 +2,13 @@
  * Winning Check Module
  *
  * Trace:
- *   spec_id: SPEC-WINNING-001, SPEC-REFACTOR-P2-LOG-001
- *   task_id: TASK-006, TASK-010, TASK-011, TASK-REFACTOR-P2-002
+ *   spec_id: SPEC-WINNING-001, SPEC-REFACTOR-P2-LOG-001, SPEC-GHACTION-001
+ *   task_id: TASK-006, TASK-010, TASK-011, TASK-REFACTOR-P2-002, TASK-GHACTION-001
  */
 
 import { USER_AGENT } from '../constants';
 import { sendNotification } from '../notify/telegram';
-import type { HttpClient, TelegramEnv, WinningResult } from '../types';
+import type { HttpClient, WinningResult } from '../types';
 import { calculatePreviousWeekRangeKst } from '../utils/date';
 import type { PreviousWeekRange } from '../utils/date';
 import { DHLotteryError } from '../utils/errors';
@@ -151,7 +151,6 @@ function formatKoreanNumber(amount: number): string {
  */
 export async function checkWinning(
   client: HttpClient,
-  env: TelegramEnv,
   now: Date = new Date()
 ): Promise<WinningResult[]> {
   const { startDate, endDate } = calculatePreviousWeekRange(now);
@@ -187,22 +186,19 @@ export async function checkWinning(
     if (jackpotWins.length === 0) return [];
 
     for (const win of jackpotWins) {
-      await sendNotification(
-        {
-          type: 'success',
-          title: 'Lottery Jackpot Win!',
-          message: `${win.roundNumber}회차 로또 ${win.rank}등 당첨을 확인했습니다.`,
-          details: {
-            roundNumber: win.roundNumber,
-            rank: win.rank,
-            prizeAmount: win.prizeAmount,
-            prizeAmountKrw: `${formatKoreanNumber(win.prizeAmount)}원`,
-            matchCount: win.matchCount,
-            period: `${startDate} ~ ${endDate}`,
-          },
+      await sendNotification({
+        type: 'success',
+        title: 'Lottery Jackpot Win!',
+        message: `${win.roundNumber}회차 로또 ${win.rank}등 당첨을 확인했습니다.`,
+        details: {
+          roundNumber: win.roundNumber,
+          rank: win.rank,
+          prizeAmount: win.prizeAmount,
+          prizeAmountKrw: `${formatKoreanNumber(win.prizeAmount)}원`,
+          matchCount: win.matchCount,
+          period: `${startDate} ~ ${endDate}`,
         },
-        env
-      );
+      });
     }
 
     return jackpotWins;

@@ -164,3 +164,27 @@ Tasks queued in `.tasks/backlog.yaml` ready for execution.
   - Kept more comprehensive versions with detailed GWT specs, acceptance tests, and rationale
   - Resolved task reference inconsistency noted in review (TASK-REFACTOR-P2-004 vs P2-003)
   - Result: Cleaner .spec directory, single source of truth for each refactoring task, better maintainability
+
+## Recent Improvements (2025-12-26)
+- **GitHub Actions Migration (TASK-GHACTION-001)**: Migrated from Cloudflare Worker scheduled cron to GitHub Actions scheduled workflow.
+  - **Rationale**: Cloudflare Worker free tier limits cron triggers to 5 slots; GitHub Actions provides unlimited scheduled workflows
+  - **Platform change**: Cloudflare Workers → GitHub Actions (ubuntu-latest runner)
+  - **Environment variables**: Refactored from Cloudflare Secrets (env parameter) to GitHub Secrets (process.env)
+  - **Entry point**: New src/run.ts for GitHub Actions, removed Cloudflare scheduled() handler from src/index.ts
+  - **Dependencies removed**: @cloudflare/workers-types, wrangler
+  - **Configuration removed**: wrangler.toml
+  - **Schedule unchanged**: Every Monday 01:00 UTC (10:00 KST)
+  - **Core refactoring**:
+    - Created src/utils/env.ts with getEnv() and validateEnv() helpers
+    - Removed env parameter from all functions: login(), sendNotification(), checkDeposit(), purchaseLottery(), checkWinning()
+    - Updated DHLotteryClient constructor to remove env parameter
+    - All modules now read credentials directly from process.env using getEnv()
+  - **CI/CD changes**:
+    - Added .github/workflows/lottery.yml for scheduled execution
+    - Updated .github/workflows/ci.yml to remove Wrangler build step
+    - Updated package.json: removed wrangler scripts, added "start" script using tsx
+  - **Documentation updates**:
+    - Updated .governance/env.yaml: platform changed to github-actions, secrets storage documented
+    - Created SPEC-GHACTION-001 with full migration specification and acceptance tests
+  - **Testing**: All existing tests need updating to mock process.env instead of passing env objects
+  - **Deployment**: GitHub Secrets must be configured (USER_ID, PASSWORD, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID)

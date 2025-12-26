@@ -6,24 +6,24 @@
  *   task_id: TASK-007, TASK-011
  */
 
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
 import { sendNotification } from "./telegram";
-import type { TelegramEnv } from "../types";
 
 describe("Telegram Notification Service", () => {
   let mockFetch: ReturnType<typeof vi.fn>;
-  let mockEnv: TelegramEnv;
 
   beforeEach(() => {
+    // Mock process.env
+    vi.stubEnv('TELEGRAM_BOT_TOKEN', '123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11');
+    vi.stubEnv('TELEGRAM_CHAT_ID', '987654321');
+
     // Mock global fetch
     mockFetch = vi.fn();
     global.fetch = mockFetch as any;
+  });
 
-    // Create mock environment with Telegram credentials
-    mockEnv = {
-      TELEGRAM_BOT_TOKEN: "123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11",
-      TELEGRAM_CHAT_ID: "987654321",
-    };
+  afterEach(() => {
+    vi.unstubAllEnvs();
   });
 
   /**
@@ -50,14 +50,13 @@ describe("Telegram Notification Service", () => {
           title: "Test",
           message: "Test message",
         },
-        mockEnv,
       );
 
       // Assert
       expect(mockFetch).toHaveBeenCalledTimes(1);
       const url = mockFetch.mock.calls[0][0];
       expect(url).toContain("https://api.telegram.org/bot");
-      expect(url).toContain(mockEnv.TELEGRAM_BOT_TOKEN);
+      expect(url).toContain("123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11");
       expect(url).toContain("/sendMessage");
     });
 
@@ -76,7 +75,6 @@ describe("Telegram Notification Service", () => {
           title: "Test Title",
           message: "Test Message",
         },
-        mockEnv,
       );
 
       // Assert
@@ -85,7 +83,7 @@ describe("Telegram Notification Service", () => {
 
       const requestBody = JSON.parse(requestOptions.body);
       expect(requestBody).toHaveProperty("chat_id");
-      expect(requestBody.chat_id).toBe(mockEnv.TELEGRAM_CHAT_ID);
+      expect(requestBody.chat_id).toBe("987654321");
       expect(requestBody).toHaveProperty("text");
       expect(requestBody.text).toContain("Test Title");
     });
@@ -105,7 +103,6 @@ describe("Telegram Notification Service", () => {
           title: "Test",
           message: "Test",
         },
-        mockEnv,
       );
 
       // Assert
@@ -145,7 +142,6 @@ describe("Telegram Notification Service", () => {
             roundNumber: 1145,
           },
         },
-        mockEnv,
       );
 
       // Assert
@@ -173,7 +169,6 @@ describe("Telegram Notification Service", () => {
           title: "Purchase Complete",
           message: "Done",
         },
-        mockEnv,
       );
 
       // Assert
@@ -211,7 +206,6 @@ describe("Telegram Notification Service", () => {
             minimumBalance: 30000,
           },
         },
-        mockEnv,
       );
 
       // Assert
@@ -239,7 +233,6 @@ describe("Telegram Notification Service", () => {
           title: "Warning",
           message: "Low balance",
         },
-        mockEnv,
       );
 
       // Assert
@@ -277,7 +270,6 @@ describe("Telegram Notification Service", () => {
             errorCode: "AUTH_INVALID_CREDENTIALS",
           },
         },
-        mockEnv,
       );
 
       // Assert
@@ -304,7 +296,6 @@ describe("Telegram Notification Service", () => {
           title: "Error",
           message: "Something went wrong",
         },
-        mockEnv,
       );
 
       // Assert
@@ -342,7 +333,6 @@ describe("Telegram Notification Service", () => {
             prizeAmount: 2000000000,
           },
         },
-        mockEnv,
       );
 
       // Assert
@@ -370,7 +360,6 @@ describe("Telegram Notification Service", () => {
           title: "You Won!",
           message: "Winner!",
         },
-        mockEnv,
       );
 
       // Assert
@@ -391,7 +380,7 @@ describe("Telegram Notification Service", () => {
     it("should use bot token from environment", async () => {
       // Arrange
       const customToken = "999888:CustomTokenForTesting";
-      mockEnv.TELEGRAM_BOT_TOKEN = customToken;
+      vi.stubEnv('TELEGRAM_BOT_TOKEN', customToken);
 
       mockFetch.mockResolvedValue({
         ok: true,
@@ -406,7 +395,6 @@ describe("Telegram Notification Service", () => {
           title: "Test",
           message: "Test",
         },
-        mockEnv,
       );
 
       // Assert
@@ -417,7 +405,7 @@ describe("Telegram Notification Service", () => {
     it("should use chat ID from environment", async () => {
       // Arrange
       const customChatId = "123123123";
-      mockEnv.TELEGRAM_CHAT_ID = customChatId;
+      vi.stubEnv('TELEGRAM_CHAT_ID', customChatId);
 
       mockFetch.mockResolvedValue({
         ok: true,
@@ -426,14 +414,11 @@ describe("Telegram Notification Service", () => {
       });
 
       // Act
-      await sendNotification(
-        {
-          type: "success",
-          title: "Test",
-          message: "Test",
-        },
-        mockEnv,
-      );
+      await sendNotification({
+        type: "success",
+        title: "Test",
+        message: "Test",
+      });
 
       // Assert
       const requestBody = JSON.parse(mockFetch.mock.calls[0][1].body);
@@ -462,7 +447,6 @@ describe("Telegram Notification Service", () => {
             title: "Test",
             message: "Test",
           },
-          mockEnv,
         ),
       ).resolves.not.toThrow();
     });
@@ -484,7 +468,6 @@ describe("Telegram Notification Service", () => {
             title: "Test",
             message: "Test",
           },
-          mockEnv,
         ),
       ).resolves.not.toThrow();
     });
@@ -506,7 +489,6 @@ describe("Telegram Notification Service", () => {
             title: "Test",
             message: "Test",
           },
-          mockEnv,
         ),
       ).resolves.not.toThrow();
     });
@@ -523,7 +505,6 @@ describe("Telegram Notification Service", () => {
           title: "Test",
           message: "Test",
         },
-        mockEnv,
       );
 
       // Assert
