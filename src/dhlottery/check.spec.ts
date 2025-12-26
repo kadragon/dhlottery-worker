@@ -8,8 +8,8 @@
 
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { HttpClient, HttpResponse, TelegramEnv } from "../types";
+import { beforeEach, describe, expect, it, vi, afterEach } from "vitest";
+import type { HttpClient, HttpResponse } from "../types";
 import {
   WINNING_PATTERNS,
   calculatePreviousWeekRange,
@@ -25,9 +25,12 @@ vi.mock("../notify/telegram", () => ({
 describe("Winning Check", () => {
   let fixtureHTML: string;
   let mockHttpClient: HttpClient;
-  let mockEnv: TelegramEnv;
 
   beforeEach(() => {
+    // Mock process.env
+    vi.stubEnv('TELEGRAM_BOT_TOKEN', '123:token');
+    vi.stubEnv('TELEGRAM_CHAT_ID', '987654321');
+
     fixtureHTML = readFileSync(
       join(__dirname, "../__fixtures__/winning-results.html"),
       "utf-8",
@@ -40,12 +43,11 @@ describe("Winning Check", () => {
       clearCookies: vi.fn(),
     };
 
-    mockEnv = {
-      TELEGRAM_BOT_TOKEN: "123:token",
-      TELEGRAM_CHAT_ID: "987654321",
-    };
-
     vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
   });
 
   /**
@@ -93,7 +95,7 @@ describe("Winning Check", () => {
 
       vi.mocked(mockHttpClient.fetch).mockResolvedValue(mockResponse);
 
-      await checkWinning(mockHttpClient, mockEnv, new Date("2025-12-15T10:00:00+09:00"));
+      await checkWinning(mockHttpClient, new Date("2025-12-15T10:00:00+09:00"));
 
       expect(mockHttpClient.fetch).toHaveBeenCalledTimes(1);
       const [url, options] = vi.mocked(mockHttpClient.fetch).mock.calls[0];
@@ -181,7 +183,6 @@ describe("Winning Check", () => {
 
       const results = await checkWinning(
         mockHttpClient,
-        mockEnv,
         new Date("2025-12-15T10:00:00+09:00"),
       );
 
@@ -313,7 +314,6 @@ describe("Winning Check", () => {
 
       const results = await checkWinning(
         mockHttpClient,
-        mockEnv,
         new Date("2025-12-15T10:00:00+09:00"),
       );
 
@@ -331,7 +331,7 @@ describe("Winning Check", () => {
       } as unknown as HttpResponse);
 
       await expect(
-        checkWinning(mockHttpClient, mockEnv, new Date("2025-12-15T10:00:00+09:00")),
+        checkWinning(mockHttpClient, new Date("2025-12-15T10:00:00+09:00")),
       ).resolves.toEqual([]);
     });
 
@@ -345,7 +345,7 @@ describe("Winning Check", () => {
       } as unknown as HttpResponse);
 
       await expect(
-        checkWinning(mockHttpClient, mockEnv, new Date("2025-12-15T10:00:00+09:00")),
+        checkWinning(mockHttpClient, new Date("2025-12-15T10:00:00+09:00")),
       ).resolves.toEqual([]);
     });
   });

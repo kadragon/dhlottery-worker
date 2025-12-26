@@ -2,12 +2,12 @@
  * DHLottery Client Facade
  *
  * Trace:
- *   spec_id: SPEC-ARCH-001
- *   task_id: TASK-019
+ *   spec_id: SPEC-ARCH-001, SPEC-GHACTION-001
+ *   task_id: TASK-019, TASK-GHACTION-001
  */
 
 import { createHttpClient } from '../client/http';
-import type { AccountInfo, HttpClient, PurchaseOutcome, WinningResult, WorkerEnv } from '../types';
+import type { AccountInfo, HttpClient, PurchaseOutcome, WinningResult } from '../types';
 import { getAccountInfo } from './account';
 import { login } from './auth';
 import { purchaseLottery } from './buy';
@@ -16,10 +16,8 @@ import { checkWinning } from './check';
 
 export class DHLotteryClient {
   private client: HttpClient;
-  private env: WorkerEnv;
 
-  constructor(env: WorkerEnv) {
-    this.env = env;
+  constructor() {
     this.client = createHttpClient();
   }
 
@@ -27,7 +25,7 @@ export class DHLotteryClient {
    * Log in to DHLottery
    */
   async login(): Promise<void> {
-    await login(this.client, this.env);
+    await login(this.client);
   }
 
   /**
@@ -49,25 +47,20 @@ export class DHLotteryClient {
    * @returns true if balance is sufficient, false otherwise
    */
   async checkDeposit(): Promise<boolean> {
-    return await checkDeposit(this.client, this.env);
+    return await checkDeposit(this.client);
   }
 
   /**
    * Purchase lottery tickets (5 games, auto)
    */
   async buy(): Promise<PurchaseOutcome> {
-    return await purchaseLottery(this.client, {
-      DHLOTTERY_USER_ID: this.env.USER_ID,
-      DHLOTTERY_USER_PW: this.env.PASSWORD,
-      TELEGRAM_BOT_TOKEN: this.env.TELEGRAM_BOT_TOKEN,
-      TELEGRAM_CHAT_ID: this.env.TELEGRAM_CHAT_ID,
-    });
+    return await purchaseLottery(this.client);
   }
 
   /**
    * Check winning results for the previous week
    */
   async checkWinning(now: Date = new Date()): Promise<WinningResult[]> {
-    return await checkWinning(this.client, this.env, now);
+    return await checkWinning(this.client, now);
   }
 }

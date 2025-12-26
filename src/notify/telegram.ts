@@ -2,11 +2,12 @@
  * Telegram Notification Service
  *
  * Trace:
- *   spec_id: SPEC-TELEGRAM-001
- *   task_id: TASK-007, TASK-011
+ *   spec_id: SPEC-TELEGRAM-001, SPEC-GHACTION-001
+ *   task_id: TASK-007, TASK-011, TASK-GHACTION-001
  */
 
-import type { NotificationPayload, TelegramEnv, TelegramMessage } from '../types';
+import type { NotificationPayload, TelegramMessage } from '../types';
+import { getEnv } from '../utils/env';
 
 /**
  * Get emoji based on notification type
@@ -57,25 +58,25 @@ function formatMessage(payload: NotificationPayload): string {
  * Send notification to Telegram
  *
  * @param payload - Notification payload with type, title, message, and optional details
- * @param env - Environment containing Telegram credentials
  */
-export async function sendNotification(
-  payload: NotificationPayload,
-  env: TelegramEnv
-): Promise<void> {
+export async function sendNotification(payload: NotificationPayload): Promise<void> {
   try {
     // Format message text
     const text = formatMessage(payload);
 
+    // Get Telegram credentials from environment
+    const botToken = getEnv('TELEGRAM_BOT_TOKEN');
+    const chatId = getEnv('TELEGRAM_CHAT_ID');
+
     // Prepare Telegram API message
     const message: TelegramMessage = {
-      chat_id: env.TELEGRAM_CHAT_ID,
+      chat_id: chatId,
       text,
       parse_mode: 'Markdown',
     };
 
     // Build API URL
-    const url = `https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`;
+    const url = `https://api.telegram.org/bot${botToken}/sendMessage`;
 
     // Send request to Telegram API
     const response = await fetch(url, {

@@ -1,0 +1,14 @@
+# GitGuardian Configuration
+# Exclude test files from secret scanning as they contain dummy test data
+
+version: "2"
+
+paths-ignore:
+  # Test files
+  - "**/*.spec.ts"
+  - "**/*.test.ts"
+  - "**/tests/**"
+  - "**/test/**"
+
+  # Documentation
+  - "**/*.md"

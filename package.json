@@ -1,17 +1,17 @@
 {
   "name": "dhlottery-worker",
   "version": "1.0.0",
-  "description": "Cloudflare Workers-based automated lottery purchase and notification service",
+  "description": "GitHub Actions-based automated lottery purchase and notification service",
   "main": "src/index.ts",
   "type": "module",
   "scripts": {
-    "dev": "wrangler dev",
-    "deploy": "wrangler deploy",
+    "start": "tsx src/run.ts",
     "test": "vitest run",
     "test:watch": "vitest --watch",
     "test:coverage": "vitest --coverage",
     "typecheck": "tsc --noEmit",
-    "format": "biome format --write .",
+    "format": "biome format .",
+    "format:fix": "biome format --write .",
     "lint": "biome lint .",
     "lint:fix": "biome lint --write .",
     "check": "biome check .",
@@ -22,18 +22,16 @@
   "simple-git-hooks": {
     "pre-commit": "npm run check:fix && npm run typecheck"
   },
-  "keywords": ["cloudflare-workers", "lottery", "automation", "telegram-bot"],
+  "keywords": ["github-actions", "lottery", "automation", "telegram-bot"],
   "author": "",
   "license": "MIT",
   "devDependencies": {
     "@biomejs/biome": "^1.9.4",
-    "@cloudflare/workers-types": "^4.20241127.0",
     "@types/node": "^22.10.2",
     "dotenv": "^17.2.3",
     "simple-git-hooks": "^2.13.1",
     "tsx": "^4.21.0",
     "typescript": "^5.7.2",
-    "vitest": "^4.0.16",
-    "wrangler": "^4.55.0"
+    "vitest": "^4.0.16"
   }
 }

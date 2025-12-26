@@ -6,17 +6,20 @@
  *   task_id: TASK-002, TASK-011, TASK-REFACTOR-P2-002
  */
 
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
 import { login } from "./auth";
 import { createHttpClient } from "../client/http";
 import { AuthenticationError } from "../utils/errors";
-import type { AuthEnv, HttpResponse } from "../types";
+import type { HttpResponse } from "../types";
 
 describe("DHLottery Authentication", () => {
   let mockHttpClient: ReturnType<typeof createHttpClient>;
-  let mockEnv: AuthEnv;
 
   beforeEach(() => {
+    // Mock process.env
+    vi.stubEnv('USER_ID', 'testuser');
+    vi.stubEnv('PASSWORD', 'testpass123');
+
     // Create mock HTTP client
     mockHttpClient = {
       cookies: {
@@ -27,12 +30,10 @@ describe("DHLottery Authentication", () => {
       getCookieHeader: vi.fn(),
       clearCookies: vi.fn(),
     } as unknown as ReturnType<typeof createHttpClient>;
+  });
 
-    // Create mock environment with secrets
-    mockEnv = {
-      USER_ID: "testuser",
-      PASSWORD: "testpass123",
-    };
+  afterEach(() => {
+    vi.unstubAllEnvs();
   });
 
   /**
@@ -88,7 +89,7 @@ describe("DHLottery Authentication", () => {
         ;
 
       // Act
-      await login(mockHttpClient, mockEnv);
+      await login(mockHttpClient);
 
       // Assert - should be called 2 times (session init + login)
       // Note: redirect is NOT followed to preserve session cookies
@@ -117,7 +118,7 @@ describe("DHLottery Authentication", () => {
         ;
 
       // Act
-      await login(mockHttpClient, mockEnv);
+      await login(mockHttpClient);
 
       // Assert - should not throw
       // Note: redirect is NOT followed to preserve session cookies
@@ -136,7 +137,7 @@ describe("DHLottery Authentication", () => {
         ;
 
       // Act & Assert - should not throw
-      await expect(login(mockHttpClient, mockEnv)).resolves.not.toThrow();
+      await expect(login(mockHttpClient)).resolves.not.toThrow();
     });
   });
 
@@ -162,7 +163,7 @@ describe("DHLottery Authentication", () => {
         ;
 
       // Act & Assert
-      await expect(login(mockHttpClient, mockEnv)).rejects.toThrow(
+      await expect(login(mockHttpClient)).rejects.toThrow(
         AuthenticationError,
       );
     });
@@ -181,7 +182,7 @@ describe("DHLottery Authentication", () => {
         ;
 
       // Act & Assert
-      await expect(login(mockHttpClient, mockEnv)).rejects.toThrow(errorMessage);
+      await expect(login(mockHttpClient)).rejects.toThrow(errorMessage);
     });
 
     it("should handle unexpected response format", async () => {
@@ -209,7 +210,7 @@ describe("DHLottery Authentication", () => {
         .mockResolvedValueOnce(invalidLoginResponse);
 
       // Act & Assert
-      await expect(login(mockHttpClient, mockEnv)).rejects.toThrow(
+      await expect(login(mockHttpClient)).rejects.toThrow(
         AuthenticationError,
       );
     });
@@ -237,7 +238,7 @@ describe("DHLottery Authentication", () => {
         .mockResolvedValueOnce(errorLoginResponse);
 
       // Act & Assert
-      await expect(login(mockHttpClient, mockEnv)).rejects.toThrow(
+      await expect(login(mockHttpClient)).rejects.toThrow(
         AuthenticationError,
       );
     });
@@ -255,7 +256,7 @@ describe("DHLottery Authentication", () => {
       vi.mocked(mockHttpClient.fetch).mockResolvedValueOnce(errorSessionInitResponse);
 
       // Act & Assert
-      await expect(login(mockHttpClient, mockEnv)).rejects.toThrow(
+      await expect(login(mockHttpClient)).rejects.toThrow(
         AuthenticationError,
       );
     });
@@ -273,7 +274,7 @@ describe("DHLottery Authentication", () => {
     it("should use USER_ID from environment", async () => {
       // Arrange
       const testUserId = "my-test-user";
-      mockEnv.USER_ID = testUserId;
+      vi.stubEnv('USER_ID', testUserId);
 
       const { sessionInitResponse, loginResponse } = createMockResponses({
         resultCode: "SUCCESS",
@@ -285,7 +286,7 @@ describe("DHLottery Authentication", () => {
         ;
 
       // Act
-      await login(mockHttpClient, mockEnv);
+      await login(mockHttpClient);
 
       // Assert - check second call (login request)
       const loginCall = vi.mocked(mockHttpClient.fetch).mock.calls[1];
@@ -297,7 +298,7 @@ describe("DHLottery Authentication", () => {
     it("should use PASSWORD from environment", async () => {
       // Arrange
       const testPassword = "secret-password-123";
-      mockEnv.PASSWORD = testPassword;
+      vi.stubEnv('PASSWORD', testPassword);
 
       const { sessionInitResponse, loginResponse } = createMockResponses({
         resultCode: "SUCCESS",
@@ -309,7 +310,7 @@ describe("DHLottery Authentication", () => {
         ;
 
       // Act
-      await login(mockHttpClient, mockEnv);
+      await login(mockHttpClient);
 
       // Assert - check second call (login request)
       const loginCall = vi.mocked(mockHttpClient.fetch).mock.calls[1];
@@ -320,8 +321,8 @@ describe("DHLottery Authentication", () => {
 
     it("should work with different credentials", async () => {
       // Arrange
-      mockEnv.USER_ID = "another-user";
-      mockEnv.PASSWORD = "another-pass";
+      vi.stubEnv('USER_ID', 'another-user');
+      vi.stubEnv('PASSWORD', 'another-pass');
 
       const { sessionInitResponse, loginResponse } = createMockResponses({
         resultCode: "SUCCESS",
@@ -333,7 +334,7 @@ describe("DHLottery Authentication", () => {
         ;
 
       // Act & Assert
-      await expect(login(mockHttpClient, mockEnv)).resolves.not.toThrow();
+      await expect(login(mockHttpClient)).resolves.not.toThrow();
     });
   });
 
@@ -358,7 +359,7 @@ describe("DHLottery Authentication", () => {
         ;
 
       // Act
-      await login(mockHttpClient, mockEnv);
+      await login(mockHttpClient);
 
       // Assert - check second call (login request)
       const loginCall = vi.mocked(mockHttpClient.fetch).mock.calls[1];
@@ -381,7 +382,7 @@ describe("DHLottery Authentication", () => {
         ;
 
       // Act
-      await login(mockHttpClient, mockEnv);
+      await login(mockHttpClient);
 
       // Assert - check second call (login request)
       const loginCall = vi.mocked(mockHttpClient.fetch).mock.calls[1];
@@ -405,7 +406,7 @@ describe("DHLottery Authentication", () => {
         ;
 
       // Act
-      await login(mockHttpClient, mockEnv);
+      await login(mockHttpClient);
 
       // Assert - check second call (login request)
       const loginCall = vi.mocked(mockHttpClient.fetch).mock.calls[1];
@@ -421,8 +422,8 @@ describe("DHLottery Authentication", () => {
 
     it("should properly URL-encode form data", async () => {
       // Arrange
-      mockEnv.USER_ID = "test@email.com";
-      mockEnv.PASSWORD = "p@ss w0rd!";
+      vi.stubEnv('USER_ID', 'test@email.com');
+      vi.stubEnv('PASSWORD', 'p@ss w0rd!');
 
       const { sessionInitResponse, loginResponse } = createMockResponses({
         resultCode: "SUCCESS",
@@ -434,7 +435,7 @@ describe("DHLottery Authentication", () => {
         ;
 
       // Act
-      await login(mockHttpClient, mockEnv);
+      await login(mockHttpClient);
 
       // Assert - check second call (login request)
       const loginCall = vi.mocked(mockHttpClient.fetch).mock.calls[1];
@@ -457,7 +458,7 @@ describe("DHLottery Authentication", () => {
         ;
 
       // Act
-      await login(mockHttpClient, mockEnv);
+      await login(mockHttpClient);
 
       // Assert - check second call (login request)
       const loginCall = vi.mocked(mockHttpClient.fetch).mock.calls[1];
@@ -495,7 +496,7 @@ describe("DHLottery Authentication", () => {
         .mockResolvedValueOnce(loginResponse);
 
       // Act
-      await login(mockHttpClient, mockEnv);
+      await login(mockHttpClient);
 
       // Assert - console.log should NOT be called since DEBUG is false
       expect(consoleLogSpy).not.toHaveBeenCalled();
@@ -520,7 +521,7 @@ describe("DHLottery Authentication", () => {
         .mockResolvedValueOnce(errorResponse);
 
       // Act & Assert - error should still be thrown
-      await expect(login(mockHttpClient, mockEnv)).rejects.toThrow(
+      await expect(login(mockHttpClient)).rejects.toThrow(
         AuthenticationError,
       );
     });

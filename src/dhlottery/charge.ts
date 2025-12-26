@@ -2,13 +2,13 @@
  * Deposit Check and Charge Initialization Module
  *
  * Trace:
- *   spec_id: SPEC-DEPOSIT-001, SPEC-REFACTOR-P2-LOG-001
- *   task_id: TASK-004, TASK-010, TASK-011, TASK-REFACTOR-P2-002
+ *   spec_id: SPEC-DEPOSIT-001, SPEC-REFACTOR-P2-LOG-001, SPEC-GHACTION-001
+ *   task_id: TASK-004, TASK-010, TASK-011, TASK-REFACTOR-P2-002, TASK-GHACTION-001
  */
 
 import { CHARGE_AMOUNT, DEBUG, MIN_DEPOSIT_AMOUNT, USER_AGENT } from '../constants';
 import { sendNotification } from '../notify/telegram';
-import type { DepositEnv, HttpClient } from '../types';
+import type { HttpClient } from '../types';
 import { getAccountInfo } from './account';
 
 /**
@@ -65,11 +65,10 @@ async function initializeChargePage(client: HttpClient): Promise<boolean> {
  * Check deposit balance and initialize charge if needed
  *
  * @param client - HTTP client with authenticated session
- * @param env - Environment containing Telegram credentials
  * @returns true if purchase can proceed, false if charge is needed
  * @throws Error if account info cannot be retrieved (fail-safe)
  */
-export async function checkDeposit(client: HttpClient, env: DepositEnv): Promise<boolean> {
+export async function checkDeposit(client: HttpClient): Promise<boolean> {
   // Fetch current account information
   const accountInfo = await getAccountInfo(client);
 
@@ -96,37 +95,31 @@ export async function checkDeposit(client: HttpClient, env: DepositEnv): Promise
 
   if (!chargeSuccess) {
     // Charge initialization failed - send error notification
-    await sendNotification(
-      {
-        type: 'error',
-        title: 'Charge Initialization Failed',
-        message: '충전 페이지 초기화에 실패했습니다. 수동으로 입금해주세요.',
-        details: {
-          currentBalance: formatCurrency(accountInfo.balance),
-          minimumRequired: formatCurrency(MIN_DEPOSIT_AMOUNT),
-        },
+    await sendNotification({
+      type: 'error',
+      title: 'Charge Initialization Failed',
+      message: '충전 페이지 초기화에 실패했습니다. 수동으로 입금해주세요.',
+      details: {
+        currentBalance: formatCurrency(accountInfo.balance),
+        minimumRequired: formatCurrency(MIN_DEPOSIT_AMOUNT),
       },
-      env
-    );
+    });
 
     return false;
   }
 
   // Send warning notification about insufficient balance
-  await sendNotification(
-    {
-      type: 'warning',
-      title: 'Insufficient Balance',
-      message:
-        '잔액이 부족하여 로또 구매를 진행할 수 없습니다. 입금 후 다음 스케줄에서 재시도됩니다.',
-      details: {
-        currentBalance: formatCurrency(accountInfo.balance),
-        minimumRequired: formatCurrency(MIN_DEPOSIT_AMOUNT),
-        chargeAmount: formatCurrency(CHARGE_AMOUNT),
-      },
+  await sendNotification({
+    type: 'warning',
+    title: 'Insufficient Balance',
+    message:
+      '잔액이 부족하여 로또 구매를 진행할 수 없습니다. 입금 후 다음 스케줄에서 재시도됩니다.',
+    details: {
+      currentBalance: formatCurrency(accountInfo.balance),
+      minimumRequired: formatCurrency(MIN_DEPOSIT_AMOUNT),
+      chargeAmount: formatCurrency(CHARGE_AMOUNT),
     },
-    env
-  );
+  });
 
   // Block purchase
   return false;

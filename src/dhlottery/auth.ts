@@ -12,12 +12,13 @@
  * - See memory.md (TASK-013) for historical context and design evolution
  *
  * Trace:
- *   spec_id: SPEC-AUTH-001, SPEC-REFACTOR-P2-LOG-001, SPEC-REFACTOR-P2-SESSION-001
- *   task_id: TASK-002, TASK-011, TASK-REFACTOR-P2-002, TASK-REFACTOR-P2-004
+ *   spec_id: SPEC-AUTH-001, SPEC-REFACTOR-P2-LOG-001, SPEC-REFACTOR-P2-SESSION-001, SPEC-GHACTION-001
+ *   task_id: TASK-002, TASK-011, TASK-REFACTOR-P2-002, TASK-REFACTOR-P2-004, TASK-GHACTION-001
  */
 
 import { DEBUG, USER_AGENT } from '../constants';
-import type { AuthEnv, HttpClient } from '../types';
+import type { HttpClient } from '../types';
+import { getEnv } from '../utils/env';
 import { AuthenticationError } from '../utils/errors';
 
 /**
@@ -124,17 +125,21 @@ async function initSession(client: HttpClient): Promise<void> {
  * Authenticate user with DHLottery
  *
  * @param client - HTTP client with cookie management
- * @param env - Environment containing USER_ID and PASSWORD secrets
  * @throws {AuthenticationError} If login fails
  */
-export async function login(client: HttpClient, env: AuthEnv): Promise<void> {
+export async function login(client: HttpClient): Promise<void> {
   // Step 1: Initialize session to get initial cookies
   await initSession(client);
-  // Step 2: Prepare form data with credentials and required parameters
+
+  // Step 2: Get credentials from environment
+  const userId = getEnv('USER_ID');
+  const password = getEnv('PASSWORD');
+
+  // Step 3: Prepare form data with credentials and required parameters
   const formData = new URLSearchParams();
   formData.append('returnUrl', RETURN_URL);
-  formData.append('userId', env.USER_ID);
-  formData.append('password', env.PASSWORD);
+  formData.append('userId', userId);
+  formData.append('password', password);
   formData.append('checkSave', 'off');
   formData.append('newsEventYn', '');
 

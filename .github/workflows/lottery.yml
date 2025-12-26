@@ -1,0 +1,37 @@
+name: Lottery Automation
+
+# Schedule: Every Monday at 10:00 AM KST (01:00 UTC)
+# KST = UTC+9, so 10:00 KST = 01:00 UTC
+on:
+  schedule:
+    - cron: "0 1 * * 1"
+  workflow_dispatch: # Allow manual trigger for testing
+
+jobs:
+  run-lottery:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run lottery workflow
+        env:
+          USER_ID: ${{ secrets.USER_ID }}
+          PASSWORD: ${{ secrets.PASSWORD }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: npx tsx src/run.ts
+
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "Lottery workflow failed. Check the logs above for details."
+          # TODO: Add Telegram notification for workflow failure if needed

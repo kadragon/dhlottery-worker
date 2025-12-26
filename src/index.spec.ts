@@ -6,8 +6,7 @@
  *   task_id: TASK-008, TASK-011
  */
 
-import { describe, it, expect, beforeEach, vi, type Mock } from "vitest";
-import type { ExecutionContext, ScheduledController } from "@cloudflare/workers-types";
+import { describe, it, expect, beforeEach, vi, afterEach, type Mock } from "vitest";
 import type { HttpClient, PurchaseOutcome } from "./types";
 
 vi.mock("./client/http", () => ({
@@ -41,31 +40,22 @@ const { purchaseLottery } = await import("./dhlottery/buy");
 const { checkWinning } = await import("./dhlottery/check");
 const { sendNotification } = await import("./notify/telegram");
 
-type WorkerEnv = {
-  USER_ID: string;
-  PASSWORD: string;
-  TELEGRAM_BOT_TOKEN: string;
-  TELEGRAM_CHAT_ID: string;
-};
-
-describe("Main Orchestration - scheduled handler", () => {
+describe("Main Orchestration - runWorkflow", () => {
   let mockClient: HttpClient;
-  let env: WorkerEnv;
 
   beforeEach(() => {
+    // Mock process.env
+    vi.stubEnv('USER_ID', 'test-user');
+    vi.stubEnv('PASSWORD', 'test-pass');
+    vi.stubEnv('TELEGRAM_BOT_TOKEN', 'test-token');
+    vi.stubEnv('TELEGRAM_CHAT_ID', 'test-chat');
+
     mockClient = {
       cookies: {},
       fetch: vi.fn(),
       getCookieHeader: vi.fn(),
       clearCookies: vi.fn(),
     } as unknown as HttpClient;
-
-    env = {
-      USER_ID: "test-user",
-      PASSWORD: "test-pass",
-      TELEGRAM_BOT_TOKEN: "test-token",
-      TELEGRAM_CHAT_ID: "test-chat",
-    };
 
     (createHttpClient as Mock).mockReturnValue(mockClient);
     (login as Mock).mockResolvedValue(undefined);
@@ -75,18 +65,14 @@ describe("Main Orchestration - scheduled handler", () => {
     vi.clearAllMocks();
   });
 
-  it("TEST-ORCH-001: should run the workflow from scheduled handler", async () => {
-    const { default: worker } = await import("./index");
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
 
-    const ctx = {
-      waitUntil: vi.fn(),
-    };
+  it("TEST-ORCH-001: should run the complete workflow", async () => {
+    const { runWorkflow } = await import("./index");
 
-    await worker.scheduled({} as ScheduledController, env, ctx as unknown as ExecutionContext);
-
-    expect(ctx.waitUntil).toHaveBeenCalledTimes(1);
-    const promise = ctx.waitUntil.mock.calls[0][0] as Promise<void>;
-    await promise;
+    await runWorkflow(new Date("2025-12-15T00:00:00.000Z"));
 
     expect(createHttpClient).toHaveBeenCalledTimes(1);
     expect(login).toHaveBeenCalledTimes(1);
@@ -100,7 +86,7 @@ describe("Main Orchestration - scheduled handler", () => {
 
     const { runWorkflow } = await import("./index");
 
-    await runWorkflow(env, new Date("2025-12-15T00:00:00.000Z"));
+    await runWorkflow(new Date("2025-12-15T00:00:00.000Z"));
 
     expect(login).toHaveBeenCalledTimes(1);
     expect(checkDeposit).toHaveBeenCalledTimes(1);
@@ -113,35 +99,15 @@ describe("Main Orchestration - scheduled handler", () => {
 
     const { runWorkflow } = await import("./index");
 
-    await runWorkflow(env, new Date("2025-12-15T00:00:00.000Z"));
+    await runWorkflow(new Date("2025-12-15T00:00:00.000Z"));
 
     expect(sendNotification).toHaveBeenCalledWith(
       expect.objectContaining({
         type: "error",
         title: expect.stringContaining("Orchestration"),
       }),
-      env
     );
     expect(checkDeposit).not.toHaveBeenCalled();
     expect(purchaseLottery).not.toHaveBeenCalled();
-  });
-
-  it("TEST-ORCH-004: should throw error when required env variables are missing", async () => {
-    const invalidEnv = {
-      USER_ID: "test-user",
-      // PASSWORD is missing
-      TELEGRAM_BOT_TOKEN: "test-token",
-      TELEGRAM_CHAT_ID: "test-chat",
-    };
-
-    const { default: worker } = await import("./index");
-
-    const ctx = {
-      waitUntil: vi.fn(),
-    };
-
-    await expect(
-      worker.scheduled({} as ScheduledController, invalidEnv as unknown as WorkerEnv, ctx as unknown as ExecutionContext)
-    ).rejects.toThrow("Missing required environment variables");
   });
 });
