@@ -1,6 +1,6 @@
 # DHLottery Worker
 
-Cloudflare Workers-based automated lottery purchase and notification service for DHLottery (Korea Lottery).
+GitHub Actions-based automated lottery purchase and notification service for DHLottery (Korea Lottery).
 
 ## Features
 
@@ -56,7 +56,7 @@ dhlottery-worker/
 ### Prerequisites
 
 - Node.js 18+
-- Cloudflare account
+- GitHub account (for GitHub Actions)
 - DHLottery account
 - Telegram bot
 
@@ -73,19 +73,19 @@ cd dhlottery-worker
 npm install
 ```
 
-3. Configure Cloudflare Workers secrets:
-```bash
-wrangler secret put USER_ID
-wrangler secret put PASSWORD
-wrangler secret put TELEGRAM_BOT_TOKEN
-wrangler secret put TELEGRAM_CHAT_ID
-```
+3. Configure GitHub Secrets:
+   - Go to your repository Settings → Secrets and variables → Actions
+   - Add the following secrets:
+     - `USER_ID`: Your DHLottery user ID
+     - `PASSWORD`: Your DHLottery password
+     - `TELEGRAM_BOT_TOKEN`: Your Telegram bot token
+     - `TELEGRAM_CHAT_ID`: Your Telegram chat ID
 
 ### Development
 
-Run local development server:
+Run locally (requires .env file with secrets):
 ```bash
-npm run dev
+npm start
 ```
 
 Run tests:
@@ -105,10 +105,14 @@ npm run typecheck
 
 ### Deployment
 
-Deploy to Cloudflare Workers:
-```bash
-npm run deploy
-```
+The service runs automatically via GitHub Actions:
+- **Schedule**: Every Monday at 10:00 AM KST (01:00 UTC)
+- **Workflow**: `.github/workflows/lottery.yml`
+- **Manual trigger**: Use "Run workflow" button in GitHub Actions tab
+
+To deploy changes:
+1. Push to `main` branch
+2. GitHub Actions will automatically use the updated code on next scheduled run
 
 ## Workflow
 
@@ -133,7 +137,7 @@ The service executes automatically every Monday at 10:00 AM KST:
 
 ## Security
 
-- All credentials stored in Cloudflare Workers Secrets
+- All credentials stored in GitHub Secrets
 - No sensitive data in logs or code
 - Stateless execution (no persistent storage)
 - Single-user, personal use only
@@ -148,7 +152,7 @@ This project uses **Test-Driven Development (TDD)** and **Spec-Driven Developmen
 4. Refactor while keeping tests green (REFACTOR)
 
 ### Test Coverage
-- **118 tests** covering all modules (auth, account, purchase, winning, notifications, utilities)
+- **161 tests** (2 skipped) covering all modules (auth, account, purchase, winning, notifications, utilities)
 - Fixture-based testing with real HTML samples from DHLottery
 - Mock HTTP client for deterministic test behavior
 - Isolated unit tests per module with spec traceability
@@ -172,19 +176,20 @@ npm run test:watch     # Run tests in watch mode
 
 ### Debugging
 
-View Cloudflare Workers logs:
-```bash
-wrangler tail
-```
+View GitHub Actions logs:
+- Go to Actions tab in your repository
+- Click on the latest workflow run
+- Check the "Run lottery workflow" step for logs
 
 Check local test execution:
 ```bash
 npm test -- --reporter=verbose
 ```
 
-Enable debug HTML save (for auth issues):
+Enable debug mode:
 ```bash
-export DEBUG_HTML=1
+# Set DEBUG=true in src/constants.ts or use environment variable
+DEBUG=true npm start
 ```
 
 ## License

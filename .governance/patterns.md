@@ -93,33 +93,19 @@ interface NotificationPayload {
 ```typescript
 async function main(env: Env): Promise<void> {
   const client = createHttpClient();
-
   try {
-    // 1. Initialize session
     await initSession(client);
-
-    // 2. Authenticate
     await login(client, env.USER_ID, env.PASSWORD);
-
-    // 3. Check account
     const account = await fetchAccountInfo(client);
-
-    // 4. Decide action based on balance
     if (account.balance < MIN_DEPOSIT_AMOUNT) {
       await initChargePage(client);
       await notifyLowBalance(account.balance);
       return;
     }
-
-    // 5. Purchase lottery
     const result = await purchaseLottery(client);
     await notifyPurchaseSuccess(result);
-
-    // 6. Check winning
     const winning = await checkWinning(client);
-    if (winning.length > 0) {
-      await notifyWinning(winning);
-    }
+    if (winning.length > 0) await notifyWinning(winning);
   } catch (error) {
     await notifyError(error);
     throw error;
@@ -170,18 +156,12 @@ console.log('Purchase completed', {
 - Resource not found (404)
 
 ```typescript
-async function withRetry<T>(
-  fn: () => Promise<T>,
-  maxRetries = 3,
-  delay = 1000
-): Promise<T> {
+async function withRetry<T>(fn: () => Promise<T>, maxRetries = 3, delay = 1000): Promise<T> {
   for (let i = 0; i < maxRetries; i++) {
     try {
       return await fn();
     } catch (error) {
-      if (i === maxRetries - 1 || !isRetryable(error)) {
-        throw error;
-      }
+      if (i === maxRetries - 1 || !isRetryable(error)) throw error;
       await sleep(delay * Math.pow(2, i));
     }
   }
