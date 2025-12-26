@@ -4,7 +4,7 @@
     "module": "ESNext",
     "lib": ["ES2021"],
     "moduleResolution": "bundler",
-    "types": ["@cloudflare/workers-types", "vitest/globals"],
+    "types": ["@types/node", "vitest/globals"],
 
     "strict": true,
     "esModuleInterop": true,
@@ -25,5 +25,5 @@
     }
   },
   "include": ["src/**/*", "*.ts"],
-  "exclude": ["node_modules", "dist", ".wrangler"]
+  "exclude": ["node_modules", "dist"]
 }
