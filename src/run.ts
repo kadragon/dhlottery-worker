@@ -6,8 +6,8 @@
  *   task_id: TASK-GHACTION-001
  */
 
-import { validateEnv } from './utils/env';
 import { runWorkflow } from './index';
+import { validateEnv } from './utils/env';
 
 /**
  * Main entry point for GitHub Actions workflow

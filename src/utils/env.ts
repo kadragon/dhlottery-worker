@@ -9,7 +9,12 @@
 /**
  * Required environment variable keys
  */
-const REQUIRED_ENV_KEYS = ['USER_ID', 'PASSWORD', 'TELEGRAM_BOT_TOKEN', 'TELEGRAM_CHAT_ID'] as const;
+const REQUIRED_ENV_KEYS = [
+  'USER_ID',
+  'PASSWORD',
+  'TELEGRAM_BOT_TOKEN',
+  'TELEGRAM_CHAT_ID',
+] as const;
 
 export type RequiredEnvKey = (typeof REQUIRED_ENV_KEYS)[number];
 

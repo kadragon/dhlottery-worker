@@ -18,8 +18,8 @@
 
 import { DEBUG, USER_AGENT } from '../constants';
 import type { HttpClient } from '../types';
-import { AuthenticationError } from '../utils/errors';
 import { getEnv } from '../utils/env';
+import { AuthenticationError } from '../utils/errors';
 
 /**
  * DHLottery endpoints
