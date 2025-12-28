@@ -9,8 +9,8 @@
 import { USER_AGENT } from '../constants';
 import { sendNotification } from '../notify/telegram';
 import type { HttpClient, WinningResult } from '../types';
-import { calculatePreviousWeekRangeKst } from '../utils/date';
 import type { PreviousWeekRange } from '../utils/date';
+import { calculatePreviousWeekRangeKst } from '../utils/date';
 import { DHLotteryError } from '../utils/errors';
 
 const WINNING_LIST_URL = 'https://www.dhlottery.co.kr/myPage.do?method=lottoBuyList';

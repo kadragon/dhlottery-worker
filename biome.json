@@ -1,17 +1,14 @@
 {
-  "$schema": "https://biomejs.dev/schemas/1.9.4/schema.json",
-  "organizeImports": {
-    "enabled": true
-  },
+  "$schema": "https://biomejs.dev/schemas/2.3.10/schema.json",
+  "assist": { "actions": { "source": { "organizeImports": "on" } } },
   "linter": {
     "enabled": true,
     "rules": {
       "recommended": true,
       "complexity": {
         "noExtraBooleanCast": "error",
-        "noMultipleSpacesInRegularExpressionLiterals": "error",
         "noUselessCatch": "error",
-        "noWith": "error"
+        "noAdjacentSpacesInRegex": "error"
       },
       "correctness": {
         "noConstAssign": "error",
@@ -19,7 +16,6 @@
         "noEmptyPattern": "error",
         "noGlobalObjectCalls": "error",
         "noInvalidConstructorSuper": "error",
-        "noNewSymbol": "error",
         "noSetterReturn": "error",
         "noUndeclaredVariables": "error",
         "noUnreachable": "error",
@@ -27,7 +23,9 @@
         "noUnsafeFinally": "error",
         "noUnusedVariables": "error",
         "useIsNan": "error",
-        "useValidForDirection": "error"
+        "useValidForDirection": "error",
+        "noInvalidBuiltinInstantiation": "error",
+        "useValidTypeof": "error"
       },
       "style": {
         "noInferrableTypes": "warn",
@@ -69,7 +67,7 @@
         "noShadowRestrictedNames": "error",
         "noUnsafeNegation": "error",
         "useGetterReturn": "error",
-        "useValidTypeof": "error"
+        "noWith": "error"
       }
     }
   },
@@ -95,7 +93,16 @@
     }
   },
   "files": {
-    "include": ["src/**/*.ts", "*.ts", "*.json"],
-    "ignore": ["node_modules", "dist", ".wrangler", "coverage", "*.spec.ts", "**/__fixtures__/**"]
+    "includes": [
+      "**/src/**/*.ts",
+      "**/*.ts",
+      "**/*.json",
+      "!**/node_modules",
+      "!**/dist",
+      "!**/.wrangler",
+      "!**/coverage",
+      "!**/*.spec.ts",
+      "!**/__fixtures__"
+    ]
   }
 }
