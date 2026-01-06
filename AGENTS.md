@@ -25,6 +25,7 @@
   - 세션 init: `/login` (DHJSESSIONID 쿠키 발급)
   - RSA 키 조회: `/login/selectRsaModulus.do` (modulus + exponent)
   - 로그인: `/login/securityLoginCheck.do` (RSA 암호화된 credentials POST)
+- 마이페이지 (2026-01 변경): `/mypage/home` (구매가능 잔액: divCrntEntrsAmt)
 - 구매: `/olotto/game/egovUserReadySocket.json`, `/olotto/game/execBuy.do`
 - 충전 init: `/kbank.do?method=kbankProcess` (검증됨)
 - 당첨 목록: `/myPage.do?method=lottoBuyList`
@@ -42,6 +43,7 @@
 - SPEC-AUTH-001: 인증 흐름(세션 init + 로그인)
 - SPEC-AUTH-RSA-001: RSA 암호화 로그인 (2026-01, node-forge 사용)
 - SPEC-ACCOUNT-001: 잔액/라운드 파싱
+- SPEC-ACCOUNT-002: 새 마이페이지 잔액 파싱 (2026-01, /mypage/home, divCrntEntrsAmt)
 - SPEC-DEPOSIT-001: 최소 잔액 체크 + 충전 init + 경고 알림
 - SPEC-PURCHASE-001: 5게임 자동 구매 + 결과 알림
 - SPEC-WINNING-001: 이전 주 당첨 확인(랭크 1만)
@@ -62,4 +64,5 @@
 ## 핵심 결정/주의사항
 - 인증 방식 변경 (2026-01): 평문 → RSA PKCS#1 v1.5 암호화 (node-forge 사용, DHLottery jsbn.js 호환)
 - 쿠키 변경: JSESSIONID → DHJSESSIONID, 로그인 성공 시 userId 쿠키 설정
+- 마이페이지 변경 (2026-01): `/myPage.do` → `/mypage/home`, 잔액 파싱은 `divCrntEntrsAmt` 요소 사용
 - 구매/알림/당첨 체크는 실패해도 전체 실행이 중단되지 않도록 설계

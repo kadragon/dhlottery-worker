@@ -17,6 +17,7 @@ import { join } from "node:path";
 describe("Account Information Retrieval", () => {
   let mockHttpClient: ReturnType<typeof createHttpClient>;
   let fixtureHTML: string;
+  let newMypageHTML: string;
 
   beforeEach(() => {
     // Create mock HTTP client
@@ -27,9 +28,13 @@ describe("Account Information Retrieval", () => {
       clearCookies: vi.fn(),
     } as unknown as ReturnType<typeof createHttpClient>;
 
-    // Load HTML fixture
+    // Load HTML fixtures
     fixtureHTML = readFileSync(
       join(__dirname, "../__fixtures__/account-page.html"),
+      "utf-8",
+    );
+    newMypageHTML = readFileSync(
+      join(__dirname, "../__fixtures__/mypage-home.html"),
       "utf-8",
     );
   });
@@ -85,7 +90,7 @@ describe("Account Information Retrieval", () => {
       expect(firstCall[0]).toContain("www.dhlottery.co.kr/common.do?method=main");
       
       const secondCall = vi.mocked(mockHttpClient.fetch).mock.calls[1];
-      expect(secondCall[0]).toContain("myPage.do?method=myPage");
+      expect(secondCall[0]).toContain("/mypage/home");
     });
 
     it("should send GET request to correct endpoint", async () => {
@@ -410,6 +415,111 @@ describe("Account Information Retrieval", () => {
       // currentRound is already the next round (current + 1)
       // HTML has 1145, so currentRound should be 1146
       expect(result.currentRound).toBe(1146);
+    });
+  });
+
+  /**
+   * TEST-ACCOUNT-006: Should parse balance from new mypage structure (2026-01 update)
+   *
+   * Criteria:
+   * - Parse balance from id="divCrntEntrsAmt" element
+   * - Handle HTML format: <div id="divCrntEntrsAmt">N,NNN<span>원</span></div>
+   * - Use new URL: /mypage/home
+   */
+  describe("TEST-ACCOUNT-006: Parse balance from new mypage structure", () => {
+    it("should parse balance from divCrntEntrsAmt element", async () => {
+      // Arrange - New mypage has 20,000 in divCrntEntrsAmt
+      const mainPageResponse = {
+        status: 200,
+        statusText: "OK",
+        headers: new Headers(),
+        text: async () => fixtureHTML, // Main page for round (1145 -> 1146)
+        json: async () => ({}),
+      } as unknown as HttpResponse;
+
+      const myPageResponse = {
+        status: 200,
+        statusText: "OK",
+        headers: new Headers(),
+        text: async () => newMypageHTML, // New mypage format with 20,000
+        json: async () => ({}),
+      } as unknown as HttpResponse;
+
+      vi.mocked(mockHttpClient.fetch)
+        .mockResolvedValueOnce(mainPageResponse)
+        .mockResolvedValueOnce(myPageResponse);
+
+      // Act
+      const result = await getAccountInfo(mockHttpClient);
+
+      // Assert
+      expect(result.balance).toBe(20000);
+    });
+
+    it("should handle zero balance in new format", async () => {
+      // Arrange
+      const htmlWithZero = newMypageHTML.replace(
+        'id="divCrntEntrsAmt">20,000',
+        'id="divCrntEntrsAmt">0'
+      );
+      const mainPageResponse = {
+        status: 200,
+        statusText: "OK",
+        headers: new Headers(),
+        text: async () => fixtureHTML,
+        json: async () => ({}),
+      } as unknown as HttpResponse;
+
+      const myPageResponse = {
+        status: 200,
+        statusText: "OK",
+        headers: new Headers(),
+        text: async () => htmlWithZero,
+        json: async () => ({}),
+      } as unknown as HttpResponse;
+
+      vi.mocked(mockHttpClient.fetch)
+        .mockResolvedValueOnce(mainPageResponse)
+        .mockResolvedValueOnce(myPageResponse);
+
+      // Act
+      const result = await getAccountInfo(mockHttpClient);
+
+      // Assert
+      expect(result.balance).toBe(0);
+    });
+
+    it("should handle large balance with multiple commas in new format", async () => {
+      // Arrange
+      const htmlWithLargeBalance = newMypageHTML.replace(
+        'id="divCrntEntrsAmt">20,000',
+        'id="divCrntEntrsAmt">1,234,567'
+      );
+      const mainPageResponse = {
+        status: 200,
+        statusText: "OK",
+        headers: new Headers(),
+        text: async () => fixtureHTML,
+        json: async () => ({}),
+      } as unknown as HttpResponse;
+
+      const myPageResponse = {
+        status: 200,
+        statusText: "OK",
+        headers: new Headers(),
+        text: async () => htmlWithLargeBalance,
+        json: async () => ({}),
+      } as unknown as HttpResponse;
+
+      vi.mocked(mockHttpClient.fetch)
+        .mockResolvedValueOnce(mainPageResponse)
+        .mockResolvedValueOnce(myPageResponse);
+
+      // Act
+      const result = await getAccountInfo(mockHttpClient);
+
+      // Assert
+      expect(result.balance).toBe(1234567);
     });
   });
 });

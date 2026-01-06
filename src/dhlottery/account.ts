@@ -14,21 +14,26 @@ import { DHLotteryError } from '../utils/errors';
  * DHLottery account page URL
  * Using main page (common.do) instead of myPage.do to avoid 302 redirects
  * and match the behavior of the verified n8n workflow.
+ *
+ * 2026-01 Update: New mypage URL is /mypage/home
  */
 const MAIN_PAGE_URL = 'https://www.dhlottery.co.kr/common.do?method=main';
-const MY_PAGE_URL = 'https://www.dhlottery.co.kr/myPage.do?method=myPage';
+const MY_PAGE_URL = 'https://dhlottery.co.kr/mypage/home';
 
 /**
  * Balance parsing regex patterns
  *
  * Matches various HTML structures where deposit balance appears:
+ * - New mypage (2026-01): <div id="divCrntEntrsAmt">N,NNN<span>원</span></div>
  * - Main page header: <li class="money">...<strong>N,NNN</strong>원</li>
  * - My page table: <td class="ta_right">N,NNN ...</td>
  * - General format: <strong>N,NNN</strong>원
  *
- * Trace: spec_id: SPEC-REFACTOR-P2-REGEX-001, task_id: TASK-REFACTOR-P2-001
+ * Trace: spec_id: SPEC-REFACTOR-P2-REGEX-001, SPEC-ACCOUNT-002, task_id: TASK-REFACTOR-P2-001
  */
 export const BALANCE_PATTERNS = {
+  // New Mypage (2026-01): <div id="divCrntEntrsAmt">N,NNN<span>원</span></div>
+  newMypageBalance: /id="divCrntEntrsAmt"[^>]*>([\d,]+)/i,
   // Main Page Header (<li class="money"><a href="..."><strong>N,NNN</strong>원</a></li>)
   mainPageHeader: /<li[^>]*class="money"[^>]*>[\s\S]*?<strong>([\d,]+)<\/strong>/i,
   // My Page Balance Table (<td class="ta_right" colspan="3">N,NNN ...</td>)
