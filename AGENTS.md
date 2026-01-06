@@ -21,12 +21,14 @@
 
 ## 외부 엔드포인트 요약
 - Base: `https://dhlottery.co.kr`
-- Session/Login: `/common.do?method=main`, `/userSsl.do?method=login`
+- Session/Login (2026-01 변경):
+  - 세션 init: `/login` (DHJSESSIONID 쿠키 발급)
+  - RSA 키 조회: `/login/selectRsaModulus.do` (modulus + exponent)
+  - 로그인: `/login/securityLoginCheck.do` (RSA 암호화된 credentials POST)
 - 구매: `/olotto/game/egovUserReadySocket.json`, `/olotto/game/execBuy.do`
 - 충전 init: `/kbank.do?method=kbankProcess` (검증됨)
 - 당첨 목록: `/myPage.do?method=lottoBuyList`
 - Telegram: `https://api.telegram.org/bot{token}/sendMessage`
-- 참고: 세션 init URL은 `gameResult.do?...` 대안도 동등(문서화 완료)
 
 ## 현재 작업 상태 (.tasks)
 - current_task: `null`
@@ -36,8 +38,9 @@
 - 마이그레이션 이후 테스트는 `process.env` mocking 기준으로 갱신 필요(기억 문서 기준)
 
 ## 스펙 요약 (.spec)
-- SPEC-SESSION-001: 쿠키 기반 세션 수립/갱신
+- SPEC-SESSION-001: 쿠키 기반 세션 수립/갱신 (DHJSESSIONID)
 - SPEC-AUTH-001: 인증 흐름(세션 init + 로그인)
+- SPEC-AUTH-RSA-001: RSA 암호화 로그인 (2026-01, node-forge 사용)
 - SPEC-ACCOUNT-001: 잔액/라운드 파싱
 - SPEC-DEPOSIT-001: 최소 잔액 체크 + 충전 init + 경고 알림
 - SPEC-PURCHASE-001: 5게임 자동 구매 + 결과 알림
@@ -57,5 +60,6 @@
 - 로그에 민감정보 금지, 구조화 로깅 선호
 
 ## 핵심 결정/주의사항
-- 세션 init URL은 `gameResult.do?...`와 `common.do?method=main`이 기능적으로 동등(현 구현 유지 결론)
+- 인증 방식 변경 (2026-01): 평문 → RSA PKCS#1 v1.5 암호화 (node-forge 사용, DHLottery jsbn.js 호환)
+- 쿠키 변경: JSESSIONID → DHJSESSIONID, 로그인 성공 시 userId 쿠키 설정
 - 구매/알림/당첨 체크는 실패해도 전체 실행이 중단되지 않도록 설계

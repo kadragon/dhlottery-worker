@@ -1,21 +1,21 @@
 /**
  * DHLottery Authentication Module
  *
- * Implements two-phase authentication flow:
- * 1. Session initialization: GET gameResult.do to acquire JSESSIONID cookie
- * 2. User login: POST credentials to userSsl.do with browser-like headers
+ * Implements RSA-encrypted authentication flow (updated 2026-01):
+ * 1. Session initialization: GET /login to acquire DHJSESSIONID cookie
+ * 2. RSA key fetch: GET /login/selectRsaModulus.do to get public key
+ * 3. User login: POST RSA-encrypted credentials to /login/securityLoginCheck.do
  *
- * Session URL strategy documented in SPEC-REFACTOR-P2-SESSION-001:
- * - Current implementation uses gameResult.do (from reference implementation)
- * - Alternative common.do also works (both are functionally equivalent)
- * - Rationale: Preserving reference implementation choice, changing carries low benefit/high risk
- * - See memory.md (TASK-013) for historical context and design evolution
+ * Historical note:
+ * - Pre-2026: Used userSsl.do with plain text credentials
+ * - Post-2026: Uses securityLoginCheck.do with RSA PKCS#1 v1.5 encryption
  *
  * Trace:
- *   spec_id: SPEC-AUTH-001, SPEC-REFACTOR-P2-LOG-001, SPEC-REFACTOR-P2-SESSION-001, SPEC-GHACTION-001
- *   task_id: TASK-002, TASK-011, TASK-REFACTOR-P2-002, TASK-REFACTOR-P2-004, TASK-GHACTION-001
+ *   spec_id: SPEC-AUTH-001, SPEC-AUTH-RSA-001
+ *   task_id: TASK-002, TASK-AUTH-RSA-001
  */
 
+import forge from 'node-forge';
 import { DEBUG, USER_AGENT } from '../constants';
 import type { HttpClient } from '../types';
 import { getEnv } from '../utils/env';
@@ -23,58 +23,60 @@ import { AuthenticationError } from '../utils/errors';
 
 /**
  * DHLottery endpoints
- *
- * SESSION_INIT_URL: gameResult.do vs common.do
- *   - Uses gameResult.do (winning results page) with wiselog=H_C_1_1 parameter
- *   - Both gameResult.do and common.do return HTTP 200 with Set-Cookie: JSESSIONID
- *   - gameResult.do chosen from reference implementation (n8n workflow)
- *   - common.do would be more semantically appropriate (home page) but gameResult.do works
- *   - Design decision: Keep current implementation (stable, proven, no functional gain from changing)
- *   - Future refactoring: common.do is valid drop-in replacement if needed
- *
- * RETURN_URL: Used in login form to specify where browser should navigate after login
- *   - Points to common.do?method=main (home page)
- *   - We do NOT follow this redirect to preserve session cookies
- *   - getAccountInfo() fetches this URL later to stabilize session
  */
-const SESSION_INIT_URL = 'https://dhlottery.co.kr/gameResult.do?method=byWin&wiselog=H_C_1_1';
-const LOGIN_URL = 'https://www.dhlottery.co.kr/userSsl.do?method=login';
-const RETURN_URL = 'https://dhlottery.co.kr/common.do?method=main';
+const LOGIN_PAGE_URL = 'https://dhlottery.co.kr/login';
+const RSA_MODULUS_URL = 'https://dhlottery.co.kr/login/selectRsaModulus.do';
+const LOGIN_URL = 'https://dhlottery.co.kr/login/securityLoginCheck.do';
 
 /**
- * Login response structure from DHLottery
+ * RSA Modulus response from DHLottery
  */
-interface DHLotteryLoginResponse {
-  result?: {
-    resultCode: string;
-    resultMsg?: string;
+interface RsaModulusResponse {
+  code: string;
+  msg: string;
+  data: {
+    rsaModulus: string;
+    publicExponent: string;
   };
 }
 
 /**
- * Initialize session by requesting gameResult.do to acquire JSESSIONID cookie
+ * Encrypt text using RSA PKCS#1 v1.5 padding
  *
- * Design notes:
- *   - MUST be called before login() to establish session with JSESSIONID
- *   - Uses gameResult.do (winning results page) - derived from reference implementation
- *   - Returns HTTP 200 with Set-Cookie: JSESSIONID header
- *   - Alternative: common.do?method=main also works (verified in SPEC-REFACTOR-P2-SESSION-001)
- *   - Verification: Throws error if JSESSIONID is not set after the request
+ * Uses node-forge for RSA encryption as it produces output compatible
+ * with DHLottery's JavaScript RSA implementation (jsbn.js based).
+ * Node.js native crypto module produces different ciphertext that
+ * DHLottery's server does not accept.
  *
- * Historical context:
- *   - TASK-013 (2025-12-18): Implemented two-phase authentication flow
- *   - Initial spec mentioned common.do, but implementation uses gameResult.do
- *   - gameResult.do is stable, tested, and proven to work in production
- *   - No functional advantage to changing, so kept for consistency
+ * @param text - Plain text to encrypt
+ * @param modulus - RSA modulus as hex string
+ * @param exponent - RSA public exponent as hex string
+ * @returns Encrypted text as hex string
+ */
+function rsaEncrypt(text: string, modulus: string, exponent: string): string {
+  // Create BigInteger from hex strings for modulus and exponent
+  const n = new forge.jsbn.BigInteger(modulus, 16);
+  const e = new forge.jsbn.BigInteger(exponent, 16);
+
+  // Create RSA public key from modulus and exponent
+  const publicKey = forge.pki.setRsaPublicKey(n, e);
+
+  // Encrypt with PKCS#1 v1.5 padding (matches DHLottery's RSA implementation)
+  const encrypted = publicKey.encrypt(text, 'RSAES-PKCS1-V1_5');
+
+  // Convert encrypted bytes to hex string
+  return forge.util.bytesToHex(encrypted);
+}
+
+/**
+ * Initialize session by requesting login page to acquire DHJSESSIONID cookie
  *
  * @param client - HTTP client with cookie management
- * @throws {AuthenticationError} If session initialization fails or JSESSIONID is not set
- *
- * Trace: SPEC-REFACTOR-P2-SESSION-001 (session URL strategy investigation)
+ * @throws {AuthenticationError} If session initialization fails
  */
 async function initSession(client: HttpClient): Promise<void> {
   try {
-    const response = await client.fetch(SESSION_INIT_URL, {
+    const response = await client.fetch(LOGIN_PAGE_URL, {
       method: 'GET',
       headers: {
         'Accept-Charset': 'UTF-8',
@@ -82,7 +84,6 @@ async function initSession(client: HttpClient): Promise<void> {
       },
     });
 
-    // Accept 200 OK
     if (response.status !== 200) {
       throw new AuthenticationError(
         `Session initialization failed with status ${response.status}`,
@@ -102,10 +103,10 @@ async function initSession(client: HttpClient): Promise<void> {
       );
     }
 
-    // Verify JSESSIONID is set (critical for login)
-    if (!client.cookies.JSESSIONID) {
+    // Verify DHJSESSIONID is set (new cookie name since 2026)
+    if (!client.cookies.DHJSESSIONID) {
       throw new AuthenticationError(
-        'JSESSIONID cookie was not set during initialization',
+        'DHJSESSIONID cookie was not set during initialization',
         'AUTH_SESSION_INIT_ERROR'
       );
     }
@@ -122,53 +123,111 @@ async function initSession(client: HttpClient): Promise<void> {
 }
 
 /**
+ * Fetch RSA public key from DHLottery
+ *
+ * @param client - HTTP client with cookie management
+ * @returns RSA modulus and exponent
+ * @throws {AuthenticationError} If RSA key fetch fails
+ */
+async function fetchRsaKey(client: HttpClient): Promise<{ modulus: string; exponent: string }> {
+  try {
+    const response = await client.fetch(RSA_MODULUS_URL, {
+      method: 'GET',
+      headers: {
+        Accept: 'application/json, text/javascript, */*; q=0.01',
+        'Content-Type': 'application/json;charset=UTF-8',
+        'User-Agent': USER_AGENT,
+        'X-Requested-With': 'XMLHttpRequest',
+        Referer: LOGIN_PAGE_URL,
+        ajax: 'true',
+      },
+    });
+
+    if (response.status !== 200) {
+      throw new AuthenticationError(
+        `RSA key fetch failed with status ${response.status}`,
+        'AUTH_RSA_KEY_ERROR'
+      );
+    }
+
+    const data = await response.json<RsaModulusResponse>();
+
+    if (!data.data?.rsaModulus || !data.data?.publicExponent) {
+      throw new AuthenticationError('Invalid RSA key response format', 'AUTH_RSA_KEY_ERROR');
+    }
+
+    if (DEBUG) {
+      console.log(
+        JSON.stringify({
+          level: 'debug',
+          module: 'auth',
+          message: 'RSA key fetched',
+          modulusLength: data.data.rsaModulus.length,
+        })
+      );
+    }
+
+    return {
+      modulus: data.data.rsaModulus,
+      exponent: data.data.publicExponent,
+    };
+  } catch (error) {
+    if (error instanceof AuthenticationError) {
+      throw error;
+    }
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    throw new AuthenticationError(`RSA key fetch failed: ${errorMessage}`, 'AUTH_NETWORK_ERROR');
+  }
+}
+
+/**
  * Authenticate user with DHLottery
+ *
+ * Authentication flow:
+ * 1. Initialize session (GET /login) to acquire DHJSESSIONID cookie
+ * 2. Fetch RSA public key (GET /login/selectRsaModulus.do)
+ * 3. Encrypt userId and password with RSA PKCS#1 v1.5
+ * 4. Submit login form (POST /login/securityLoginCheck.do)
  *
  * @param client - HTTP client with cookie management
  * @throws {AuthenticationError} If login fails
  */
 export async function login(client: HttpClient): Promise<void> {
-  // Step 1: Initialize session to get initial cookies
+  // Step 1: Initialize session to get DHJSESSIONID cookie
   await initSession(client);
 
-  // Step 2: Get credentials from environment
+  // Step 2: Fetch RSA public key
+  const rsaKey = await fetchRsaKey(client);
+
+  // Step 3: Get credentials from environment
   const userId = getEnv('USER_ID');
   const password = getEnv('PASSWORD');
 
-  // Step 3: Prepare form data with credentials and required parameters
+  // Step 4: Encrypt credentials with RSA
+  const encryptedUserId = rsaEncrypt(userId, rsaKey.modulus, rsaKey.exponent);
+  const encryptedPassword = rsaEncrypt(password, rsaKey.modulus, rsaKey.exponent);
+
+  // Step 5: Prepare form data with encrypted credentials
   const formData = new URLSearchParams();
-  formData.append('returnUrl', RETURN_URL);
-  formData.append('userId', userId);
-  formData.append('password', password);
-  formData.append('checkSave', 'off');
-  formData.append('newsEventYn', '');
+  formData.append('userId', encryptedUserId);
+  formData.append('userPswdEncn', encryptedPassword);
+  formData.append('inpUserId', userId);
 
   try {
-    // Step 3: Send POST request to login endpoint with browser-like headers
+    // Step 6: Send POST request to login endpoint
     const response = await client.fetch(LOGIN_URL, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+        'Content-Type': 'application/x-www-form-urlencoded',
         'User-Agent': USER_AGENT,
-        'X-Requested-With': 'XMLHttpRequest',
-        'sec-ch-ua-mobile': '?0',
-        Referer: 'https://dhlottery.co.kr',
-        'Sec-Fetch-Site': 'same-site',
-        Connection: 'keep-alive',
-        'sec-ch-ua': '" Not;A Brand";v="99", "Google Chrome";v="91", "Chromium";v="91"',
+        Origin: 'https://dhlottery.co.kr',
+        Referer: LOGIN_PAGE_URL,
+        'Upgrade-Insecure-Requests': '1',
+        'Cache-Control': 'max-age=0',
       },
       body: formData.toString(),
     });
 
-    // Accept 200 OK or 3xx redirect
-    if (response.status !== 200 && (response.status < 300 || response.status >= 400)) {
-      throw new AuthenticationError(
-        `Login request failed with status ${response.status}`,
-        'AUTH_HTTP_ERROR'
-      );
-    }
-
-    // Debug: Check Set-Cookie headers from login response
     if (DEBUG) {
       console.log(
         JSON.stringify({
@@ -176,107 +235,74 @@ export async function login(client: HttpClient): Promise<void> {
           module: 'auth',
           message: 'Login response received',
           status: response.status,
-          setCookie: response.headers.getSetCookie(),
           cookies: client.cookies,
         })
       );
     }
 
-    // 302 redirect = success
-    if (response.status >= 300 && response.status < 400) {
-      const location = response.headers.get('location');
+    // Check for successful login via redirect (302 to loginSuccess.do)
+    // The HttpClient follows redirects, so we check if we ended up on success page
+    // or if userId cookie was set (indicates successful login)
+    if (client.cookies.userId) {
       if (DEBUG) {
         console.log(
           JSON.stringify({
             level: 'info',
             module: 'auth',
-            message: 'Login successful - received redirect',
-            status: response.status,
-            location,
+            message: 'Login successful - session established',
             cookies: client.cookies,
           })
         );
       }
-
-      // Do NOT follow the redirect manually.
-      // n8n workflow uses the original session cookie for subsequent requests.
-      // Following loginResult might reset the session or require complex handling.
-      // We will let getAccountInfo() fetch the main page, which serves as the returnUrl visit.
       return;
     }
 
-    // Parse response body with euc-kr encoding (server sends euc-kr)
-    const responseText = await response.text('euc-kr');
-    const contentType = response.headers.get('content-type') || '';
+    // Parse response body for additional checks
+    const responseText = await response.text('utf-8');
 
-    // DHLottery returns HTML redirect page on successful login, JSON on failure
-    if (contentType.includes('text/html')) {
-      // HTML response indicates successful login with redirect
-      // The response contains JavaScript that redirects to returnUrl or /common.do?method=main
-      // Verify it's a success page by checking for goNextPage function
-      if (responseText.includes('goNextPage')) {
-        if (DEBUG) {
-          console.log(
-            JSON.stringify({
-              level: 'info',
-              module: 'auth',
-              message: 'Login successful - session cookies established',
-              cookies: client.cookies,
-              cookieHeader: client.getCookieHeader(),
-            })
-          );
-        }
-
-        // DO NOT follow redirect - session cookies (WMONID, JSESSIONID) are already set
-        // Following redirect may cause session loss
-        return;
+    // Check for login success indicator in HTML response
+    // Successful login may also show isLoggedIn = true after redirect
+    if (responseText.includes('isLoggedIn = true')) {
+      if (DEBUG) {
+        console.log(
+          JSON.stringify({
+            level: 'info',
+            module: 'auth',
+            message: 'Login successful - session established',
+            cookies: client.cookies,
+          })
+        );
       }
-      // HTML but not the expected success page
+      return;
+    }
+
+    // Check for error message in response
+    // Failed login returns HTML with error message displayed via $.alert()
+    const errorMatch = responseText.match(/\$\.alert\(['"]([^'"]+)['"]\)/);
+    if (errorMatch) {
+      throw new AuthenticationError(errorMatch[1], 'AUTH_INVALID_CREDENTIALS');
+    }
+
+    // Check for inline error message variable
+    const errorMsgMatch = responseText.match(/const errorMessage = '([^']+)'/);
+    if (errorMsgMatch?.[1]) {
+      throw new AuthenticationError(errorMsgMatch[1], 'AUTH_INVALID_CREDENTIALS');
+    }
+
+    // If still on login page with isLoggedIn = false, login failed
+    if (responseText.includes('isLoggedIn = false')) {
       throw new AuthenticationError(
-        'Unexpected HTML response from login endpoint',
-        'AUTH_UNEXPECTED_RESPONSE'
+        '아이디 또는 비밀번호가 일치하지 않습니다.',
+        'AUTH_INVALID_CREDENTIALS'
       );
     }
 
-    // Try to parse as JSON (error responses are typically JSON)
-    let responseData: DHLotteryLoginResponse;
-    try {
-      responseData = JSON.parse(responseText) as DHLotteryLoginResponse;
-    } catch (_parseError) {
-      throw new AuthenticationError(
-        'Login response is neither valid HTML nor JSON',
-        'AUTH_UNEXPECTED_RESPONSE'
-      );
-    }
-
-    // Validate JSON response structure
-    if (!responseData.result || !responseData.result.resultCode) {
-      throw new AuthenticationError('Invalid login response format', 'AUTH_UNEXPECTED_RESPONSE');
-    }
-
-    // Check login result (JSON response typically indicates failure)
-    if (responseData.result.resultCode !== 'SUCCESS') {
-      const errorMessage = responseData.result.resultMsg || 'Authentication failed';
-      throw new AuthenticationError(errorMessage, 'AUTH_INVALID_CREDENTIALS');
-    }
-
-    // JSON success response (if it exists)
-    if (DEBUG) {
-      console.log(
-        JSON.stringify({
-          level: 'info',
-          module: 'auth',
-          message: 'Login successful (JSON response)',
-        })
-      );
-    }
+    // Unexpected response
+    throw new AuthenticationError('Unexpected login response', 'AUTH_UNEXPECTED_RESPONSE');
   } catch (error) {
-    // Re-throw AuthenticationError as-is
     if (error instanceof AuthenticationError) {
       throw error;
     }
-
-    // Wrap other errors in AuthenticationError
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     throw new AuthenticationError(`Login failed: ${errorMessage}`, 'AUTH_NETWORK_ERROR');
   }
