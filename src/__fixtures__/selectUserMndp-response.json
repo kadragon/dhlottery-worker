@@ -1,0 +1,17 @@
+{
+  "resultCode": null,
+  "resultMessage": null,
+  "data": {
+    "userMndp": {
+      "crntEntrsAmt": 20000,
+      "csblDpstAmt": 4237000,
+      "csblTkmnyAmt": 4207000,
+      "ncsblDpstAmt": 4000,
+      "ncsblTkmnyAmt": 4000,
+      "useDsalAmt": 10000,
+      "rsvtOrdrAmt": 10000,
+      "crntMilgAmt": 500,
+      "feeAmt": 0
+    }
+  }
+}

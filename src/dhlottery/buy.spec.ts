@@ -490,6 +490,151 @@ describe("Lottery Purchase - TEST-PURCHASE-002: Purchase execution with correct 
 		expect(execBuyCall).toBeDefined();
 		expect(execBuyCall![1].body).toContain("nBuyAmount=5000");
 	});
+
+	it("TEST-PURCHASE-006: should include saleMdaDcd=10 in execBuy request", async () => {
+		const mockAccountInfo: AccountInfo = {
+			balance: 50000,
+			currentRound: 1203,
+		};
+		(getAccountInfo as Mock).mockResolvedValue(mockAccountInfo);
+
+		const mockReadyResponse: PurchaseReadyResponse = {
+			direct_yn: "N",
+			ready_ip: "INTCOM2",
+			ready_time: "0",
+			ready_cnt: "0",
+		};
+
+		const mockPurchaseResult: PurchaseResult = {
+			loginYn: "Y",
+			result: {
+				resultCode: "100",
+				resultMsg: "Success",
+			},
+		};
+
+		mockFetch
+			.mockResolvedValueOnce({
+				ok: true,
+				status: 200,
+				json: async () => mockReadyResponse,
+			} as Response)
+			.mockResolvedValueOnce({
+				ok: true,
+				status: 200,
+				json: async () => mockPurchaseResult,
+			} as Response);
+
+		await purchaseLottery(mockClient);
+
+		const execBuyCall = mockFetch.mock.calls.find((call) =>
+			call[0].includes("execBuy.do"),
+		);
+		expect(execBuyCall).toBeDefined();
+		expect(execBuyCall![1].body).toContain("saleMdaDcd=10");
+	});
+
+	it("TEST-PURCHASE-007: should include draw and pay limit dates in execBuy request", async () => {
+		const mockAccountInfo: AccountInfo = {
+			balance: 50000,
+			currentRound: 1203,
+		};
+		(getAccountInfo as Mock).mockResolvedValue(mockAccountInfo);
+
+		const mockReadyResponse: PurchaseReadyResponse = {
+			direct_yn: "N",
+			ready_ip: "INTCOM2",
+			ready_time: "0",
+			ready_cnt: "0",
+		};
+
+		const mockPurchaseResult: PurchaseResult = {
+			loginYn: "Y",
+			result: {
+				resultCode: "100",
+				resultMsg: "Success",
+			},
+		};
+
+		mockFetch
+			.mockResolvedValueOnce({
+				ok: true,
+				status: 200,
+				json: async () => mockReadyResponse,
+			} as Response)
+			.mockResolvedValueOnce({
+				ok: true,
+				status: 200,
+				json: async () => mockPurchaseResult,
+			} as Response);
+
+		await purchaseLottery(mockClient);
+
+		const execBuyCall = mockFetch.mock.calls.find((call) =>
+			call[0].includes("execBuy.do"),
+		);
+		expect(execBuyCall).toBeDefined();
+		const decodedBody = decodeURIComponent(execBuyCall![1].body);
+		expect(decodedBody).toMatch(/ROUND_DRAW_DATE=\d{4}\/\d{2}\/\d{2}/);
+		expect(decodedBody).toMatch(/WAMT_PAY_TLMT_END_DT=\d{4}\/\d{2}\/\d{2}/);
+	});
+
+	it("TEST-PURCHASE-008: should include required headers in ready and execBuy requests", async () => {
+		const mockAccountInfo: AccountInfo = {
+			balance: 50000,
+			currentRound: 1203,
+		};
+		(getAccountInfo as Mock).mockResolvedValue(mockAccountInfo);
+
+		const mockReadyResponse: PurchaseReadyResponse = {
+			direct_yn: "N",
+			ready_ip: "INTCOM2",
+			ready_time: "0",
+			ready_cnt: "0",
+		};
+
+		const mockPurchaseResult: PurchaseResult = {
+			loginYn: "Y",
+			result: {
+				resultCode: "100",
+				resultMsg: "Success",
+			},
+		};
+
+		mockFetch
+			.mockResolvedValueOnce({
+				ok: true,
+				status: 200,
+				json: async () => mockReadyResponse,
+			} as Response)
+			.mockResolvedValueOnce({
+				ok: true,
+				status: 200,
+				json: async () => mockPurchaseResult,
+			} as Response);
+
+		await purchaseLottery(mockClient);
+
+		const readyCall = mockFetch.mock.calls.find((call) =>
+			call[0].includes("egovUserReadySocket.json"),
+		);
+		expect(readyCall).toBeDefined();
+		expect(readyCall![1].headers).toMatchObject({
+			Origin: "https://ol.dhlottery.co.kr",
+			Referer: "https://ol.dhlottery.co.kr/olotto/game/game645.do",
+			"X-Requested-With": "XMLHttpRequest",
+		});
+
+		const execBuyCall = mockFetch.mock.calls.find((call) =>
+			call[0].includes("execBuy.do"),
+		);
+		expect(execBuyCall).toBeDefined();
+		expect(execBuyCall![1].headers).toMatchObject({
+			Origin: "https://ol.dhlottery.co.kr",
+			Referer: "https://ol.dhlottery.co.kr/olotto/game/game645.do",
+			"X-Requested-With": "XMLHttpRequest",
+		});
+	});
 });
 
 describe("Lottery Purchase - TEST-PURCHASE-003: Parse purchase result", () => {
