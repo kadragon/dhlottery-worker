@@ -19,9 +19,16 @@ import type {
 } from '../types';
 import { PURCHASE_CONSTANTS } from '../types/purchase.types';
 import { PurchaseError } from '../utils/errors';
+import { getNextSaturdayKst } from '../utils/date';
 import { getAccountInfo } from './account';
 
 const BASE_URL = 'https://ol.dhlottery.co.kr/olotto/game';
+const GAME_PAGE_URL = `${BASE_URL}/game645.do`;
+const AJAX_HEADERS = {
+  Origin: 'https://ol.dhlottery.co.kr',
+  Referer: GAME_PAGE_URL,
+  'X-Requested-With': 'XMLHttpRequest',
+} as const;
 
 /**
  * Prepares purchase session by calling ready endpoint
@@ -32,6 +39,7 @@ async function preparePurchase(client: HttpClient): Promise<PurchaseReadyRespons
     headers: {
       'Content-Type': 'application/json; charset=UTF-8',
       'User-Agent': USER_AGENT,
+      ...AJAX_HEADERS,
     },
   });
 
@@ -50,6 +58,9 @@ async function executePurchase(
   readyResponse: PurchaseReadyResponse,
   roundNumber: number
 ): Promise<PurchaseResult> {
+  const drawDate = getNextSaturdayKst();
+  const payLimitDate = addYearsAndDays(drawDate, 1, 1);
+
   // Generate 5 game selections with auto mode
   const games: GameSelection[] = ['A', 'B', 'C', 'D', 'E'].map((alpabet) => ({
     genType: '0', // Auto-generated numbers
@@ -64,6 +75,9 @@ async function executePurchase(
     nBuyAmount: PURCHASE_CONSTANTS.TOTAL_COST.toString(),
     param: JSON.stringify(games),
     gameCnt: PURCHASE_CONSTANTS.GAME_COUNT.toString(),
+    saleMdaDcd: '10',
+    ROUND_DRAW_DATE: formatDateWithSlashes(drawDate),
+    WAMT_PAY_TLMT_END_DT: formatDateWithSlashes(payLimitDate),
   });
 
   console.log(
@@ -83,6 +97,7 @@ async function executePurchase(
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
       'User-Agent': USER_AGENT,
+      ...AJAX_HEADERS,
     },
     body: params.toString(),
   });
@@ -102,6 +117,21 @@ async function executePurchase(
  */
 function formatKoreanNumber(amount: number): string {
   return amount.toLocaleString('ko-KR');
+}
+
+function formatDateWithSlashes(date: string): string {
+  return date.replace(/-/g, '/');
+}
+
+function addYearsAndDays(date: string, years: number, days: number): string {
+  const [year, month, day] = date.split('-').map((part) => Number(part));
+  const base = new Date(Date.UTC(year, month - 1, day));
+  base.setUTCFullYear(base.getUTCFullYear() + years);
+  base.setUTCDate(base.getUTCDate() + days);
+  const resultYear = base.getUTCFullYear();
+  const resultMonth = String(base.getUTCMonth() + 1).padStart(2, '0');
+  const resultDay = String(base.getUTCDate()).padStart(2, '0');
+  return `${resultYear}-${resultMonth}-${resultDay}`;
 }
 
 /**
