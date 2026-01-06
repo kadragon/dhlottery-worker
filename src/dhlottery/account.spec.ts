@@ -123,6 +123,25 @@ describe("Account Information Retrieval", () => {
       );
     });
 
+    it("should include stage and redirect location when main page returns 302", async () => {
+      // Arrange
+      const redirectLocation = "https://dhlottery.co.kr/login";
+      const mainPageResponse = {
+        status: 302,
+        statusText: "Found",
+        headers: new Headers({ Location: redirectLocation }),
+        text: async () => "",
+        json: async () => ({}),
+      } as unknown as HttpResponse;
+
+      vi.mocked(mockHttpClient.fetch).mockResolvedValue(mainPageResponse);
+
+      // Act & Assert
+      await expect(getAccountInfo(mockHttpClient)).rejects.toThrowError(
+        /account[\s\S]*main page[\s\S]*url:[\s\S]*common\.do\?method=main[\s\S]*HTTP 302[\s\S]*Location: https:\/\/dhlottery\.co\.kr\/login/i,
+      );
+    });
+
     it("should fallback to main page balance if myPage fails", async () => {
       // Arrange
       const mainPageResponse = {
