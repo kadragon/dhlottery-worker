@@ -455,6 +455,68 @@ describe("DHLottery Authentication", () => {
   });
 
   /**
+   * TEST-AUTH-005: Treat 302 redirect as success with manual redirects
+   *
+   * Criteria:
+   * - Login response returns 302 redirect
+   * - Response body may be empty
+   * - Authentication succeeds without userId cookie
+   */
+  describe("TEST-AUTH-005: Treat 302 redirect as success with manual redirects", () => {
+    it("should succeed when login returns 302 redirect", async () => {
+      // Arrange
+      const { sessionInitResponse, rsaKeyResponse } = createMockResponses(true);
+
+      const redirectLoginResponse = {
+        status: 302,
+        statusText: "Found",
+        headers: new Headers({ location: "/login/loginSuccess.do" }),
+        text: async () => "",
+        json: async () => ({}),
+      } as unknown as HttpResponse;
+
+      vi.mocked(mockHttpClient.fetch)
+        .mockResolvedValueOnce(sessionInitResponse)
+        .mockResolvedValueOnce(rsaKeyResponse)
+        .mockResolvedValueOnce(redirectLoginResponse);
+
+      // Act & Assert
+      await expect(login(mockHttpClient)).resolves.not.toThrow();
+    });
+  });
+
+  /**
+   * TEST-AUTH-006: Reject non-success 302 redirect
+   *
+   * Criteria:
+   * - Login response returns 302 redirect
+   * - Location header does not indicate login success
+   * - Authentication fails
+   */
+  describe("TEST-AUTH-006: Reject non-success 302 redirect", () => {
+    it("should fail when login returns 302 to non-success location", async () => {
+      // Arrange
+      const { sessionInitResponse, rsaKeyResponse } = createMockResponses(true);
+
+      const redirectLoginResponse = {
+        status: 302,
+        statusText: "Found",
+        headers: new Headers({ location: "/login/loginFail.do" }),
+        text: async () => "",
+        json: async () => ({}),
+      } as unknown as HttpResponse;
+
+      vi.mocked(mockHttpClient.fetch)
+        .mockResolvedValueOnce(sessionInitResponse)
+        .mockResolvedValueOnce(rsaKeyResponse)
+        .mockResolvedValueOnce(redirectLoginResponse);
+
+      // Act & Assert
+      await expect(login(mockHttpClient)).rejects.toThrow(AuthenticationError);
+    });
+  });
+
+  /**
    * TEST-AUTH-RSA-001: RSA key fetch
    *
    * Criteria:

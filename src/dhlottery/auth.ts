@@ -240,6 +240,25 @@ export async function login(client: HttpClient): Promise<void> {
       );
     }
 
+    // Manual redirects: successful login typically returns 302 with empty body.
+    if (response.status >= 300 && response.status < 400) {
+      const location = response.headers.get('location') ?? '';
+      if (location.includes('loginSuccess.do')) {
+        if (DEBUG) {
+          console.log(
+            JSON.stringify({
+              level: 'info',
+              module: 'auth',
+              message: 'Login successful - redirect received',
+              status: response.status,
+              location,
+            })
+          );
+        }
+        return;
+      }
+    }
+
     // Check for successful login via redirect (302 to loginSuccess.do)
     // The HttpClient follows redirects, so we check if we ended up on success page
     // or if userId cookie was set (indicates successful login)
