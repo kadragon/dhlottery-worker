@@ -11,132 +11,93 @@ import type { AccountInfo, HttpClient } from '../types';
 import { DHLotteryError } from '../utils/errors';
 
 /**
- * DHLottery account page URL
- * Using main page (common.do) instead of myPage.do to avoid 302 redirects
- * and match the behavior of the verified n8n workflow.
+ * DHLottery API URLs
  *
- * 2026-01 Update: New mypage URL is /mypage/home
+ * 2026-01 Update:
+ * - Main page (common.do) now redirects to new homepage
+ * - Use /lt645/selectThsLt645Info.do API for current lottery round (JSON)
+ * - Use /mypage/selectUserMndp.do API for balance (JSON)
+ *   - mypage/home is JS-rendered, HTML parsing no longer works
  */
-const MAIN_PAGE_URL = 'https://www.dhlottery.co.kr/common.do?method=main';
-const MY_PAGE_URL = 'https://dhlottery.co.kr/mypage/home';
-
-/**
- * Balance parsing regex patterns
- *
- * Matches various HTML structures where deposit balance appears:
- * - New mypage (2026-01): <div id="divCrntEntrsAmt">N,NNN<span>원</span></div>
- * - Main page header: <li class="money">...<strong>N,NNN</strong>원</li>
- * - My page table: <td class="ta_right">N,NNN ...</td>
- * - General format: <strong>N,NNN</strong>원
- *
- * Trace: spec_id: SPEC-REFACTOR-P2-REGEX-001, SPEC-ACCOUNT-002, task_id: TASK-REFACTOR-P2-001
- */
-export const BALANCE_PATTERNS = {
-  // New Mypage (2026-01): <div id="divCrntEntrsAmt">N,NNN<span>원</span></div>
-  newMypageBalance: /id="divCrntEntrsAmt"[^>]*>([\d,]+)/i,
-  // Main Page Header (<li class="money"><a href="..."><strong>N,NNN</strong>원</a></li>)
-  mainPageHeader: /<li[^>]*class="money"[^>]*>[\s\S]*?<strong>([\d,]+)<\/strong>/i,
-  // My Page Balance Table (<td class="ta_right" colspan="3">N,NNN ...</td>)
-  myPageBalance: /<td[^>]*class="ta_right"[^>]*>\s*([\d,]+)\s+/i,
-  // Strong tag with Korean won suffix (<strong>N,NNN</strong>원)
-  strongWithYuan: /<strong>([\d,]+)<\/strong>\s*원/,
-} as const;
+const LOTTO_ROUND_API_URL = 'https://www.dhlottery.co.kr/lt645/selectThsLt645Info.do';
+const BALANCE_API_URL = 'https://dhlottery.co.kr/mypage/selectUserMndp.do';
 
 /**
  * Fetch and parse account information
  *
- * Strategy:
- * 1. Fetch Main Page (common.do) first.
- *    - Gets the current lottery round (essential).
- *    - Serves as the "returnUrl" visit after login to stabilize session.
- * 2. Fetch My Page (myPage.do) for balance.
- *    - Primary source for deposit balance.
- *    - If this fails (e.g. 302 redirect), fallback to parsing balance from Main Page header.
+ * Strategy (2026-01 Update):
+ * 1. Fetch Lotto Round API (/lt645/selectThsLt645Info.do) first.
+ *    - Gets the current lottery round via JSON API.
+ *    - Public API, no authentication needed.
+ * 2. Fetch Balance API (/mypage/selectUserMndp.do) for balance.
+ *    - Gets available balance (crntEntrsAmt) via JSON API.
+ *    - Requires authenticated session.
  *
  * @param client - HTTP client with authenticated session
  * @returns Account information with balance and current round
  * @throws {DHLotteryError} If fetch fails or parsing fails
  */
 export async function getAccountInfo(client: HttpClient): Promise<AccountInfo> {
-  // Step 1: Fetch Main Page
-  // This is required to get the current round and "finalize" the login session
+  // Step 1: Fetch Lotto Round API for current round
   if (DEBUG) {
     console.log(
       JSON.stringify({
         level: 'debug',
         module: 'account',
-        message: 'Fetching main page',
-        url: MAIN_PAGE_URL,
-        cookies: client.cookies, // Log cookies to debug session state
+        message: 'Fetching lotto round API',
+        url: LOTTO_ROUND_API_URL,
       })
     );
   }
 
-  const mainResponse = await client.fetch(MAIN_PAGE_URL, {
+  const roundResponse = await client.fetch(LOTTO_ROUND_API_URL, {
     headers: {
       'User-Agent': USER_AGENT,
     },
   });
 
-  if (mainResponse.status !== 200) {
-    const location = mainResponse.headers.get('Location');
+  if (roundResponse.status !== 200) {
+    const location = roundResponse.headers.get('Location');
     const locationInfo = location ? ` (Location: ${location})` : '';
     throw new DHLotteryError(
-      `Account fetch failed at main page (url: ${MAIN_PAGE_URL}): HTTP ${mainResponse.status}${locationInfo}`,
+      `Account fetch failed at round API (url: ${LOTTO_ROUND_API_URL}): HTTP ${roundResponse.status}${locationInfo}`,
       'ACCOUNT_FETCH_FAILED'
     );
   }
 
-  const mainHtml = await mainResponse.text('euc-kr');
+  // Parse round from JSON API response
+  const currentRound = await parseRoundFromApi(roundResponse);
 
-  // Parse round from Main Page (reliable)
-  const currentRound = parseRound(mainHtml);
-
-  // Step 2: Fetch My Page for Balance
-  // User explicitly requested to use myPage for balance
+  // Step 2: Fetch Balance API
+  // 2026-01 Update: mypage/home is JS-rendered, use JSON API instead
   if (DEBUG) {
     console.log(
       JSON.stringify({
         level: 'debug',
         module: 'account',
-        message: 'Fetching my page',
-        url: MY_PAGE_URL,
+        message: 'Fetching balance API',
+        url: BALANCE_API_URL,
       })
     );
   }
 
-  let balance: number;
+  const balanceResponse = await client.fetch(BALANCE_API_URL, {
+    headers: {
+      'User-Agent': USER_AGENT,
+      Referer: 'https://www.dhlottery.co.kr/mypage/home',
+    },
+  });
 
-  try {
-    const myPageResponse = await client.fetch(MY_PAGE_URL, {
-      headers: {
-        'User-Agent': USER_AGENT,
-        Referer: MAIN_PAGE_URL, // Add Referer to mimic browser navigation
-      },
-    });
-
-    if (myPageResponse.status === 200) {
-      const myPageHtml = await myPageResponse.text('euc-kr');
-      balance = parseBalance(myPageHtml);
-    } else {
-      // If 302 or error, throw to trigger fallback
-      throw new Error(`HTTP ${myPageResponse.status}`);
-    }
-  } catch (error) {
-    if (DEBUG) {
-      console.warn(
-        JSON.stringify({
-          level: 'warning',
-          module: 'account',
-          message: 'Failed to fetch My Page, falling back to Main Page balance',
-          error: error instanceof Error ? error.message : String(error),
-        })
-      );
-    }
-
-    // Fallback: Try to parse balance from Main Page header
-    balance = parseBalance(mainHtml);
+  if (balanceResponse.status !== 200) {
+    const location = balanceResponse.headers.get('Location');
+    const locationInfo = location ? ` (Location: ${location})` : '';
+    throw new DHLotteryError(
+      `Account fetch failed at balance API (url: ${BALANCE_API_URL}): HTTP ${balanceResponse.status}${locationInfo}`,
+      'ACCOUNT_FETCH_FAILED'
+    );
   }
+
+  const balance = await parseBalanceFromApi(balanceResponse);
 
   // Validate parsed data
   validateAccountInfo(balance, currentRound);
@@ -148,95 +109,147 @@ export async function getAccountInfo(client: HttpClient): Promise<AccountInfo> {
 }
 
 /**
- * Parse deposit balance from HTML
- * Actual format: <td class="ta_right" colspan="3">N,NNN 원</td>
- * Note: HTML is EUC-KR encoded, so we match the pattern without Korean characters
+ * Balance API Response Type
  *
- * Trace: spec_id: SPEC-REFACTOR-P2-REGEX-001, task_id: TASK-REFACTOR-P2-001
+ * 2026-01 Update: /mypage/selectUserMndp.do returns JSON:
+ * {
+ *   "resultCode": null,
+ *   "resultMessage": null,
+ *   "data": {
+ *     "userMndp": {
+ *       "crntEntrsAmt": 20000,  // Available balance for purchase
+ *       "csblDpstAmt": 4237000,
+ *       ...
+ *     }
+ *   }
+ * }
  */
-function parseBalance(html: string): number {
-  // Try multiple regex patterns to match different HTML structures using BALANCE_PATTERNS
-  let match: RegExpMatchArray | null = null;
-  for (const pattern of Object.values(BALANCE_PATTERNS)) {
-    match = html.match(pattern);
-    if (match) {
-      break;
-    }
-  }
+interface BalanceApiResponse {
+  resultCode: string | null;
+  resultMessage: string | null;
+  data: {
+    userMndp: {
+      crntEntrsAmt: number;
+      csblDpstAmt?: number;
+      csblTkmnyAmt?: number;
+      ncsblDpstAmt?: number;
+      ncsblTkmnyAmt?: number;
+      useDsalAmt?: number;
+    };
+  };
+}
 
-  if (!match) {
-    // Debug: Log context for troubleshooting
+/**
+ * Parse balance from JSON API response
+ * Uses /mypage/selectUserMndp.do API endpoint
+ *
+ * 2026-01 Update: mypage/home is JS-rendered, use JSON API instead
+ */
+async function parseBalanceFromApi(response: { json: () => Promise<unknown> }): Promise<number> {
+  try {
+    const data = (await response.json()) as BalanceApiResponse;
+
+    if (data?.data?.userMndp?.crntEntrsAmt === undefined) {
+      throw new Error('Missing crntEntrsAmt in API response');
+    }
+
+    const balance = data.data.userMndp.crntEntrsAmt;
+
+    if (typeof balance !== 'number') {
+      throw new Error(`Invalid balance type: ${typeof balance}`);
+    }
+
     if (DEBUG) {
       console.log(
         JSON.stringify({
-          level: 'error',
+          level: 'info',
           module: 'account',
-          message: 'Balance regex did not match any pattern',
-          htmlSample: html.substring(1400, 1500),
+          message: 'Found balance from API',
+          balance,
         })
       );
     }
 
+    return balance;
+  } catch (error) {
     throw new DHLotteryError(
-      'Failed to parse balance from account page',
+      `Failed to parse balance from API: ${error instanceof Error ? error.message : String(error)}`,
       'ACCOUNT_PARSE_BALANCE_FAILED'
     );
   }
-
-  // Remove commas and parse to number
-  const balanceStr = match[1].replace(/,/g, '');
-  const balance = Number.parseInt(balanceStr, 10);
-
-  if (Number.isNaN(balance)) {
-    throw new DHLotteryError(`Invalid balance value: ${match[1]}`, 'ACCOUNT_PARSE_BALANCE_FAILED');
-  }
-
-  return balance;
 }
 
 /**
- * Parse current lottery round from HTML
- * Extracts from #lottoDrwNo element (like n8n does)
+ * Lotto Round API Response Type
+ *
+ * 2026-01 Update: /lt645/selectThsLt645Info.do returns JSON:
+ * {
+ *   "resultCode": null,
+ *   "resultMessage": null,
+ *   "data": {
+ *     "result": {
+ *       "ltEpsd": 1206,      // Current round number
+ *       "ltRflYmd": "20260110",
+ *       "ltRflHh": "20",
+ *       "ltRflMm": "00"
+ *     },
+ *     "gameMng": null
+ *   }
+ * }
+ *
+ * Trace: spec_id: SPEC-ACCOUNT-003, task_id: TASK-ROUND-API-UPDATE
  */
-function parseRound(html: string): number {
-  // Try multiple patterns
-  const patterns = [
-    // Pattern 1: id="lottoDrwNo" element (n8n style)
-    /id="lottoDrwNo"[^>]*>(\d+)/i,
-    // Pattern 2: Korean text format
-    /제<strong>(\d+)<\/strong>회/,
-    /제\s*(\d+)\s*회/,
-    // Pattern 3: Table format
-    /<td>(\d{4})<\/td>/,
-  ];
+interface LottoRoundApiResponse {
+  resultCode: string | null;
+  resultMessage: string | null;
+  data: {
+    result: {
+      ltEpsd: number;
+      ltRflYmd: string;
+      ltRflHh: string;
+      ltRflMm: string;
+    };
+    gameMng: unknown;
+  };
+}
 
-  for (const pattern of patterns) {
-    const match = html.match(pattern);
-    if (match) {
-      const round = Number.parseInt(match[1], 10);
-      if (!Number.isNaN(round) && round > 0) {
-        if (DEBUG) {
-          console.log(
-            JSON.stringify({
-              level: 'info',
-              module: 'account',
-              message: 'Found current round from HTML',
-              round,
-              pattern: pattern.source,
-            })
-          );
-        }
+/**
+ * Parse current lottery round from API JSON response
+ * Uses /lt645/selectThsLt645Info.do API endpoint
+ */
+async function parseRoundFromApi(response: { json: () => Promise<unknown> }): Promise<number> {
+  try {
+    const data = (await response.json()) as LottoRoundApiResponse;
 
-        // Return next round (current + 1 for upcoming purchase)
-        return round + 1;
-      }
+    if (!data?.data?.result?.ltEpsd) {
+      throw new Error('Missing ltEpsd in API response');
     }
-  }
 
-  throw new DHLotteryError(
-    'Failed to parse lottery round from account page',
-    'ACCOUNT_PARSE_ROUND_FAILED'
-  );
+    const round = data.data.result.ltEpsd;
+
+    if (typeof round !== 'number' || round <= 0) {
+      throw new Error(`Invalid round value: ${round}`);
+    }
+
+    if (DEBUG) {
+      console.log(
+        JSON.stringify({
+          level: 'info',
+          module: 'account',
+          message: 'Found current round from API',
+          round,
+          drawDate: data.data.result.ltRflYmd,
+        })
+      );
+    }
+
+    return round;
+  } catch (error) {
+    throw new DHLotteryError(
+      `Failed to parse lottery round from API: ${error instanceof Error ? error.message : String(error)}`,
+      'ACCOUNT_PARSE_ROUND_FAILED'
+    );
+  }
 }
 
 /**

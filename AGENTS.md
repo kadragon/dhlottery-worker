@@ -25,7 +25,8 @@
   - 세션 init: `/login` (DHJSESSIONID 쿠키 발급)
   - RSA 키 조회: `/login/selectRsaModulus.do` (modulus + exponent)
   - 로그인: `/login/securityLoginCheck.do` (RSA 암호화된 credentials POST)
-- 마이페이지 (2026-01 변경): `/mypage/home` (구매가능 잔액: divCrntEntrsAmt)
+- 로또 회차 정보 (2026-01 변경): `/lt645/selectThsLt645Info.do` (JSON API, ltEpsd 필드)
+- 잔액 조회 (2026-01 변경): `/mypage/selectUserMndp.do` (JSON API, crntEntrsAmt 필드)
 - 구매: `/olotto/game/egovUserReadySocket.json`, `/olotto/game/execBuy.do`
 - 충전 init: `/kbank.do?method=kbankProcess` (검증됨)
 - 당첨 목록: `/myPage.do?method=lottoBuyList`
@@ -43,7 +44,8 @@
 - SPEC-AUTH-001: 인증 흐름(세션 init + 로그인)
 - SPEC-AUTH-RSA-001: RSA 암호화 로그인 (2026-01, node-forge 사용)
 - SPEC-ACCOUNT-001: 잔액/라운드 파싱
-- SPEC-ACCOUNT-002: 새 마이페이지 잔액 파싱 (2026-01, /mypage/home, divCrntEntrsAmt)
+- SPEC-ACCOUNT-002: 잔액 파싱 (2026-01, /mypage/selectUserMndp.do JSON API, crntEntrsAmt)
+- SPEC-ACCOUNT-003: 로또 회차 파싱 (2026-01, /lt645/selectThsLt645Info.do JSON API, ltEpsd)
 - SPEC-DEPOSIT-001: 최소 잔액 체크 + 충전 init + 경고 알림
 - SPEC-PURCHASE-001: 5게임 자동 구매 + 결과 알림
 - SPEC-WINNING-001: 이전 주 당첨 확인(랭크 1만)
@@ -65,6 +67,7 @@
 - 인증 방식 변경 (2026-01): 평문 → RSA PKCS#1 v1.5 암호화 (node-forge 사용, DHLottery jsbn.js 호환)
 - 쿠키 변경: JSESSIONID → DHJSESSIONID, 로그인 성공 시 userId 쿠키 설정
 - 로그인 응답은 manual redirect 모드에서 3xx(특히 302)로 성공을 반환할 수 있으나, Location이 `loginSuccess.do`를 포함하는 경우에만 성공으로 처리
-- 마이페이지 변경 (2026-01): `/myPage.do` → `/mypage/home`, 잔액 파싱은 `divCrntEntrsAmt` 요소 사용
+- 로또 회차 조회 변경 (2026-01): `/common.do?method=main` → `/lt645/selectThsLt645Info.do` JSON API (HTML은 JS로 동적 로드되어 사용 불가, ltEpsd 필드가 예정 회차 직접 제공)
+- 잔액 조회 변경 (2026-01): `/mypage/home`은 JS 동적 렌더링으로 HTML 파싱 불가 → `/mypage/selectUserMndp.do` JSON API 사용 (crntEntrsAmt 필드)
 - 구매/알림/당첨 체크는 실패해도 전체 실행이 중단되지 않도록 설계
-- 계정 메인 페이지 fetch 실패 시 단계/URL/Location 정보를 오류 메시지에 포함해 오케스트레이션 가시성 강화
+- 계정 정보 fetch 실패 시 단계/URL/Location 정보를 오류 메시지에 포함해 오케스트레이션 가시성 강화
