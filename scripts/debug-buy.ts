@@ -1,6 +1,6 @@
+import { USER_AGENT } from '../src/constants';
 import { getAccountInfo } from '../src/dhlottery/account';
 import { DHLotteryClient } from '../src/dhlottery/client';
-import { USER_AGENT } from '../src/constants';
 import { getNextSaturdayKst } from '../src/utils/date';
 
 const BASE_URL = 'https://ol.dhlottery.co.kr/olotto/game';
