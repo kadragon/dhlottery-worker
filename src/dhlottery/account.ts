@@ -79,8 +79,10 @@ export async function getAccountInfo(client: HttpClient): Promise<AccountInfo> {
   });
 
   if (mainResponse.status !== 200) {
+    const location = mainResponse.headers.get('Location');
+    const locationInfo = location ? ` (Location: ${location})` : '';
     throw new DHLotteryError(
-      `Failed to fetch main page: HTTP ${mainResponse.status}`,
+      `Account fetch failed at main page (url: ${MAIN_PAGE_URL}): HTTP ${mainResponse.status}${locationInfo}`,
       'ACCOUNT_FETCH_FAILED'
     );
   }

@@ -67,3 +67,4 @@
 - 로그인 응답은 manual redirect 모드에서 3xx(특히 302)로 성공을 반환할 수 있으나, Location이 `loginSuccess.do`를 포함하는 경우에만 성공으로 처리
 - 마이페이지 변경 (2026-01): `/myPage.do` → `/mypage/home`, 잔액 파싱은 `divCrntEntrsAmt` 요소 사용
 - 구매/알림/당첨 체크는 실패해도 전체 실행이 중단되지 않도록 설계
+- 계정 메인 페이지 fetch 실패 시 단계/URL/Location 정보를 오류 메시지에 포함해 오케스트레이션 가시성 강화
