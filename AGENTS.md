@@ -64,6 +64,5 @@
 ## 핵심 결정/주의사항
 - 인증 방식 변경 (2026-01): 평문 → RSA PKCS#1 v1.5 암호화 (node-forge 사용, DHLottery jsbn.js 호환)
 - 쿠키 변경: JSESSIONID → DHJSESSIONID, 로그인 성공 시 userId 쿠키 설정
-- 로그인 응답은 manual redirect 모드에서 3xx(특히 302)로 성공을 반환할 수 있으며 body가 비어도 성공으로 처리해야 함
 - 마이페이지 변경 (2026-01): `/myPage.do` → `/mypage/home`, 잔액 파싱은 `divCrntEntrsAmt` 요소 사용
 - 구매/알림/당첨 체크는 실패해도 전체 실행이 중단되지 않도록 설계
