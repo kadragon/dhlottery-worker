@@ -18,8 +18,8 @@ import type {
   PurchaseResult,
 } from '../types';
 import { PURCHASE_CONSTANTS } from '../types/purchase.types';
-import { PurchaseError } from '../utils/errors';
 import { getNextSaturdayKst } from '../utils/date';
+import { PurchaseError } from '../utils/errors';
 import { getAccountInfo } from './account';
 
 const BASE_URL = 'https://ol.dhlottery.co.kr/olotto/game';
