@@ -8,6 +8,7 @@
 
 import type { NotificationPayload, TelegramMessage } from '../types';
 import { getEnv } from '../utils/env';
+import { logger } from '../utils/logger';
 
 /**
  * Get emoji based on notification type
@@ -90,28 +91,22 @@ export async function sendNotification(payload: NotificationPayload): Promise<vo
     // Check response
     if (!response.ok) {
       const errorData = await response.json();
-      console.error(
-        JSON.stringify({
-          event: 'telegram_api_error',
-          status: response.status,
-          statusText: response.statusText,
-          errorData,
-          message: 'Telegram API error',
-        })
-      );
+      logger.error('Telegram API error', {
+        event: 'telegram_api_error',
+        status: response.status,
+        statusText: response.statusText,
+        errorData,
+      });
       return; // Do not retry, just log
     }
 
     // Success - no need to process response
   } catch (error) {
     // Log network errors or other failures
-    console.error(
-      JSON.stringify({
-        event: 'telegram_send_failed',
-        error: error instanceof Error ? error.message : String(error),
-        message: 'Failed to send Telegram notification',
-      })
-    );
+    logger.error('Failed to send Telegram notification', {
+      event: 'telegram_send_failed',
+      error: error instanceof Error ? error.message : String(error),
+    });
     // Do not throw - allow main execution to continue
   }
 }

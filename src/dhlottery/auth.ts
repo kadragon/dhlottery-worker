@@ -16,10 +16,11 @@
  */
 
 import forge from 'node-forge';
-import { DEBUG, USER_AGENT } from '../constants';
+import { USER_AGENT } from '../constants';
 import type { HttpClient } from '../types';
 import { getEnv } from '../utils/env';
-import { AuthenticationError } from '../utils/errors';
+import { AuthenticationError, wrapAuthError } from '../utils/errors';
+import { logger } from '../utils/logger';
 
 /**
  * DHLottery endpoints
@@ -91,17 +92,11 @@ async function initSession(client: HttpClient): Promise<void> {
       );
     }
 
-    if (DEBUG) {
-      console.log(
-        JSON.stringify({
-          level: 'debug',
-          module: 'auth',
-          message: 'Session initialized',
-          cookies: client.cookies,
-          status: response.status,
-        })
-      );
-    }
+    logger.debug('Session initialized', {
+      module: 'auth',
+      cookies: client.cookies,
+      status: response.status,
+    });
 
     // Verify DHJSESSIONID is set (new cookie name since 2026)
     if (!client.cookies.DHJSESSIONID) {
@@ -111,14 +106,7 @@ async function initSession(client: HttpClient): Promise<void> {
       );
     }
   } catch (error) {
-    if (error instanceof AuthenticationError) {
-      throw error;
-    }
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    throw new AuthenticationError(
-      `Session initialization failed: ${errorMessage}`,
-      'AUTH_NETWORK_ERROR'
-    );
+    throw wrapAuthError(error, 'Session initialization');
   }
 }
 
@@ -156,27 +144,17 @@ async function fetchRsaKey(client: HttpClient): Promise<{ modulus: string; expon
       throw new AuthenticationError('Invalid RSA key response format', 'AUTH_RSA_KEY_ERROR');
     }
 
-    if (DEBUG) {
-      console.log(
-        JSON.stringify({
-          level: 'debug',
-          module: 'auth',
-          message: 'RSA key fetched',
-          modulusLength: data.data.rsaModulus.length,
-        })
-      );
-    }
+    logger.debug('RSA key fetched', {
+      module: 'auth',
+      modulusLength: data.data.rsaModulus.length,
+    });
 
     return {
       modulus: data.data.rsaModulus,
       exponent: data.data.publicExponent,
     };
   } catch (error) {
-    if (error instanceof AuthenticationError) {
-      throw error;
-    }
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    throw new AuthenticationError(`RSA key fetch failed: ${errorMessage}`, 'AUTH_NETWORK_ERROR');
+    throw wrapAuthError(error, 'RSA key fetch');
   }
 }
 
@@ -228,51 +206,33 @@ export async function login(client: HttpClient): Promise<void> {
       body: formData.toString(),
     });
 
-    if (DEBUG) {
-      console.log(
-        JSON.stringify({
-          level: 'debug',
-          module: 'auth',
-          message: 'Login response received',
-          status: response.status,
-          cookies: client.cookies,
-        })
-      );
-    }
+    logger.debug('Login response received', {
+      module: 'auth',
+      status: response.status,
+      cookies: client.cookies,
+    });
 
     // Manual redirects: successful login typically returns 302 with empty body.
     if (response.status >= 300 && response.status < 400) {
       const location = response.headers.get('location') ?? '';
       if (location.includes('loginSuccess.do')) {
-        if (DEBUG) {
-          console.log(
-            JSON.stringify({
-              level: 'info',
-              module: 'auth',
-              message: 'Login successful - redirect received',
-              status: response.status,
-              location,
-            })
-          );
-        }
+        logger.debug('Login successful - redirect received', {
+          module: 'auth',
+          status: response.status,
+          location,
+        });
         return;
       }
     }
 
     // Check for successful login via redirect (302 to loginSuccess.do)
-    // The HttpClient follows redirects, so we check if we ended up on success page
-    // or if userId cookie was set (indicates successful login)
+    // HttpClient uses redirect: 'manual', so we may not follow the redirect here.
+    // A userId cookie indicates successful login.
     if (client.cookies.userId) {
-      if (DEBUG) {
-        console.log(
-          JSON.stringify({
-            level: 'info',
-            module: 'auth',
-            message: 'Login successful - session established',
-            cookies: client.cookies,
-          })
-        );
-      }
+      logger.debug('Login successful - session established', {
+        module: 'auth',
+        cookies: client.cookies,
+      });
       return;
     }
 
@@ -282,16 +242,10 @@ export async function login(client: HttpClient): Promise<void> {
     // Check for login success indicator in HTML response
     // Successful login may also show isLoggedIn = true after redirect
     if (responseText.includes('isLoggedIn = true')) {
-      if (DEBUG) {
-        console.log(
-          JSON.stringify({
-            level: 'info',
-            module: 'auth',
-            message: 'Login successful - session established',
-            cookies: client.cookies,
-          })
-        );
-      }
+      logger.debug('Login successful - session established', {
+        module: 'auth',
+        cookies: client.cookies,
+      });
       return;
     }
 
@@ -319,10 +273,6 @@ export async function login(client: HttpClient): Promise<void> {
     // Unexpected response
     throw new AuthenticationError('Unexpected login response', 'AUTH_UNEXPECTED_RESPONSE');
   } catch (error) {
-    if (error instanceof AuthenticationError) {
-      throw error;
-    }
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    throw new AuthenticationError(`Login failed: ${errorMessage}`, 'AUTH_NETWORK_ERROR');
+    throw wrapAuthError(error, 'Login');
   }
 }

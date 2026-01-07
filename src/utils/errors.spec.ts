@@ -7,7 +7,13 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { DHLotteryError, AuthenticationError, NetworkError, PurchaseError } from './errors';
+import {
+  DHLotteryError,
+  AuthenticationError,
+  NetworkError,
+  PurchaseError,
+  wrapAuthError,
+} from './errors';
 
 describe('DHLottery Error Classes', () => {
   /**
@@ -149,6 +155,36 @@ describe('DHLottery Error Classes', () => {
 
       expect(error.message).toBe(message);
       expect(error.code).toBe('PURCHASE_EXECUTION_FAILED');
+    });
+  });
+
+  /**
+   * TEST-REFACTOR-P0-AUTH-002: wrapAuthError behavior
+   */
+  describe('TEST-REFACTOR-P0-AUTH-002: wrapAuthError behavior', () => {
+    it('should return existing AuthenticationError instance', () => {
+      const error = new AuthenticationError('Auth failed', 'AUTH_INVALID_CREDENTIALS');
+
+      const wrapped = wrapAuthError(error, 'Login');
+
+      expect(wrapped).toBe(error);
+    });
+
+    it('should wrap Error with context and AUTH_NETWORK_ERROR code', () => {
+      const error = new Error('boom');
+
+      const wrapped = wrapAuthError(error, 'Login');
+
+      expect(wrapped).toBeInstanceOf(AuthenticationError);
+      expect(wrapped.message).toBe('Login failed: boom');
+      expect(wrapped.code).toBe('AUTH_NETWORK_ERROR');
+    });
+
+    it('should handle non-Error values as Unknown error', () => {
+      const wrapped = wrapAuthError('oops', 'Login');
+
+      expect(wrapped.message).toBe('Login failed: Unknown error');
+      expect(wrapped.code).toBe('AUTH_NETWORK_ERROR');
     });
   });
 });

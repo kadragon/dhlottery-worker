@@ -617,4 +617,21 @@ describe("DHLottery Authentication", () => {
       await expect(login(mockHttpClient)).rejects.toThrow(AuthenticationError);
     });
   });
+
+  /**
+   * TEST-REFACTOR-P0-AUTH-001: Ensure auth redirect comment reflects manual behavior
+   *
+   * Criteria:
+   * - Comment references manual redirects (redirect: 'manual')
+   */
+  describe("TEST-REFACTOR-P0-AUTH-001: redirect comment clarity", () => {
+    it("should mention redirect: 'manual' in auth login flow comment", () => {
+      const fs = require("fs");
+      const path = require("path");
+      const sourceFile = path.join(__dirname, "auth.ts");
+      const content = fs.readFileSync(sourceFile, "utf-8");
+
+      expect(content).toMatch(/redirect:\s*'manual'/);
+    });
+  });
 });
