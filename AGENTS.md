@@ -74,3 +74,4 @@
 - 인증 흐름 예외는 `wrapAuthError`로 감싸 공통 메시지/코드 정책을 유지한다.
 - `checkWinning`은 3xx 리다이렉트를 파싱하지 않고 빈 결과로 종료한다 (200만 HTML 파싱).
 - `src/dhlottery` 내 `.bak*` 파일은 금지하며 테스트로 감시한다.
+- 테스트 파일 네이밍은 `*.test.ts`를 표준으로 사용하며 Vitest include/exclude와 Biome 설정이 이에 맞춰져 있다.

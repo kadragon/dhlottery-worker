@@ -9,12 +9,12 @@ export default defineConfig({
      */
     globals: true,
     environment: 'node',
-    include: ['src/**/*.spec.ts'],
+    include: ['src/**/*.test.ts'],
     silent: true,
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
-      exclude: ['node_modules/', 'src/**/*.spec.ts', 'src/__fixtures__/', 'src/types/'],
+      exclude: ['node_modules/', 'src/**/*.test.ts', 'src/__fixtures__/', 'src/types/'],
     },
   },
   resolve: {
