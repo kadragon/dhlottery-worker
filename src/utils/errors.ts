@@ -48,3 +48,14 @@ export class PurchaseError extends DHLotteryError {
     this.name = 'PurchaseError';
   }
 }
+
+/**
+ * Wrap non-authentication errors with AuthenticationError
+ */
+export function wrapAuthError(error: unknown, context: string): AuthenticationError {
+  if (error instanceof AuthenticationError) {
+    return error;
+  }
+  const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+  return new AuthenticationError(`${context} failed: ${errorMessage}`, 'AUTH_NETWORK_ERROR');
+}

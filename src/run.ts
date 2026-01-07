@@ -8,36 +8,7 @@
 
 import { runWorkflow } from './index';
 import { validateEnv } from './utils/env';
-
-/**
- * Log level type
- */
-type LogLevel = 'info' | 'error';
-
-/**
- * Structured logging helper for GitHub Actions
- * Outputs JSON-formatted logs with timestamp
- *
- * @param level - Log level (info or error)
- * @param message - Log message
- * @param details - Optional additional details to include in log
- */
-function log(level: LogLevel, message: string, details?: Record<string, unknown>): void {
-  const logEntry = {
-    level,
-    message,
-    ...details,
-    timestamp: new Date().toISOString(),
-  };
-
-  const output = JSON.stringify(logEntry);
-
-  if (level === 'error') {
-    console.error(output);
-  } else {
-    console.log(output);
-  }
-}
+import { logger } from './utils/logger';
 
 /**
  * Main entry point for GitHub Actions workflow
@@ -48,16 +19,16 @@ async function main(): Promise<void> {
     // Validate all required environment variables
     validateEnv();
 
-    log('info', 'Starting lottery workflow');
+    logger.info('Starting lottery workflow');
 
     // Run the workflow
     await runWorkflow();
 
-    log('info', 'Lottery workflow completed successfully');
+    logger.info('Lottery workflow completed successfully');
 
     process.exit(0);
   } catch (error) {
-    log('error', 'Lottery workflow failed', {
+    logger.error('Lottery workflow failed', {
       error: error instanceof Error ? error.message : String(error),
     });
 

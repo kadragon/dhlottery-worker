@@ -6,9 +6,10 @@
  *   task_id: TASK-003, TASK-011, TASK-REFACTOR-P2-002
  */
 
-import { DEBUG, USER_AGENT } from '../constants';
+import { USER_AGENT } from '../constants';
 import type { AccountInfo, HttpClient } from '../types';
 import { DHLotteryError } from '../utils/errors';
+import { logger } from '../utils/logger';
 
 /**
  * DHLottery API URLs
@@ -39,16 +40,10 @@ const BALANCE_API_URL = 'https://dhlottery.co.kr/mypage/selectUserMndp.do';
  */
 export async function getAccountInfo(client: HttpClient): Promise<AccountInfo> {
   // Step 1: Fetch Lotto Round API for current round
-  if (DEBUG) {
-    console.log(
-      JSON.stringify({
-        level: 'debug',
-        module: 'account',
-        message: 'Fetching lotto round API',
-        url: LOTTO_ROUND_API_URL,
-      })
-    );
-  }
+  logger.debug('Fetching lotto round API', {
+    module: 'account',
+    url: LOTTO_ROUND_API_URL,
+  });
 
   const roundResponse = await client.fetch(LOTTO_ROUND_API_URL, {
     headers: {
@@ -70,16 +65,10 @@ export async function getAccountInfo(client: HttpClient): Promise<AccountInfo> {
 
   // Step 2: Fetch Balance API
   // 2026-01 Update: mypage/home is JS-rendered, use JSON API instead
-  if (DEBUG) {
-    console.log(
-      JSON.stringify({
-        level: 'debug',
-        module: 'account',
-        message: 'Fetching balance API',
-        url: BALANCE_API_URL,
-      })
-    );
-  }
+  logger.debug('Fetching balance API', {
+    module: 'account',
+    url: BALANCE_API_URL,
+  });
 
   const balanceResponse = await client.fetch(BALANCE_API_URL, {
     headers: {
@@ -159,16 +148,10 @@ async function parseBalanceFromApi(response: { json: () => Promise<unknown> }): 
       throw new Error(`Invalid balance type: ${typeof balance}`);
     }
 
-    if (DEBUG) {
-      console.log(
-        JSON.stringify({
-          level: 'info',
-          module: 'account',
-          message: 'Found balance from API',
-          balance,
-        })
-      );
-    }
+    logger.debug('Found balance from API', {
+      module: 'account',
+      balance,
+    });
 
     return balance;
   } catch (error) {
@@ -231,17 +214,11 @@ async function parseRoundFromApi(response: { json: () => Promise<unknown> }): Pr
       throw new Error(`Invalid round value: ${round}`);
     }
 
-    if (DEBUG) {
-      console.log(
-        JSON.stringify({
-          level: 'info',
-          module: 'account',
-          message: 'Found current round from API',
-          round,
-          drawDate: data.data.result.ltRflYmd,
-        })
-      );
-    }
+    logger.debug('Found current round from API', {
+      module: 'account',
+      round,
+      drawDate: data.data.result.ltRflYmd,
+    });
 
     return round;
   } catch (error) {

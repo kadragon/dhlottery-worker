@@ -12,6 +12,8 @@ import type { HttpClient, WinningResult } from '../types';
 import type { PreviousWeekRange } from '../utils/date';
 import { calculatePreviousWeekRangeKst } from '../utils/date';
 import { DHLotteryError } from '../utils/errors';
+import { formatKoreanNumber } from '../utils/format';
+import { logger } from '../utils/logger';
 
 const WINNING_LIST_URL = 'https://www.dhlottery.co.kr/myPage.do?method=lottoBuyList';
 
@@ -139,10 +141,6 @@ export function filterJackpotWins(results: WinningResult[]): WinningResult[] {
   return results.filter((r) => r.rank === 1);
 }
 
-function formatKoreanNumber(amount: number): string {
-  return amount.toLocaleString('ko-KR');
-}
-
 /**
  * Check winning results for the previous week and notify jackpot wins.
  *
@@ -167,14 +165,20 @@ export async function checkWinning(
       },
     });
     // Accept 200 OK or 3xx redirect
-    if (response.status !== 200 && (response.status < 300 || response.status >= 400)) {
-      console.error(
-        JSON.stringify({
-          event: 'winning_fetch_failed',
-          status: response.status,
-          message: 'Winning fetch failed',
-        })
-      );
+    if (response.status >= 300 && response.status < 400) {
+      logger.error('Winning fetch redirected', {
+        event: 'winning_fetch_redirect',
+        status: response.status,
+        location: response.headers.get('location') ?? undefined,
+      });
+      return [];
+    }
+
+    if (response.status !== 200) {
+      logger.error('Winning fetch failed', {
+        event: 'winning_fetch_failed',
+        status: response.status,
+      });
       return [];
     }
 
@@ -204,13 +208,10 @@ export async function checkWinning(
     return jackpotWins;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    console.error(
-      JSON.stringify({
-        event: 'winning_check_failed',
-        error: message,
-        message: 'Winning check failed (non-fatal)',
-      })
-    );
+    logger.error('Winning check failed (non-fatal)', {
+      event: 'winning_check_failed',
+      error: message,
+    });
     return [];
   }
 }

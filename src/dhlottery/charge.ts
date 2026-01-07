@@ -6,9 +6,11 @@
  *   task_id: TASK-004, TASK-010, TASK-011, TASK-REFACTOR-P2-002, TASK-GHACTION-001
  */
 
-import { CHARGE_AMOUNT, DEBUG, MIN_DEPOSIT_AMOUNT, USER_AGENT } from '../constants';
+import { CHARGE_AMOUNT, MIN_DEPOSIT_AMOUNT, USER_AGENT } from '../constants';
 import { sendNotification } from '../notify/telegram';
 import type { HttpClient } from '../types';
+import { formatCurrency } from '../utils/format';
+import { logger } from '../utils/logger';
 import { getAccountInfo } from './account';
 
 /**
@@ -17,13 +19,6 @@ import { getAccountInfo } from './account';
  * Amount: 50,000 KRW
  */
 const CHARGE_INIT_URL = `https://www.dhlottery.co.kr/kbank.do?method=kbankProcess&PayMethod=VBANK&VBankAccountName=%EB%8F%99%ED%96%89%EB%B3%B5%EA%B6%8C&LicenseKey=&VBankExpDate=&GoodsAmt=${CHARGE_AMOUNT}`;
-
-/**
- * Format number with thousands separator
- */
-function formatCurrency(amount: number): string {
-  return `${amount.toLocaleString('ko-KR')}원`;
-}
 
 /**
  * Initialize charge page (access but do not execute payment)
@@ -38,25 +33,19 @@ async function initializeChargePage(client: HttpClient): Promise<boolean> {
     });
 
     if (response.status !== 200) {
-      console.error(
-        JSON.stringify({
-          event: 'charge_init_failed',
-          status: response.status,
-          message: 'Failed to initialize charge page',
-        })
-      );
+      logger.error('Failed to initialize charge page', {
+        event: 'charge_init_failed',
+        status: response.status,
+      });
       return false;
     }
 
     return true;
   } catch (error) {
-    console.error(
-      JSON.stringify({
-        event: 'charge_init_error',
-        error: error instanceof Error ? error.message : String(error),
-        message: 'Error initializing charge page',
-      })
-    );
+    logger.error('Error initializing charge page', {
+      event: 'charge_init_error',
+      error: error instanceof Error ? error.message : String(error),
+    });
     return false;
   }
 }
@@ -79,16 +68,11 @@ export async function checkDeposit(client: HttpClient): Promise<boolean> {
   }
 
   // Balance is insufficient - initialize charge and notify
-  if (DEBUG) {
-    console.info(
-      JSON.stringify({
-        event: 'insufficient_balance',
-        balance: accountInfo.balance,
-        required: MIN_DEPOSIT_AMOUNT,
-        message: 'Insufficient balance detected',
-      })
-    );
-  }
+  logger.debug('Insufficient balance detected', {
+    event: 'insufficient_balance',
+    balance: accountInfo.balance,
+    required: MIN_DEPOSIT_AMOUNT,
+  });
 
   // Initialize charge page
   const chargeSuccess = await initializeChargePage(client);

@@ -348,5 +348,23 @@ describe("Winning Check", () => {
         checkWinning(mockHttpClient, new Date("2025-12-15T10:00:00+09:00")),
       ).resolves.toEqual([]);
     });
+
+    it("should return empty without parsing on redirect response", async () => {
+      const textSpy = vi.fn(async () => fixtureHTML);
+
+      vi.mocked(mockHttpClient.fetch).mockResolvedValue({
+        status: 302,
+        statusText: "Found",
+        headers: new Headers({ location: "https://www.dhlottery.co.kr/login" }),
+        text: textSpy,
+        json: async () => ({}),
+      } as unknown as HttpResponse);
+
+      await expect(
+        checkWinning(mockHttpClient, new Date("2025-12-15T10:00:00+09:00")),
+      ).resolves.toEqual([]);
+
+      expect(textSpy).not.toHaveBeenCalled();
+    });
   });
 });

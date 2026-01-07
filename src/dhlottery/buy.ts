@@ -20,6 +20,8 @@ import type {
 import { PURCHASE_CONSTANTS } from '../types/purchase.types';
 import { getNextSaturdayKst } from '../utils/date';
 import { PurchaseError } from '../utils/errors';
+import { formatKoreanNumber } from '../utils/format';
+import { logger } from '../utils/logger';
 import { getAccountInfo } from './account';
 
 const BASE_URL = 'https://ol.dhlottery.co.kr/olotto/game';
@@ -80,17 +82,13 @@ async function executePurchase(
     WAMT_PAY_TLMT_END_DT: formatDateWithSlashes(payLimitDate),
   });
 
-  console.log(
-    JSON.stringify({
-      level: 'debug',
-      module: 'buy',
-      message: 'Purchase parameters',
-      round: roundNumber,
-      direct: readyResponse.ready_ip,
-      nBuyAmount: PURCHASE_CONSTANTS.TOTAL_COST,
-      gameCnt: PURCHASE_CONSTANTS.GAME_COUNT,
-    })
-  );
+  logger.debug('Purchase parameters', {
+    module: 'buy',
+    round: roundNumber,
+    direct: readyResponse.ready_ip,
+    nBuyAmount: PURCHASE_CONSTANTS.TOTAL_COST,
+    gameCnt: PURCHASE_CONSTANTS.GAME_COUNT,
+  });
 
   const response = await client.fetch(`${BASE_URL}/execBuy.do`, {
     method: 'POST',
@@ -110,13 +108,6 @@ async function executePurchase(
   }
 
   return await response.json();
-}
-
-/**
- * Formats Korean number with thousands separator
- */
-function formatKoreanNumber(amount: number): string {
-  return amount.toLocaleString('ko-KR');
 }
 
 function formatDateWithSlashes(date: string): string {
