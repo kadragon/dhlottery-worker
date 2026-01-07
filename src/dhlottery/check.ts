@@ -165,7 +165,16 @@ export async function checkWinning(
       },
     });
     // Accept 200 OK or 3xx redirect
-    if (response.status !== 200 && (response.status < 300 || response.status >= 400)) {
+    if (response.status >= 300 && response.status < 400) {
+      logger.error('Winning fetch redirected', {
+        event: 'winning_fetch_redirect',
+        status: response.status,
+        location: response.headers.get('location') ?? undefined,
+      });
+      return [];
+    }
+
+    if (response.status !== 200) {
       logger.error('Winning fetch failed', {
         event: 'winning_fetch_failed',
         status: response.status,
