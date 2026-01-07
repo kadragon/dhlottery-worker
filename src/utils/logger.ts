@@ -2,10 +2,10 @@
  * Logger utility
  */
 
-import { DEBUG } from "../constants";
+import { DEBUG } from '../constants';
 
 type LogDetails = Record<string, unknown>;
-type LogLevel = "debug" | "info" | "error";
+type LogLevel = 'debug' | 'info' | 'error';
 
 function formatEntry(level: LogLevel, message: string, details?: LogDetails): string {
   return JSON.stringify({
@@ -19,15 +19,15 @@ function formatEntry(level: LogLevel, message: string, details?: LogDetails): st
 export const logger = {
   debug(message: string, details?: LogDetails): void {
     if (!DEBUG) return;
-    const output = formatEntry("debug", message, details);
+    const output = formatEntry('debug', message, details);
     console.log(output);
   },
   info(message: string, details?: LogDetails): void {
-    const output = formatEntry("info", message, details);
+    const output = formatEntry('info', message, details);
     console.log(output);
   },
   error(message: string, details?: LogDetails): void {
-    const output = formatEntry("error", message, details);
+    const output = formatEntry('error', message, details);
     console.error(output);
   },
 };
