@@ -72,39 +72,81 @@ function rsaEncrypt(text: string, modulus: string, exponent: string): string {
 /**
  * Initialize session by requesting login page to acquire DHJSESSIONID cookie
  *
+ * Handles 301/302 redirects manually since HttpClient uses redirect: 'manual'.
+ * Follows up to 5 redirects to prevent infinite loops.
+ *
  * @param client - HTTP client with cookie management
  * @throws {AuthenticationError} If session initialization fails
  */
 async function initSession(client: HttpClient): Promise<void> {
-  try {
-    const response = await client.fetch(LOGIN_PAGE_URL, {
-      method: 'GET',
-      headers: {
-        'Accept-Charset': 'UTF-8',
-        'User-Agent': USER_AGENT,
-      },
-    });
+  const MAX_REDIRECTS = 5;
 
-    if (response.status !== 200) {
+  try {
+    let currentUrl = LOGIN_PAGE_URL;
+    let redirectCount = 0;
+
+    while (redirectCount < MAX_REDIRECTS) {
+      const response = await client.fetch(currentUrl, {
+        method: 'GET',
+        headers: {
+          'Accept-Charset': 'UTF-8',
+          'User-Agent': USER_AGENT,
+        },
+      });
+
+      // Success - got the page
+      if (response.status === 200) {
+        logger.debug('Session initialized', {
+          module: 'auth',
+          cookies: client.cookies,
+          status: response.status,
+        });
+
+        // Verify DHJSESSIONID is set (new cookie name since 2026)
+        if (!client.cookies.DHJSESSIONID) {
+          throw new AuthenticationError(
+            'DHJSESSIONID cookie was not set during initialization',
+            'AUTH_SESSION_INIT_ERROR'
+          );
+        }
+        return;
+      }
+
+      // Handle redirects (301, 302, 303, 307, 308)
+      if (response.status >= 300 && response.status < 400) {
+        const location = response.headers.get('location');
+        if (!location) {
+          throw new AuthenticationError(
+            `Session initialization redirect without Location header (status ${response.status})`,
+            'AUTH_SESSION_INIT_ERROR'
+          );
+        }
+
+        // Resolve relative URL to absolute
+        currentUrl = new URL(location, currentUrl).toString();
+        redirectCount++;
+
+        logger.debug('Session init redirect', {
+          module: 'auth',
+          status: response.status,
+          location: currentUrl,
+          redirectCount,
+        });
+        continue;
+      }
+
+      // Non-success, non-redirect status
       throw new AuthenticationError(
         `Session initialization failed with status ${response.status}`,
         'AUTH_SESSION_INIT_ERROR'
       );
     }
 
-    logger.debug('Session initialized', {
-      module: 'auth',
-      cookies: client.cookies,
-      status: response.status,
-    });
-
-    // Verify DHJSESSIONID is set (new cookie name since 2026)
-    if (!client.cookies.DHJSESSIONID) {
-      throw new AuthenticationError(
-        'DHJSESSIONID cookie was not set during initialization',
-        'AUTH_SESSION_INIT_ERROR'
-      );
-    }
+    // Exceeded max redirects
+    throw new AuthenticationError(
+      `Session initialization exceeded maximum redirects (${MAX_REDIRECTS})`,
+      'AUTH_SESSION_INIT_ERROR'
+    );
   } catch (error) {
     throw wrapAuthError(error, 'Session initialization');
   }

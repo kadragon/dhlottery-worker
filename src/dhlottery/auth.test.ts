@@ -517,6 +517,76 @@ describe("DHLottery Authentication", () => {
   });
 
   /**
+   * TEST-AUTH-007: Handle 301 redirect during session initialization
+   *
+   * Criteria:
+   * - Session init (GET /login) returns 301 redirect
+   * - Client follows redirect and gets DHJSESSIONID cookie
+   * - Authentication flow continues successfully
+   */
+  describe("TEST-AUTH-007: Handle 301 redirect during session initialization", () => {
+    it("should follow 301 redirect during session init", async () => {
+      // Arrange
+      const redirectSessionInitResponse = {
+        status: 301,
+        statusText: "Moved Permanently",
+        headers: new Headers({ location: "https://dhlottery.co.kr/login.do" }),
+        text: async () => "",
+        json: async () => ({}),
+      } as unknown as HttpResponse;
+
+      const finalSessionInitResponse = {
+        status: 200,
+        statusText: "OK",
+        headers: new Headers(),
+        text: async () => "<!DOCTYPE html>...",
+        json: async () => ({}),
+      } as unknown as HttpResponse;
+
+      const { rsaKeyResponse, loginResponse } = createMockResponses(true);
+
+      vi.mocked(mockHttpClient.fetch)
+        .mockResolvedValueOnce(redirectSessionInitResponse)
+        .mockResolvedValueOnce(finalSessionInitResponse)
+        .mockResolvedValueOnce(rsaKeyResponse)
+        .mockResolvedValueOnce(loginResponse);
+
+      // Act & Assert - should not throw
+      await expect(login(mockHttpClient)).resolves.not.toThrow();
+    });
+
+    it("should follow 302 redirect during session init", async () => {
+      // Arrange
+      const redirectSessionInitResponse = {
+        status: 302,
+        statusText: "Found",
+        headers: new Headers({ location: "https://dhlottery.co.kr/login.do" }),
+        text: async () => "",
+        json: async () => ({}),
+      } as unknown as HttpResponse;
+
+      const finalSessionInitResponse = {
+        status: 200,
+        statusText: "OK",
+        headers: new Headers(),
+        text: async () => "<!DOCTYPE html>...",
+        json: async () => ({}),
+      } as unknown as HttpResponse;
+
+      const { rsaKeyResponse, loginResponse } = createMockResponses(true);
+
+      vi.mocked(mockHttpClient.fetch)
+        .mockResolvedValueOnce(redirectSessionInitResponse)
+        .mockResolvedValueOnce(finalSessionInitResponse)
+        .mockResolvedValueOnce(rsaKeyResponse)
+        .mockResolvedValueOnce(loginResponse);
+
+      // Act & Assert - should not throw
+      await expect(login(mockHttpClient)).resolves.not.toThrow();
+    });
+  });
+
+  /**
    * TEST-AUTH-RSA-001: RSA key fetch
    *
    * Criteria:
