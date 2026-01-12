@@ -121,15 +121,15 @@ describe("DHLottery Authentication", () => {
 
       // Verify first call is session init
       const sessionCall = vi.mocked(mockHttpClient.fetch).mock.calls[0];
-      expect(sessionCall[0]).toBe("https://dhlottery.co.kr/login");
+      expect(sessionCall[0]).toBe("https://www.dhlottery.co.kr/login");
 
       // Verify second call is RSA key fetch
       const rsaKeyCall = vi.mocked(mockHttpClient.fetch).mock.calls[1];
-      expect(rsaKeyCall[0]).toBe("https://dhlottery.co.kr/login/selectRsaModulus.do");
+      expect(rsaKeyCall[0]).toBe("https://www.dhlottery.co.kr/login/selectRsaModulus.do");
 
       // Verify third call is login
       const loginCall = vi.mocked(mockHttpClient.fetch).mock.calls[2];
-      expect(loginCall[0]).toBe("https://dhlottery.co.kr/login/securityLoginCheck.do");
+      expect(loginCall[0]).toBe("https://www.dhlottery.co.kr/login/securityLoginCheck.do");
       expect(loginCall[1]?.method).toBe("POST");
     });
 
@@ -381,8 +381,8 @@ describe("DHLottery Authentication", () => {
       const headers = loginCall[1]?.headers;
 
       expect(headers?.["User-Agent"]).toBeDefined();
-      expect(headers?.["Origin"]).toBe("https://dhlottery.co.kr");
-      expect(headers?.["Referer"]).toBe("https://dhlottery.co.kr/login");
+      expect(headers?.["Origin"]).toBe("https://www.dhlottery.co.kr");
+      expect(headers?.["Referer"]).toBe("https://www.dhlottery.co.kr/login");
     });
 
     it("should include all required form parameters", async () => {
@@ -450,7 +450,7 @@ describe("DHLottery Authentication", () => {
       const loginCall = vi.mocked(mockHttpClient.fetch).mock.calls[2];
       const url = loginCall[0];
 
-      expect(url).toBe("https://dhlottery.co.kr/login/securityLoginCheck.do");
+      expect(url).toBe("https://www.dhlottery.co.kr/login/securityLoginCheck.do");
     });
   });
 
@@ -530,7 +530,7 @@ describe("DHLottery Authentication", () => {
       const redirectSessionInitResponse = {
         status: 301,
         statusText: "Moved Permanently",
-        headers: new Headers({ location: "https://dhlottery.co.kr/login.do" }),
+        headers: new Headers({ location: "https://www.dhlottery.co.kr/login.do" }),
         text: async () => "",
         json: async () => ({}),
       } as unknown as HttpResponse;
@@ -560,7 +560,7 @@ describe("DHLottery Authentication", () => {
       const redirectSessionInitResponse = {
         status: 302,
         statusText: "Found",
-        headers: new Headers({ location: "https://dhlottery.co.kr/login.do" }),
+        headers: new Headers({ location: "https://www.dhlottery.co.kr/login.do" }),
         text: async () => "",
         json: async () => ({}),
       } as unknown as HttpResponse;
@@ -592,8 +592,31 @@ describe("DHLottery Authentication", () => {
    * Criteria:
    * - RSA modulus and exponent are fetched before login
    * - Invalid RSA response throws error
+   * - 301/302 redirects are followed during RSA key fetch
    */
   describe("TEST-AUTH-RSA-001: RSA key fetch", () => {
+    it("should follow 301 redirect during RSA key fetch", async () => {
+      // Arrange
+      const { sessionInitResponse, rsaKeyResponse, loginResponse } = createMockResponses(true);
+
+      const redirectRsaResponse = {
+        status: 301,
+        statusText: "Moved Permanently",
+        headers: new Headers({ location: "https://www.dhlottery.co.kr/login/selectRsaModulus2.do" }),
+        text: async () => "",
+        json: async () => ({}),
+      } as unknown as HttpResponse;
+
+      vi.mocked(mockHttpClient.fetch)
+        .mockResolvedValueOnce(sessionInitResponse)
+        .mockResolvedValueOnce(redirectRsaResponse)
+        .mockResolvedValueOnce(rsaKeyResponse)
+        .mockResolvedValueOnce(loginResponse);
+
+      // Act & Assert - should not throw
+      await expect(login(mockHttpClient)).resolves.not.toThrow();
+    });
+
     it("should handle RSA key fetch failure", async () => {
       // Arrange
       const { sessionInitResponse } = createMockResponses(true);

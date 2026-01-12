@@ -24,10 +24,11 @@ import { logger } from '../utils/logger';
 
 /**
  * DHLottery endpoints
+ * Note: Use www.dhlottery.co.kr to avoid 301 redirects from dhlottery.co.kr
  */
-const LOGIN_PAGE_URL = 'https://dhlottery.co.kr/login';
-const RSA_MODULUS_URL = 'https://dhlottery.co.kr/login/selectRsaModulus.do';
-const LOGIN_URL = 'https://dhlottery.co.kr/login/securityLoginCheck.do';
+const LOGIN_PAGE_URL = 'https://www.dhlottery.co.kr/login';
+const RSA_MODULUS_URL = 'https://www.dhlottery.co.kr/login/selectRsaModulus.do';
+const LOGIN_URL = 'https://www.dhlottery.co.kr/login/securityLoginCheck.do';
 
 /**
  * RSA Modulus response from DHLottery
@@ -155,46 +156,87 @@ async function initSession(client: HttpClient): Promise<void> {
 /**
  * Fetch RSA public key from DHLottery
  *
+ * Handles 301/302 redirects manually since HttpClient uses redirect: 'manual'.
+ * Follows up to 5 redirects to prevent infinite loops.
+ *
  * @param client - HTTP client with cookie management
  * @returns RSA modulus and exponent
  * @throws {AuthenticationError} If RSA key fetch fails
  */
 async function fetchRsaKey(client: HttpClient): Promise<{ modulus: string; exponent: string }> {
-  try {
-    const response = await client.fetch(RSA_MODULUS_URL, {
-      method: 'GET',
-      headers: {
-        Accept: 'application/json, text/javascript, */*; q=0.01',
-        'Content-Type': 'application/json;charset=UTF-8',
-        'User-Agent': USER_AGENT,
-        'X-Requested-With': 'XMLHttpRequest',
-        Referer: LOGIN_PAGE_URL,
-        ajax: 'true',
-      },
-    });
+  const MAX_REDIRECTS = 5;
 
-    if (response.status !== 200) {
+  try {
+    let currentUrl = RSA_MODULUS_URL;
+    let redirectCount = 0;
+
+    while (redirectCount < MAX_REDIRECTS) {
+      const response = await client.fetch(currentUrl, {
+        method: 'GET',
+        headers: {
+          Accept: 'application/json, text/javascript, */*; q=0.01',
+          'Content-Type': 'application/json;charset=UTF-8',
+          'User-Agent': USER_AGENT,
+          'X-Requested-With': 'XMLHttpRequest',
+          Referer: LOGIN_PAGE_URL,
+          ajax: 'true',
+        },
+      });
+
+      // Success - got the response
+      if (response.status === 200) {
+        const data = await response.json<RsaModulusResponse>();
+
+        if (!data.data?.rsaModulus || !data.data?.publicExponent) {
+          throw new AuthenticationError('Invalid RSA key response format', 'AUTH_RSA_KEY_ERROR');
+        }
+
+        logger.debug('RSA key fetched', {
+          module: 'auth',
+          modulusLength: data.data.rsaModulus.length,
+        });
+
+        return {
+          modulus: data.data.rsaModulus,
+          exponent: data.data.publicExponent,
+        };
+      }
+
+      // Handle redirects (301, 302, 303, 307, 308)
+      if (response.status >= 300 && response.status < 400) {
+        const location = response.headers.get('location');
+        if (!location) {
+          throw new AuthenticationError(
+            `RSA key fetch redirect without Location header (status ${response.status})`,
+            'AUTH_RSA_KEY_ERROR'
+          );
+        }
+
+        // Resolve relative URL to absolute
+        currentUrl = new URL(location, currentUrl).toString();
+        redirectCount++;
+
+        logger.debug('RSA key fetch redirect', {
+          module: 'auth',
+          status: response.status,
+          location: currentUrl,
+          redirectCount,
+        });
+        continue;
+      }
+
+      // Non-success, non-redirect status
       throw new AuthenticationError(
         `RSA key fetch failed with status ${response.status}`,
         'AUTH_RSA_KEY_ERROR'
       );
     }
 
-    const data = await response.json<RsaModulusResponse>();
-
-    if (!data.data?.rsaModulus || !data.data?.publicExponent) {
-      throw new AuthenticationError('Invalid RSA key response format', 'AUTH_RSA_KEY_ERROR');
-    }
-
-    logger.debug('RSA key fetched', {
-      module: 'auth',
-      modulusLength: data.data.rsaModulus.length,
-    });
-
-    return {
-      modulus: data.data.rsaModulus,
-      exponent: data.data.publicExponent,
-    };
+    // Exceeded max redirects
+    throw new AuthenticationError(
+      `RSA key fetch exceeded maximum redirects (${MAX_REDIRECTS})`,
+      'AUTH_RSA_KEY_ERROR'
+    );
   } catch (error) {
     throw wrapAuthError(error, 'RSA key fetch');
   }
@@ -240,7 +282,7 @@ export async function login(client: HttpClient): Promise<void> {
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
         'User-Agent': USER_AGENT,
-        Origin: 'https://dhlottery.co.kr',
+        Origin: 'https://www.dhlottery.co.kr',
         Referer: LOGIN_PAGE_URL,
         'Upgrade-Insecure-Requests': '1',
         'Cache-Control': 'max-age=0',
