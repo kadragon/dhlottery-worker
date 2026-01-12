@@ -25,7 +25,7 @@
 
 ## 외부 엔드포인트 요약
 
-- Base: `https://dhlottery.co.kr`
+- Base: `https://www.dhlottery.co.kr` (non-www redirects to www with 301)
 - Session/Login (2026-01 변경):
   - 세션 init: `/login` (DHJSESSIONID 쿠키 발급)
   - RSA 키 조회: `/login/selectRsaModulus.do` (modulus + exponent)
@@ -60,7 +60,8 @@
 
 - 인증 방식 변경 (2026-01): 평문 → RSA PKCS#1 v1.5 암호화 (node-forge 사용, DHLottery jsbn.js 호환)
 - 쿠키 변경: JSESSIONID → DHJSESSIONID, 로그인 성공 시 userId 쿠키 설정
-- 세션 초기화 (2026-01): `/login` 요청 시 301/302 리다이렉트가 발생할 수 있음 (최대 5회까지 따라감)
+- 세션/RSA 초기화 (2026-01): `/login`, `/login/selectRsaModulus.do` 요청 시 301/302 리다이렉트가 발생할 수 있음 (최대 5회까지 따라감)
+- 도메인 변경 (2026-01): `dhlottery.co.kr` → `www.dhlottery.co.kr` (non-www는 301로 리다이렉트됨)
 - 로그인 응답은 manual redirect 모드에서 3xx(특히 302)로 성공을 반환할 수 있으나, Location이 `loginSuccess.do`를 포함하는 경우에만 성공으로 처리
 - 로또 회차 조회 변경 (2026-01): `/common.do?method=main` → `/lt645/selectThsLt645Info.do` JSON API (HTML은 JS로 동적 로드되어 사용 불가, ltEpsd 필드가 예정 회차 직접 제공)
 - 잔액 조회 변경 (2026-01): `/mypage/home`은 JS 동적 렌더링으로 HTML 파싱 불가 → `/mypage/selectUserMndp.do` JSON API 사용 (crntEntrsAmt 필드)
