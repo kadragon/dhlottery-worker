@@ -144,7 +144,7 @@ describe("Account Information Retrieval", () => {
 
     it("should include stage and redirect location when round API returns 302", async () => {
       // Arrange
-      const redirectLocation = "https://dhlottery.co.kr/";
+      const redirectLocation = "https://www.dhlottery.co.kr/";
       const roundApiResponse = {
         status: 302,
         statusText: "Found",
@@ -174,7 +174,7 @@ describe("Account Information Retrieval", () => {
       const balanceApiResponseError = {
         status: 302,
         statusText: "Found",
-        headers: new Headers({ Location: "https://dhlottery.co.kr/login" }),
+        headers: new Headers({ Location: "https://www.dhlottery.co.kr/login" }),
         text: async () => "",
         json: async () => ({}),
       } as unknown as HttpResponse;

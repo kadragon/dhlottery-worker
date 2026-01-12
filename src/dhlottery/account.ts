@@ -21,7 +21,7 @@ import { logger } from '../utils/logger';
  *   - mypage/home is JS-rendered, HTML parsing no longer works
  */
 const LOTTO_ROUND_API_URL = 'https://www.dhlottery.co.kr/lt645/selectThsLt645Info.do';
-const BALANCE_API_URL = 'https://dhlottery.co.kr/mypage/selectUserMndp.do';
+const BALANCE_API_URL = 'https://www.dhlottery.co.kr/mypage/selectUserMndp.do';
 
 /**
  * Fetch and parse account information

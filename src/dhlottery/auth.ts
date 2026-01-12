@@ -24,10 +24,11 @@ import { logger } from '../utils/logger';
 
 /**
  * DHLottery endpoints
+ * Note: Use www.dhlottery.co.kr to avoid 301 redirects from dhlottery.co.kr
  */
-const LOGIN_PAGE_URL = 'https://dhlottery.co.kr/login';
-const RSA_MODULUS_URL = 'https://dhlottery.co.kr/login/selectRsaModulus.do';
-const LOGIN_URL = 'https://dhlottery.co.kr/login/securityLoginCheck.do';
+const LOGIN_PAGE_URL = 'https://www.dhlottery.co.kr/login';
+const RSA_MODULUS_URL = 'https://www.dhlottery.co.kr/login/selectRsaModulus.do';
+const LOGIN_URL = 'https://www.dhlottery.co.kr/login/securityLoginCheck.do';
 
 /**
  * RSA Modulus response from DHLottery
@@ -39,6 +40,75 @@ interface RsaModulusResponse {
     rsaModulus: string;
     publicExponent: string;
   };
+}
+
+/** Maximum number of redirects to follow */
+const MAX_REDIRECTS = 5;
+
+/**
+ * Fetch URL with automatic redirect following
+ *
+ * Handles 301/302/303/307/308 redirects manually since HttpClient uses redirect: 'manual'.
+ * Follows up to MAX_REDIRECTS to prevent infinite loops.
+ *
+ * @param client - HTTP client with cookie management
+ * @param url - Initial URL to fetch
+ * @param options - Fetch options (headers, etc.)
+ * @param context - Context for error messages (e.g., 'Session initialization', 'RSA key fetch')
+ * @param errorCode - Error code to use when throwing AuthenticationError
+ * @returns Response with status 200
+ * @throws {AuthenticationError} If fetch fails or exceeds max redirects
+ */
+async function fetchWithRedirects(
+  client: HttpClient,
+  url: string,
+  options: { method?: string; headers?: Record<string, string> },
+  context: string,
+  errorCode: string
+): Promise<{ response: Awaited<ReturnType<HttpClient['fetch']>>; finalUrl: string }> {
+  let currentUrl = url;
+  let redirectCount = 0;
+
+  while (redirectCount < MAX_REDIRECTS) {
+    const response = await client.fetch(currentUrl, options);
+
+    // Success - return the response
+    if (response.status === 200) {
+      return { response, finalUrl: currentUrl };
+    }
+
+    // Handle redirects (301, 302, 303, 307, 308)
+    if (response.status >= 300 && response.status < 400) {
+      const location = response.headers.get('location');
+      if (!location) {
+        throw new AuthenticationError(
+          `${context} redirect without Location header (status ${response.status})`,
+          errorCode
+        );
+      }
+
+      // Resolve relative URL to absolute
+      currentUrl = new URL(location, currentUrl).toString();
+      redirectCount++;
+
+      logger.debug(`${context} redirect`, {
+        module: 'auth',
+        status: response.status,
+        location: currentUrl,
+        redirectCount,
+      });
+      continue;
+    }
+
+    // Non-success, non-redirect status
+    throw new AuthenticationError(`${context} failed with status ${response.status}`, errorCode);
+  }
+
+  // Exceeded max redirects
+  throw new AuthenticationError(
+    `${context} exceeded maximum redirects (${MAX_REDIRECTS})`,
+    errorCode
+  );
 }
 
 /**
@@ -77,20 +147,19 @@ function rsaEncrypt(text: string, modulus: string, exponent: string): string {
  */
 async function initSession(client: HttpClient): Promise<void> {
   try {
-    const response = await client.fetch(LOGIN_PAGE_URL, {
-      method: 'GET',
-      headers: {
-        'Accept-Charset': 'UTF-8',
-        'User-Agent': USER_AGENT,
+    const { response } = await fetchWithRedirects(
+      client,
+      LOGIN_PAGE_URL,
+      {
+        method: 'GET',
+        headers: {
+          'Accept-Charset': 'UTF-8',
+          'User-Agent': USER_AGENT,
+        },
       },
-    });
-
-    if (response.status !== 200) {
-      throw new AuthenticationError(
-        `Session initialization failed with status ${response.status}`,
-        'AUTH_SESSION_INIT_ERROR'
-      );
-    }
+      'Session initialization',
+      'AUTH_SESSION_INIT_ERROR'
+    );
 
     logger.debug('Session initialized', {
       module: 'auth',
@@ -119,24 +188,23 @@ async function initSession(client: HttpClient): Promise<void> {
  */
 async function fetchRsaKey(client: HttpClient): Promise<{ modulus: string; exponent: string }> {
   try {
-    const response = await client.fetch(RSA_MODULUS_URL, {
-      method: 'GET',
-      headers: {
-        Accept: 'application/json, text/javascript, */*; q=0.01',
-        'Content-Type': 'application/json;charset=UTF-8',
-        'User-Agent': USER_AGENT,
-        'X-Requested-With': 'XMLHttpRequest',
-        Referer: LOGIN_PAGE_URL,
-        ajax: 'true',
+    const { response } = await fetchWithRedirects(
+      client,
+      RSA_MODULUS_URL,
+      {
+        method: 'GET',
+        headers: {
+          Accept: 'application/json, text/javascript, */*; q=0.01',
+          'Content-Type': 'application/json;charset=UTF-8',
+          'User-Agent': USER_AGENT,
+          'X-Requested-With': 'XMLHttpRequest',
+          Referer: LOGIN_PAGE_URL,
+          ajax: 'true',
+        },
       },
-    });
-
-    if (response.status !== 200) {
-      throw new AuthenticationError(
-        `RSA key fetch failed with status ${response.status}`,
-        'AUTH_RSA_KEY_ERROR'
-      );
-    }
+      'RSA key fetch',
+      'AUTH_RSA_KEY_ERROR'
+    );
 
     const data = await response.json<RsaModulusResponse>();
 
@@ -198,7 +266,7 @@ export async function login(client: HttpClient): Promise<void> {
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
         'User-Agent': USER_AGENT,
-        Origin: 'https://dhlottery.co.kr',
+        Origin: 'https://www.dhlottery.co.kr',
         Referer: LOGIN_PAGE_URL,
         'Upgrade-Insecure-Requests': '1',
         'Cache-Control': 'max-age=0',

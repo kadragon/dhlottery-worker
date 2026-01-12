@@ -101,7 +101,7 @@
       "!**/dist",
       "!**/.wrangler",
       "!**/coverage",
-      "!**/*.spec.ts",
+      "!**/*.test.ts",
       "!**/__fixtures__"
     ]
   }
