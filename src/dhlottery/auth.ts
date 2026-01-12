@@ -42,6 +42,75 @@ interface RsaModulusResponse {
   };
 }
 
+/** Maximum number of redirects to follow */
+const MAX_REDIRECTS = 5;
+
+/**
+ * Fetch URL with automatic redirect following
+ *
+ * Handles 301/302/303/307/308 redirects manually since HttpClient uses redirect: 'manual'.
+ * Follows up to MAX_REDIRECTS to prevent infinite loops.
+ *
+ * @param client - HTTP client with cookie management
+ * @param url - Initial URL to fetch
+ * @param options - Fetch options (headers, etc.)
+ * @param context - Context for error messages (e.g., 'Session initialization', 'RSA key fetch')
+ * @param errorCode - Error code to use when throwing AuthenticationError
+ * @returns Response with status 200
+ * @throws {AuthenticationError} If fetch fails or exceeds max redirects
+ */
+async function fetchWithRedirects(
+  client: HttpClient,
+  url: string,
+  options: { method?: string; headers?: Record<string, string> },
+  context: string,
+  errorCode: string
+): Promise<{ response: Awaited<ReturnType<HttpClient['fetch']>>; finalUrl: string }> {
+  let currentUrl = url;
+  let redirectCount = 0;
+
+  while (redirectCount < MAX_REDIRECTS) {
+    const response = await client.fetch(currentUrl, options);
+
+    // Success - return the response
+    if (response.status === 200) {
+      return { response, finalUrl: currentUrl };
+    }
+
+    // Handle redirects (301, 302, 303, 307, 308)
+    if (response.status >= 300 && response.status < 400) {
+      const location = response.headers.get('location');
+      if (!location) {
+        throw new AuthenticationError(
+          `${context} redirect without Location header (status ${response.status})`,
+          errorCode
+        );
+      }
+
+      // Resolve relative URL to absolute
+      currentUrl = new URL(location, currentUrl).toString();
+      redirectCount++;
+
+      logger.debug(`${context} redirect`, {
+        module: 'auth',
+        status: response.status,
+        location: currentUrl,
+        redirectCount,
+      });
+      continue;
+    }
+
+    // Non-success, non-redirect status
+    throw new AuthenticationError(`${context} failed with status ${response.status}`, errorCode);
+  }
+
+  // Exceeded max redirects
+  throw new AuthenticationError(
+    `${context} exceeded maximum redirects (${MAX_REDIRECTS})`,
+    errorCode
+  );
+}
+
 /**
  * Encrypt text using RSA PKCS#1 v1.5 padding
  *
@@ -73,81 +142,38 @@ function rsaEncrypt(text: string, modulus: string, exponent: string): string {
 /**
  * Initialize session by requesting login page to acquire DHJSESSIONID cookie
  *
- * Handles 301/302 redirects manually since HttpClient uses redirect: 'manual'.
- * Follows up to 5 redirects to prevent infinite loops.
- *
  * @param client - HTTP client with cookie management
  * @throws {AuthenticationError} If session initialization fails
  */
 async function initSession(client: HttpClient): Promise<void> {
-  const MAX_REDIRECTS = 5;
-
   try {
-    let currentUrl = LOGIN_PAGE_URL;
-    let redirectCount = 0;
-
-    while (redirectCount < MAX_REDIRECTS) {
-      const response = await client.fetch(currentUrl, {
+    const { response } = await fetchWithRedirects(
+      client,
+      LOGIN_PAGE_URL,
+      {
         method: 'GET',
         headers: {
           'Accept-Charset': 'UTF-8',
           'User-Agent': USER_AGENT,
         },
-      });
+      },
+      'Session initialization',
+      'AUTH_SESSION_INIT_ERROR'
+    );
 
-      // Success - got the page
-      if (response.status === 200) {
-        logger.debug('Session initialized', {
-          module: 'auth',
-          cookies: client.cookies,
-          status: response.status,
-        });
+    logger.debug('Session initialized', {
+      module: 'auth',
+      cookies: client.cookies,
+      status: response.status,
+    });
 
-        // Verify DHJSESSIONID is set (new cookie name since 2026)
-        if (!client.cookies.DHJSESSIONID) {
-          throw new AuthenticationError(
-            'DHJSESSIONID cookie was not set during initialization',
-            'AUTH_SESSION_INIT_ERROR'
-          );
-        }
-        return;
-      }
-
-      // Handle redirects (301, 302, 303, 307, 308)
-      if (response.status >= 300 && response.status < 400) {
-        const location = response.headers.get('location');
-        if (!location) {
-          throw new AuthenticationError(
-            `Session initialization redirect without Location header (status ${response.status})`,
-            'AUTH_SESSION_INIT_ERROR'
-          );
-        }
-
-        // Resolve relative URL to absolute
-        currentUrl = new URL(location, currentUrl).toString();
-        redirectCount++;
-
-        logger.debug('Session init redirect', {
-          module: 'auth',
-          status: response.status,
-          location: currentUrl,
-          redirectCount,
-        });
-        continue;
-      }
-
-      // Non-success, non-redirect status
+    // Verify DHJSESSIONID is set (new cookie name since 2026)
+    if (!client.cookies.DHJSESSIONID) {
       throw new AuthenticationError(
-        `Session initialization failed with status ${response.status}`,
+        'DHJSESSIONID cookie was not set during initialization',
         'AUTH_SESSION_INIT_ERROR'
       );
     }
-
-    // Exceeded max redirects
-    throw new AuthenticationError(
-      `Session initialization exceeded maximum redirects (${MAX_REDIRECTS})`,
-      'AUTH_SESSION_INIT_ERROR'
-    );
   } catch (error) {
     throw wrapAuthError(error, 'Session initialization');
   }
@@ -156,22 +182,16 @@ async function initSession(client: HttpClient): Promise<void> {
 /**
  * Fetch RSA public key from DHLottery
  *
- * Handles 301/302 redirects manually since HttpClient uses redirect: 'manual'.
- * Follows up to 5 redirects to prevent infinite loops.
- *
  * @param client - HTTP client with cookie management
  * @returns RSA modulus and exponent
  * @throws {AuthenticationError} If RSA key fetch fails
  */
 async function fetchRsaKey(client: HttpClient): Promise<{ modulus: string; exponent: string }> {
-  const MAX_REDIRECTS = 5;
-
   try {
-    let currentUrl = RSA_MODULUS_URL;
-    let redirectCount = 0;
-
-    while (redirectCount < MAX_REDIRECTS) {
-      const response = await client.fetch(currentUrl, {
+    const { response } = await fetchWithRedirects(
+      client,
+      RSA_MODULUS_URL,
+      {
         method: 'GET',
         headers: {
           Accept: 'application/json, text/javascript, */*; q=0.01',
@@ -181,62 +201,26 @@ async function fetchRsaKey(client: HttpClient): Promise<{ modulus: string; expon
           Referer: LOGIN_PAGE_URL,
           ajax: 'true',
         },
-      });
-
-      // Success - got the response
-      if (response.status === 200) {
-        const data = await response.json<RsaModulusResponse>();
-
-        if (!data.data?.rsaModulus || !data.data?.publicExponent) {
-          throw new AuthenticationError('Invalid RSA key response format', 'AUTH_RSA_KEY_ERROR');
-        }
-
-        logger.debug('RSA key fetched', {
-          module: 'auth',
-          modulusLength: data.data.rsaModulus.length,
-        });
-
-        return {
-          modulus: data.data.rsaModulus,
-          exponent: data.data.publicExponent,
-        };
-      }
-
-      // Handle redirects (301, 302, 303, 307, 308)
-      if (response.status >= 300 && response.status < 400) {
-        const location = response.headers.get('location');
-        if (!location) {
-          throw new AuthenticationError(
-            `RSA key fetch redirect without Location header (status ${response.status})`,
-            'AUTH_RSA_KEY_ERROR'
-          );
-        }
-
-        // Resolve relative URL to absolute
-        currentUrl = new URL(location, currentUrl).toString();
-        redirectCount++;
-
-        logger.debug('RSA key fetch redirect', {
-          module: 'auth',
-          status: response.status,
-          location: currentUrl,
-          redirectCount,
-        });
-        continue;
-      }
-
-      // Non-success, non-redirect status
-      throw new AuthenticationError(
-        `RSA key fetch failed with status ${response.status}`,
-        'AUTH_RSA_KEY_ERROR'
-      );
-    }
-
-    // Exceeded max redirects
-    throw new AuthenticationError(
-      `RSA key fetch exceeded maximum redirects (${MAX_REDIRECTS})`,
+      },
+      'RSA key fetch',
       'AUTH_RSA_KEY_ERROR'
     );
+
+    const data = await response.json<RsaModulusResponse>();
+
+    if (!data.data?.rsaModulus || !data.data?.publicExponent) {
+      throw new AuthenticationError('Invalid RSA key response format', 'AUTH_RSA_KEY_ERROR');
+    }
+
+    logger.debug('RSA key fetched', {
+      module: 'auth',
+      modulusLength: data.data.rsaModulus.length,
+    });
+
+    return {
+      modulus: data.data.rsaModulus,
+      exponent: data.data.publicExponent,
+    };
   } catch (error) {
     throw wrapAuthError(error, 'RSA key fetch');
   }
