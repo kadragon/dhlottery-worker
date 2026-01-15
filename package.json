@@ -20,7 +20,7 @@
     "prepare": "bunx simple-git-hooks"
   },
   "simple-git-hooks": {
-    "pre-commit": "bun run check:fix && bun run typecheck"
+    "pre-commit": "bun run precommit"
   },
   "keywords": [
     "github-actions",
