@@ -16,11 +16,11 @@
     "lint:fix": "biome lint --write .",
     "check": "biome check .",
     "check:fix": "biome check --write .",
-    "precommit": "npm run check:fix && npm run typecheck",
-    "prepare": "npx simple-git-hooks"
+    "precommit": "bun run check:fix && bun run typecheck",
+    "prepare": "bunx simple-git-hooks"
   },
   "simple-git-hooks": {
-    "pre-commit": "npm run check:fix && npm run typecheck"
+    "pre-commit": "bun run precommit"
   },
   "keywords": [
     "github-actions",

@@ -77,3 +77,4 @@
 - `checkWinning`은 3xx 리다이렉트를 파싱하지 않고 빈 결과로 종료한다 (200만 HTML 파싱).
 - `src/dhlottery` 내 `.bak*` 파일은 금지하며 테스트로 감시한다.
 - 테스트 파일 네이밍은 `*.test.ts`를 표준으로 사용하며 Vitest include/exclude와 Biome 설정이 이에 맞춰져 있다.
+- 패키지 매니저는 Bun을 사용하며 CI/워크플로는 `oven-sh/setup-bun`과 `bun` 명령으로 표준화한다.

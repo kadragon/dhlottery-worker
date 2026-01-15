@@ -1,230 +1,168 @@
 # DHLottery Worker
 
-GitHub Actions-based automated lottery purchase and notification service for DHLottery (Korea Lottery).
+DHLottery(동행복권) 자동 구매와 알림을 위한 GitHub Actions 기반 서비스입니다.
 
-## Features
+## 주요 기능
 
-- 🎰 Automatic lottery purchase (5 games per week)
-- 💰 Deposit balance monitoring
-- 🏆 Winning number verification
-- 📱 Telegram notifications
-- ⏰ Scheduled execution (every Monday 10:00 KST)
+- 🎰 자동 로또 구매 (주 5게임)
+- 💰 잔액 모니터링
+- 🏆 당첨 확인
+- 📱 Telegram 알림
+- ⏰ 스케줄 실행 (매주 월요일 10:00 KST)
 
-## Architecture
+## 구성
 
-This project follows **Spec-Driven Development (SDD)** and **Test-Driven Development (TDD)** principles:
+- `agents.md`: 운영 규칙과 개발 원칙
+- `plan.md`: 리팩터링/개선 계획과 현황
+- `src/`: 실행 코드
+- `.github/workflows/lottery.yml`: GitHub Actions 워크플로
 
-```
-.spec/         → Functional specifications (What)
-.tasks/        → Task backlog and tracking (When/What next)
-.governance/   → Project memory and patterns (How/Why)
-src/           → Implementation code
-```
+## 설치
 
-## Project Structure
+### 사전 준비
 
-```
-dhlottery-worker/
-├── .governance/           # Project memory and coding standards
-│   ├── memory.md         # Session memory and learnings
-│   ├── coding-style.md   # Code conventions
-│   ├── patterns.md       # Design patterns
-│   └── env.yaml          # Environment configuration
-├── .spec/                # Feature specifications
-│   ├── session-management/
-│   ├── authentication/
-│   ├── account-info/
-│   ├── deposit-check/
-│   ├── lotto-purchase/
-│   ├── winning-check/
-│   └── telegram-notification/
-├── .tasks/               # Task management
-│   ├── backlog.yaml     # Pending tasks
-│   ├── current.yaml     # Active task
-│   └── done.yaml        # Completed tasks
-└── src/                 # Source code
-    ├── index.ts         # Entry point
-    ├── client/          # HTTP client
-    ├── dhlottery/       # DHLottery integration
-    ├── notify/          # Notification services
-    ├── types/           # Type definitions
-    └── utils/           # Utilities
-```
+- Bun 1.x
+- GitHub 계정 (GitHub Actions 사용)
+- DHLottery 계정
+- Telegram 봇
 
-## Setup
+### 설치 방법
 
-### Prerequisites
-
-- Node.js 18+
-- GitHub account (for GitHub Actions)
-- DHLottery account
-- Telegram bot
-
-### Installation
-
-1. Clone repository:
+1. 저장소 클론:
 ```bash
 git clone <repository-url>
 cd dhlottery-worker
 ```
 
-2. Install dependencies:
+2. 의존성 설치:
 ```bash
-npm install
+bun install
 ```
 
-3. Configure GitHub Secrets:
-   - Go to your repository Settings → Secrets and variables → Actions
-   - Add the following secrets:
-     - `USER_ID`: Your DHLottery user ID
-     - `PASSWORD`: Your DHLottery password
-     - `TELEGRAM_BOT_TOKEN`: Your Telegram bot token
-     - `TELEGRAM_CHAT_ID`: Your Telegram chat ID
+3. GitHub Secrets 설정:
+   - 저장소 Settings → Secrets and variables → Actions
+   - 다음 항목 추가:
+     - `USER_ID`: DHLottery 사용자 ID
+     - `PASSWORD`: DHLottery 비밀번호
+     - `TELEGRAM_BOT_TOKEN`: Telegram 봇 토큰
+     - `TELEGRAM_CHAT_ID`: Telegram 채팅 ID
 
-### Development
+## 개발
 
-Run locally (requires .env file with secrets):
+로컬 실행 (.env 파일 필요):
 ```bash
-npm start
+bun run start
 ```
 
-Run tests:
+테스트 실행:
 ```bash
-npm test
+bun run test
 ```
 
-Run tests in watch mode:
+테스트 감시 모드:
 ```bash
-npm run test:watch
+bun run test:watch
 ```
 
-Type check:
+타입 체크:
 ```bash
-npm run typecheck
+bun run typecheck
 ```
 
-### Deployment
+## 배포
 
-The service runs automatically via GitHub Actions:
-- **Schedule**: Every Monday at 10:00 AM KST (01:00 UTC)
-- **Workflow**: `.github/workflows/lottery.yml`
-- **Manual trigger**: Use "Run workflow" button in GitHub Actions tab
+GitHub Actions로 자동 실행됩니다.
 
-To deploy changes:
-1. Push to `main` branch
-2. GitHub Actions will automatically use the updated code on next scheduled run
+- **스케줄**: 매주 월요일 10:00 KST (01:00 UTC)
+- **워크플로**: `.github/workflows/lottery.yml`
+- **수동 실행**: GitHub Actions 탭에서 “Run workflow” 사용
 
-## Workflow
+## 실행 흐름
 
-The service executes automatically every Monday at 10:00 AM KST:
+1. **세션 초기화** → GET `/login` (DHJSESSIONID 쿠키 발급)
+2. **RSA 키 조회** → GET `/login/selectRsaModulus.do`
+3. **인증** → POST `/login/securityLoginCheck.do` (RSA 암호화 로그인)
+4. **계정 조회** → 잔액 `/mypage/selectUserMndp.do`, 회차 `/lt645/selectThsLt645Info.do`
+5. **잔액 확인** → 최소 잔액(5,000원) 확인
+6. **구매** → `/olotto/game/egovUserReadySocket.json` → `/olotto/game/execBuy.do`
+7. **당첨 확인** → `/myPage.do?method=lottoBuyList`
+8. **알림** → Telegram 메시지 전송
 
-1. **Initialize session** → GET `common.do?method=main` to capture initial cookies
-2. **Authenticate** → POST login with session cookies and browser headers
-3. **Check account** → Fetch balance from My Page (`myPage.do`) and round from lottery API
-4. **Verify deposit** → Ensure sufficient balance (≥5,000 KRW)
-5. **Purchase lottery** → Two-phase purchase: ready socket → execute with auto-generated numbers
-6. **Check winning** → Verify previous week's results (Mon-Sun KST) for rank 1 jackpots
-7. **Notify** → Send Telegram message with purchase and winning results
+## 비즈니스 규칙
 
-## Business Rules
+- **최소 잔액**: 5,000원 (5게임 × 1,000원)
+- **구매 방식**: 자동 번호 생성 (genType "0")
+- **당첨 확인 범위**: 이전 주(월~일, KST), 1등만 알림
+- **실행 시간**: 매주 월요일 10:00 KST
 
-- **Minimum deposit**: 5,000 KRW (exact purchase cost)
-- **Purchase amount**: 5 games × 1,000 KRW = 5,000 KRW
-- **Purchase mode**: Automatic number generation (genType "0")
-- **Winning check**: Previous Monday-Sunday (KST), rank 1 (jackpot) only
-- **Weekly limit**: DHLottery enforces 5,000 KRW/week per account
-- **Execution**: Every Monday 10:00 KST (purchases for upcoming Saturday draw)
+## 보안
 
-## Security
+- 모든 인증 정보는 GitHub Secrets로 관리
+- 로그/코드에 민감 정보 저장 금지
+- 상태 없는 실행 (영구 저장 없음)
+- 개인 용도 전제
 
-- All credentials stored in GitHub Secrets
-- No sensitive data in logs or code
-- Stateless execution (no persistent storage)
-- Single-user, personal use only
+## 테스트
 
-## Testing
+이 프로젝트는 **TDD(Test-Driven Development)**를 따릅니다.
 
-This project uses **Test-Driven Development (TDD)** and **Spec-Driven Development (SDD)**:
+1. 테스트부터 작성 (RED)
+2. 최소 구현으로 통과 (GREEN)
+3. 구조 개선 (REFACTOR)
 
-1. Write specification in `.spec/` (Given-When-Then scenarios)
-2. Create tests first (RED)
-3. Implement minimal code to pass (GREEN)
-4. Refactor while keeping tests green (REFACTOR)
+### 테스트 커버리지
 
-### Test Coverage
-- **161 tests** (2 skipped) covering all modules (auth, account, purchase, winning, notifications, utilities)
-- Fixture-based testing with real HTML samples from DHLottery
-- Mock HTTP client for deterministic test behavior
-- Isolated unit tests per module with spec traceability
+- **161개 테스트** (2개 스킵)
+- DHLottery 실 HTML 기반 픽스처
+- HTTP 클라이언트 모킹으로 결정적 테스트
 
-Run tests:
+## 유지보수
+
+### 기능 추가 절차
+
+1. `plan.md`에 작업 목적/범위 정리
+2. 테스트 작성 후 구현 (RED → GREEN → REFACTOR)
+3. 변경 사항을 `agents.md` 규칙에 맞게 정리
+
+### 디버깅
+
+GitHub Actions 로그 확인:
+- Actions 탭 → 최신 워크플로 → “Run lottery workflow” 단계
+
+로컬 테스트 상세 로그:
 ```bash
-npm test                # Run all tests once
-npm run test:watch     # Run tests in watch mode
+bun run test -- --reporter=verbose
 ```
 
-## Maintenance
-
-### Adding new features
-
-1. Create spec in `.spec/[feature-name]/spec.yaml` with GWT scenarios
-2. Add task to `.tasks/backlog.yaml` with spec_id reference
-3. Move task to `.tasks/current.yaml` 
-4. Implement following RED → GREEN → REFACTOR cycle
-5. Update `.governance/memory.md` with learnings and patterns
-6. Move task to `.tasks/done.yaml` with outcome notes
-
-### Debugging
-
-View GitHub Actions logs:
-- Go to Actions tab in your repository
-- Click on the latest workflow run
-- Check the "Run lottery workflow" step for logs
-
-Check local test execution:
+디버그 모드:
 ```bash
-npm test -- --reporter=verbose
+DEBUG=true bun run start
 ```
 
-Enable debug mode:
-```bash
-# Set DEBUG=true in src/constants.ts or use environment variable
-DEBUG=true npm start
-```
+## 구현 메모
 
-## License
+### 인증 흐름 (2026-01 기준)
+- 세션 초기화 후 RSA 키 조회 및 암호화 로그인 수행
+- 로그인 응답이 3xx일 수 있으며, `loginSuccess.do` 포함 여부로 성공 판단
+- 리다이렉트는 수동 처리
 
-MIT
+### 계정 정보
+- 잔액: `/mypage/selectUserMndp.do` JSON API (`crntEntrsAmt`)
+- 회차: `/lt645/selectThsLt645Info.do` JSON API (`ltEpsd`)
 
-## Implementation Notes
+### 구매 프로토콜
+- 2단계 원자적 구매 (ready → exec)
+- 필요 헤더 및 날짜 파라미터 포함
+- 실패 시 전체 흐름 중단 없이 알림 처리
 
-### Authentication Flow (Verified Dec 2025)
-- Requires two-phase authentication: session init + login
-- GET `common.do?method=main` first to acquire initial cookies
-- POST login with browser-like headers (User-Agent, X-Requested-With, Referer, etc.)
-- Success indicated by HTML response with `goNextPage` function (NOT JSON)
-- Prevents session loss by NOT following redirect after successful login
+### 당첨 확인
+- 이전 주 구매 내역만 조회, 1등만 알림
+- 파싱 실패는 빈 결과로 종료
 
-### Account Info Retrieval
-- Fetches both Main Page and My Page to handle potential 302 redirects
-- Parses balance from HTML using regex (requires '원' suffix)
-- Determines current lottery round via fallback binary search + API call
+## 참고
 
-### Purchase Protocol
-- Two-phase atomic transaction: ready socket init → execute with round number
-- Auto-generates 5 games using genType "0"
-- Returns resultCode "100" on success, "-7" if hitting weekly limit
-- Non-fatal: failures logged and notified, do not crash workflow
+- [roeniss/dhlottery-api](https://github.com/roeniss/dhlottery-api)
 
-### Winning Check
-- Scans previous week's purchase history (Monday 00:00 ~ Sunday 23:59:59 KST)
-- Parses HTML table and filters rank 1 (jackpot) wins only
-- Non-fatal: parsing errors return empty, never crash workflow
+## 면책
 
-## References
-
-This project was developed with reference to [roeniss/dhlottery-api](https://github.com/roeniss/dhlottery-api), a comprehensive DHLottery API library.
-
-## Disclaimer
-
-This is a personal automation tool for individual use only. Not for commercial purposes.
+개인 자동화 도구이며 상업적 사용을 금지합니다.

@@ -16,13 +16,13 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
         with:
-          cache: "npm"
+          bun-version: "latest"
 
       - name: Install dependencies
-        run: npm ci
+        run: bun install
 
       - name: Run lottery workflow
         env:
@@ -30,7 +30,7 @@ jobs:
           PASSWORD: ${{ secrets.PASSWORD }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: npx tsx src/run.ts
+        run: bun run start
 
       - name: Notify on failure
         if: failure()
