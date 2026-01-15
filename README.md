@@ -21,7 +21,7 @@ DHLottery(동행복권) 자동 구매와 알림을 위한 GitHub Actions 기반 
 
 ### 사전 준비
 
-- Node.js 18+
+- Bun 1.x
 - GitHub 계정 (GitHub Actions 사용)
 - DHLottery 계정
 - Telegram 봇
@@ -36,7 +36,7 @@ cd dhlottery-worker
 
 2. 의존성 설치:
 ```bash
-npm install
+bun install
 ```
 
 3. GitHub Secrets 설정:
@@ -51,22 +51,22 @@ npm install
 
 로컬 실행 (.env 파일 필요):
 ```bash
-npm start
+bun run start
 ```
 
 테스트 실행:
 ```bash
-npm test
+bun run test
 ```
 
 테스트 감시 모드:
 ```bash
-npm run test:watch
+bun run test:watch
 ```
 
 타입 체크:
 ```bash
-npm run typecheck
+bun run typecheck
 ```
 
 ## 배포
@@ -131,12 +131,12 @@ GitHub Actions 로그 확인:
 
 로컬 테스트 상세 로그:
 ```bash
-npm test -- --reporter=verbose
+bun run test -- --reporter=verbose
 ```
 
 디버그 모드:
 ```bash
-DEBUG=true npm start
+DEBUG=true bun run start
 ```
 
 ## 구현 메모
