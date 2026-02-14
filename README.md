@@ -59,6 +59,16 @@ bun run start
 bun run test
 ```
 
+커버리지 실행:
+```bash
+bun run test:coverage
+```
+
+CI 커버리지 게이트 실행:
+```bash
+bun run test:coverage:ci
+```
+
 테스트 감시 모드:
 ```bash
 bun run test:watch
@@ -112,9 +122,20 @@ GitHub Actions로 자동 실행됩니다.
 
 ### 테스트 커버리지
 
-- **161개 테스트** (2개 스킵)
+- 커버리지 임계치(글로벌):
+  - Statements: **85%**
+  - Branches: **75%**
+  - Functions: **85%**
+  - Lines: **85%**
 - DHLottery 실 HTML 기반 픽스처
 - HTTP 클라이언트 모킹으로 결정적 테스트
+
+#### 커버리지 트러블슈팅
+
+- `Cannot find dependency '@vitest/coverage-v8'` 오류가 발생하면 의존성을 다시 설치하세요:
+  ```bash
+  bun install
+  ```
 
 ## 유지보수
 

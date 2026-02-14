@@ -32,3 +32,14 @@ jobs:
 
       - name: Test
         run: bun run test
+
+      - name: Coverage gate
+        run: bun run test:coverage:ci
+
+      - name: Upload coverage artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage
+          if-no-files-found: error

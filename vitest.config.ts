@@ -13,8 +13,15 @@ export default defineConfig({
     silent: true,
     coverage: {
       provider: 'v8',
-      reporter: ['text', 'json', 'html'],
+      include: ['src/**/*.ts'],
+      reporter: ['text', 'json', 'html', 'lcov'],
       exclude: ['node_modules/', 'src/**/*.test.ts', 'src/__fixtures__/', 'src/types/'],
+      thresholds: {
+        lines: 85,
+        functions: 85,
+        branches: 75,
+        statements: 85,
+      },
     },
   },
   resolve: {
