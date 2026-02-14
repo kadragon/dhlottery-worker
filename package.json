@@ -9,7 +9,7 @@
     "test": "vitest run",
     "test:watch": "vitest --watch",
     "test:coverage": "vitest run --coverage",
-    "test:coverage:ci": "vitest run --coverage --reporter=default",
+    "test:coverage:ci": "vitest run --coverage",
     "typecheck": "tsc --noEmit",
     "format": "biome format .",
     "format:fix": "biome format --write .",
