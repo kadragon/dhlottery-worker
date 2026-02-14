@@ -10,6 +10,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { beforeEach, describe, expect, it, vi, afterEach } from "vitest";
 import type { HttpClient, HttpResponse } from "../types";
+import { DHLotteryError } from "../utils/errors";
 import {
   WINNING_PATTERNS,
   calculatePreviousWeekRange,
@@ -73,6 +74,23 @@ describe("Winning Check", () => {
     it("should throw for invalid now date", () => {
       expect(() => calculatePreviousWeekRange(new Date("invalid"))).toThrow();
     });
+
+    it("should wrap non-DHLottery errors from date utilities", async () => {
+      const dateUtils = await import("../utils/date");
+      const spy = vi
+        .spyOn(dateUtils, "calculatePreviousWeekRangeKst")
+        .mockImplementation(() => {
+          throw new Error("unexpected range failure");
+        });
+
+      try {
+        expect(() => calculatePreviousWeekRange(new Date("2025-12-15T10:00:00+09:00"))).toThrow(
+          new DHLotteryError("Invalid date range computed", "WINNING_INVALID_DATE_RANGE"),
+        );
+      } finally {
+        spy.mockRestore();
+      }
+    });
   });
 
   /**
@@ -133,6 +151,23 @@ describe("Winning Check", () => {
         prizeAmount: 65000000,
         matchCount: 5,
       });
+    });
+
+    it("should skip rows with invalid numeric fields", () => {
+      const invalidRowHtml = `
+        <tr>
+          <td>2025-12-10</td>
+          <td>로또6/45</td>
+          <td><a href="#">상세</a></td>
+          <td>5</td>
+          <td>1등 (일치 6개)</td>
+          <td>1,000,000,000원</td>
+          <td>2025-12-13</td>
+        </tr>
+      `;
+
+      const results = parseWinningResultsFromHtml(invalidRowHtml);
+      expect(results).toEqual([]);
     });
   });
 
@@ -365,6 +400,34 @@ describe("Winning Check", () => {
       ).resolves.toEqual([]);
 
       expect(textSpy).not.toHaveBeenCalled();
+    });
+
+    it("should return empty and stringify non-Error failures during HTML read", async () => {
+      const { logger } = await import("../utils/logger");
+      const loggerSpy = vi.spyOn(logger, "error").mockImplementation(() => undefined);
+
+      vi.mocked(mockHttpClient.fetch).mockResolvedValue({
+        status: 200,
+        statusText: "OK",
+        headers: new Headers(),
+        text: async () => {
+          throw "decode failed";
+        },
+        json: async () => ({}),
+      } as unknown as HttpResponse);
+
+      try {
+        await expect(
+          checkWinning(mockHttpClient, new Date("2025-12-15T10:00:00+09:00")),
+        ).resolves.toEqual([]);
+
+        expect(loggerSpy).toHaveBeenCalledWith("Winning check failed (non-fatal)", {
+          event: "winning_check_failed",
+          error: "decode failed",
+        });
+      } finally {
+        loggerSpy.mockRestore();
+      }
     });
   });
 });
