@@ -54,9 +54,6 @@ export class DHLotteryClient {
    * @returns true if balance is sufficient, false otherwise
    */
   async checkDeposit(requiredAmount?: number): Promise<boolean> {
-    if (requiredAmount === undefined) {
-      return await checkDeposit(this.client);
-    }
     return await checkDeposit(this.client, requiredAmount);
   }
 

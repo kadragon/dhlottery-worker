@@ -63,7 +63,7 @@ describe('DHLotteryClient', () => {
 
   it('TEST-ARCH-002: should delegate checkDeposit to charge module', async () => {
     await client.checkDeposit();
-    expect(chargeModule.checkDeposit).toHaveBeenCalledWith(expect.anything());
+    expect(chargeModule.checkDeposit).toHaveBeenCalledWith(expect.anything(), undefined);
   });
 
   it('should delegate checkDeposit with required amount to charge module', async () => {

@@ -12,15 +12,6 @@ describe('Pension EL crypto', () => {
     expect(decrypted).toBe(plain);
   });
 
-  it('should decrypt payload that was URL-encoded twice', () => {
-    const plain = 'q=test+value&arr=A%2CB';
-    const encrypted = encryptElQ(plain, sessionId);
-    const doubleEncoded = encodeURIComponent(encrypted);
-    const decrypted = decryptElQ(doubleEncoded, sessionId);
-
-    expect(decrypted).toBe(plain);
-  });
-
   it('should throw when session id is missing or too short', () => {
     expect(() => encryptElQ('test', '')).toThrow('Session cookie is missing');
     expect(() => decryptElQ('abc', 'short-session')).toThrow('Session cookie is missing');

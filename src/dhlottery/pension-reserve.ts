@@ -18,6 +18,7 @@ import type {
 } from '../types';
 import { DHLotteryError } from '../utils/errors';
 import { formatKoreanNumber } from '../utils/format';
+import { logger } from '../utils/logger';
 import { decryptElQ, encryptElQ } from './pension-crypto';
 
 const EL_BASE_URL = 'https://el.dhlottery.co.kr';
@@ -27,6 +28,8 @@ const ROUND_REMAIN_TIME_URL = `${EL_BASE_URL}/roundRemainTime.do`;
 const CHECK_DEPOSIT_URL = `${EL_BASE_URL}/checkDeposit.do`;
 const CHECK_MY_RESERVE_URL = `${EL_BASE_URL}/checkMyReserve.do`;
 const ADD_MY_RESERVE_URL = `${EL_BASE_URL}/addMyReserve.do`;
+// Empty form serialized from the reservation page's frmAuto; accepted as-is by
+// roundRemainTime.do and checkDeposit.do for session-scoped queries.
 const FRM_AUTO_SERIALIZED = 'ROUND=&SEL_NO=&BUY_CNT=&AUTO_SEL_SET=&SEL_CLASS=&ACCS_TYPE=01';
 const TICKET_COUNT = 5;
 
@@ -41,10 +44,15 @@ function createAjaxHeaders(referer: string): Record<string, string> {
 }
 
 function getSessionId(client: HttpClient): string {
+  // el.dhlottery.co.kr uses JSESSIONID; fall back to DHJSESSIONID (main site)
+  // in case the EL bootstrap sets its own session under a different key.
   const sessionId = client.cookies.JSESSIONID || client.cookies.DHJSESSIONID;
   if (!sessionId) {
     throw new DHLotteryError('Missing session cookie for pension reserve', 'PENSION_AUTH_MISSING');
   }
+  logger.debug('Using session cookie for EL encryption', {
+    cookieKey: client.cookies.JSESSIONID ? 'JSESSIONID' : 'DHJSESSIONID',
+  });
   return sessionId;
 }
 
@@ -53,6 +61,7 @@ function addDaysToYmd(dateStr: string, days: number): string {
     ? dateStr
     : `${dateStr.slice(0, 4)}-${dateStr.slice(4, 6)}-${dateStr.slice(6, 8)}`;
   const [year, month, day] = normalized.split('-').map((part) => Number(part));
+  // Date.UTC month is 0-indexed (0 = January), so subtract 1 from the parsed month.
   const utcDate = new Date(Date.UTC(year, month - 1, day));
   utcDate.setUTCDate(utcDate.getUTCDate() + days);
   const nextYear = utcDate.getUTCFullYear();
@@ -78,8 +87,8 @@ function buildReserveFormPayload(params: {
     repeatRoundCnt: '1',
     totalBuyAmt: String(PENSION_RESERVE_COST),
     totalBuyCnt: String(TICKET_COUNT),
-    moneyBalance: '0/',
-    couponBalance: '0/',
+    moneyBalance: '0/', // trailing slash is the site's serialized format (not a typo)
+    couponBalance: '0/', // trailing slash is the site's serialized format (not a typo)
     nextRound: String(params.nextRound),
     repeatClass: '5',
     roundBuyCnt: '1',
@@ -156,7 +165,7 @@ async function fetchRoundRemainTime(client: HttpClient): Promise<{
   const nextDrawDate = addDaysToYmd(data.DRAW_DATE, 7);
   return {
     currentRound,
-    nextRound: currentRound + 1,
+    nextRound: currentRound + 1, // pension draws are weekly and sequential
     nextDrawDateDot: toDotDate(nextDrawDate),
   };
 }
@@ -378,14 +387,19 @@ export async function reservePensionNextWeek(client: HttpClient): Promise<Pensio
     return success;
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
+    // DHLotteryError carries a structured code from the API or our own error constants;
+    // generic runtime errors (TypeError, SyntaxError, etc.) get a fallback code.
+    const errorCode =
+      error instanceof DHLotteryError ? error.code : 'PENSION_UNEXPECTED_ERROR';
     await sendNotification({
       type: 'error',
       title: 'Pension Reserve Failed',
       message: `연금복권 예약 중 오류가 발생했습니다: ${errorMessage}`,
       details: {
+        오류코드: errorCode,
         대상회차: targetRound ? `${targetRound}회` : undefined,
       },
     });
-    return createFailure(errorMessage, undefined, targetRound);
+    return createFailure(errorMessage, errorCode, targetRound);
   }
 }

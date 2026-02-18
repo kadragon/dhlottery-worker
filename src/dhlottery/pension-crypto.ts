@@ -11,6 +11,7 @@
 import crypto from 'node:crypto';
 import { DHLotteryError } from '../utils/errors';
 
+// Low by modern standards, but reverse-engineered to match DHLottery's jsbn.js implementation exactly.
 const PBKDF2_ITERATIONS = 1000;
 const KEY_BYTES = 16; // 128-bit
 const SALT_BYTES = 32;
@@ -33,18 +34,13 @@ function deriveKey(passphrase: string, salt: Buffer): Buffer {
 }
 
 function decodePossiblyEncoded(input: string): string {
-  let decoded = input;
-  for (let i = 0; i < 2; i += 1) {
-    if (!decoded.includes('%')) {
-      break;
-    }
-    try {
-      decoded = decodeURIComponent(decoded);
-    } catch {
-      break;
-    }
+  // encryptElQ URL-encodes its output once; the API response is JSON which
+  // does not add further encoding, so a single decode is always sufficient.
+  try {
+    return decodeURIComponent(input);
+  } catch {
+    return input;
   }
-  return decoded;
 }
 
 export function encryptElQ(plainText: string, sessionId: string): string {

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { PENSION_RESERVE_COST } from '../constants';
 import type { HttpClient } from '../types';
+import { DHLotteryError } from '../utils/errors';
 import { reservePensionNextWeek } from './pension-reserve';
 
 vi.mock('../notify/telegram', () => ({
@@ -188,6 +189,44 @@ describe('pension reserve', () => {
       expect.objectContaining({
         type: 'error',
         title: 'Pension Reserve Failed',
+      })
+    );
+  });
+
+  it('should include DHLotteryError code in failure when bootstrap throws', async () => {
+    fetchMock.mockRejectedValueOnce(
+      new DHLotteryError('EL session failed', 'PENSION_BOOTSTRAP_FAILED')
+    );
+
+    const result = await reservePensionNextWeek(mockClient);
+
+    expect(result).toMatchObject({
+      status: 'failure',
+      success: false,
+      code: 'PENSION_BOOTSTRAP_FAILED',
+    });
+    expect(sendNotification).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'error',
+        details: expect.objectContaining({ 오류코드: 'PENSION_BOOTSTRAP_FAILED' }),
+      })
+    );
+  });
+
+  it('should use PENSION_UNEXPECTED_ERROR code when a generic error is thrown', async () => {
+    fetchMock.mockRejectedValueOnce(new TypeError('fetch failed'));
+
+    const result = await reservePensionNextWeek(mockClient);
+
+    expect(result).toMatchObject({
+      status: 'failure',
+      success: false,
+      code: 'PENSION_UNEXPECTED_ERROR',
+    });
+    expect(sendNotification).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'error',
+        details: expect.objectContaining({ 오류코드: 'PENSION_UNEXPECTED_ERROR' }),
       })
     );
   });
