@@ -7,12 +7,19 @@
  */
 
 import { createHttpClient } from '../client/http';
-import type { AccountInfo, HttpClient, PurchaseOutcome, WinningResult } from '../types';
+import type {
+  AccountInfo,
+  HttpClient,
+  PensionReserveOutcome,
+  PurchaseOutcome,
+  WinningResult,
+} from '../types';
 import { getAccountInfo } from './account';
 import { login } from './auth';
 import { purchaseLottery } from './buy';
 import { checkDeposit } from './charge';
 import { checkWinning } from './check';
+import { reservePensionNextWeek } from './pension-reserve';
 
 export class DHLotteryClient {
   private client: HttpClient;
@@ -46,8 +53,15 @@ export class DHLotteryClient {
    * Check deposit balance and initialize charge if needed
    * @returns true if balance is sufficient, false otherwise
    */
-  async checkDeposit(): Promise<boolean> {
-    return await checkDeposit(this.client);
+  async checkDeposit(requiredAmount?: number): Promise<boolean> {
+    return await checkDeposit(this.client, requiredAmount);
+  }
+
+  /**
+   * Reserve next week's pension 720+ ticket (1 round, all groups, 1 ticket each)
+   */
+  async reservePensionNextWeek(): Promise<PensionReserveOutcome> {
+    return await reservePensionNextWeek(this.client);
   }
 
   /**

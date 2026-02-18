@@ -13,6 +13,7 @@ import * as accountModule from './account';
 import * as chargeModule from './charge';
 import * as buyModule from './buy';
 import * as checkModule from './check';
+import * as pensionReserveModule from './pension-reserve';
 
 // Mock dependencies
 vi.mock('./auth');
@@ -20,6 +21,7 @@ vi.mock('./account');
 vi.mock('./charge');
 vi.mock('./buy');
 vi.mock('./check');
+vi.mock('./pension-reserve');
 vi.mock('../client/http', () => ({
   createHttpClient: vi.fn(() => ({
     fetch: vi.fn(),
@@ -61,7 +63,12 @@ describe('DHLotteryClient', () => {
 
   it('TEST-ARCH-002: should delegate checkDeposit to charge module', async () => {
     await client.checkDeposit();
-    expect(chargeModule.checkDeposit).toHaveBeenCalledWith(expect.anything());
+    expect(chargeModule.checkDeposit).toHaveBeenCalledWith(expect.anything(), undefined);
+  });
+
+  it('should delegate checkDeposit with required amount to charge module', async () => {
+    await client.checkDeposit(10000);
+    expect(chargeModule.checkDeposit).toHaveBeenCalledWith(expect.anything(), 10000);
   });
 
   it('TEST-ARCH-002: should delegate buy to buy module', async () => {
@@ -73,6 +80,11 @@ describe('DHLotteryClient', () => {
     const now = new Date();
     await client.checkWinning(now);
     expect(checkModule.checkWinning).toHaveBeenCalledWith(expect.anything(), now);
+  });
+
+  it('should delegate pension reserve to pension-reserve module', async () => {
+    await client.reservePensionNextWeek();
+    expect(pensionReserveModule.reservePensionNextWeek).toHaveBeenCalledWith(expect.anything());
   });
 
   /**

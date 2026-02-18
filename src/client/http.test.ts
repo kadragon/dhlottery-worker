@@ -61,6 +61,23 @@ describe("HTTP Client - Session Management", () => {
 			expect(client.cookies.JSESSIONID).toBe("abc123");
 		});
 
+		it("should preserve cookie value containing equals signs", async () => {
+			// Arrange
+			const client = createHttpClient();
+			const mockHeaders = new Headers({
+				"set-cookie": "DHJSESSIONID=abc.def==; Path=/; HttpOnly",
+			});
+
+			mockFetch.mockResolvedValue(createMockResponse(200, mockHeaders));
+
+			// Act
+			await client.fetch("https://example.com");
+
+			// Assert
+			expect(client.cookies).toHaveProperty("DHJSESSIONID");
+			expect(client.cookies.DHJSESSIONID).toBe("abc.def==");
+		});
+
 		it("should capture multiple cookies from Set-Cookie header", async () => {
 			// Arrange
 			const client = createHttpClient();

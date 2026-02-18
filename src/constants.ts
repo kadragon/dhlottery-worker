@@ -40,6 +40,16 @@ export const COST_PER_GAME = 1000;
 export const TOTAL_PURCHASE_COST = GAMES_PER_PURCHASE * COST_PER_GAME;
 
 /**
+ * Pension 720+ reserve amount per run in KRW
+ */
+export const PENSION_RESERVE_COST = 5000;
+
+/**
+ * Minimum balance required to run both pension reserve and lotto purchase
+ */
+export const WEEKLY_COMBINED_REQUIRED_BALANCE = TOTAL_PURCHASE_COST + PENSION_RESERVE_COST;
+
+/**
  * Browser-like User-Agent for requests
  */
 export const USER_AGENT =

@@ -11,7 +11,7 @@ import { checkDeposit } from './charge';
 import type { HttpClient } from '../types';
 import * as accountModule from './account';
 import * as telegramModule from '../notify/telegram';
-import { MIN_DEPOSIT_AMOUNT, USER_AGENT } from '../constants';
+import { MIN_DEPOSIT_AMOUNT, USER_AGENT, WEEKLY_COMBINED_REQUIRED_BALANCE } from '../constants';
 
 // Mock modules
 vi.mock('./account');
@@ -354,6 +354,41 @@ describe('checkDeposit', () => {
     it('should verify threshold value is 5,000', () => {
       // Then: Constant value is exactly 5,000 (same as purchase cost)
       expect(MIN_DEPOSIT_AMOUNT).toBe(5000);
+    });
+  });
+
+  describe('Custom threshold', () => {
+    it('should allow custom required amount for combined weekly execution', async () => {
+      vi.mocked(accountModule.getAccountInfo).mockResolvedValue({
+        balance: WEEKLY_COMBINED_REQUIRED_BALANCE,
+        currentRound: 1200,
+      });
+
+      const result = await checkDeposit(mockClient, WEEKLY_COMBINED_REQUIRED_BALANCE);
+
+      expect(result).toBe(true);
+      expect(telegramModule.sendNotification).not.toHaveBeenCalled();
+    });
+
+    it('should include custom minimumRequired value in warning notification', async () => {
+      vi.mocked(accountModule.getAccountInfo).mockResolvedValue({
+        balance: 9000,
+        currentRound: 1200,
+      });
+
+      vi.mocked(mockClient.fetch).mockResolvedValue({
+        status: 200,
+        statusText: 'OK',
+        headers: new Headers(),
+        text: async () => '<html></html>',
+        json: async <T>() => ({}) as T,
+      });
+
+      await checkDeposit(mockClient, WEEKLY_COMBINED_REQUIRED_BALANCE);
+
+      const notificationCall = vi.mocked(telegramModule.sendNotification).mock.calls[0];
+      const payload = notificationCall[0];
+      expect(payload.details).toHaveProperty('minimumRequired', '10,000원');
     });
   });
 

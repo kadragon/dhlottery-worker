@@ -6,6 +6,7 @@
  *   task_id: TASK-008, TASK-011, TASK-GHACTION-001
  */
 
+import { TOTAL_PURCHASE_COST } from './constants';
 import { DHLotteryClient } from './dhlottery/client';
 import { sendNotification } from './notify/telegram';
 
@@ -32,13 +33,14 @@ export async function runWorkflow(now: Date = new Date()): Promise<void> {
 
     let canPurchase: boolean;
     try {
-      canPurchase = await client.checkDeposit();
+      canPurchase = await client.checkDeposit(TOTAL_PURCHASE_COST);
     } catch (error) {
       await notifyOrchestrationError(error);
       return;
     }
 
     if (canPurchase) {
+      await client.reservePensionNextWeek();
       await client.buy();
     }
 
