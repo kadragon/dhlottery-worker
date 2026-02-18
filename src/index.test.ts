@@ -86,7 +86,7 @@ describe("Main Orchestration - runWorkflow", () => {
 
     expect(createHttpClient).toHaveBeenCalledTimes(1);
     expect(login).toHaveBeenCalledTimes(1);
-    expect(checkDeposit).toHaveBeenCalledWith(expect.anything(), 10000);
+    expect(checkDeposit).toHaveBeenCalledWith(expect.anything(), 5000);
     expect(reservePensionNextWeek).toHaveBeenCalledTimes(1);
     expect(purchaseLottery).toHaveBeenCalledTimes(1);
     expect(checkWinning).toHaveBeenCalledTimes(1);
@@ -173,6 +173,24 @@ describe("Main Orchestration - runWorkflow", () => {
       }),
     );
     expect(checkWinning).not.toHaveBeenCalled();
+  });
+
+  it("TEST-ORCH-007: should buy lotto when balance is 5000 (lotto-only range, pension precheck skipped)", async () => {
+    (checkDeposit as Mock).mockResolvedValue(true); // sufficient for lotto (5000)
+    (reservePensionNextWeek as Mock).mockResolvedValue({
+      status: "failure",
+      success: false,
+      skipped: false,
+      error: "insufficient pension deposit",
+    });
+
+    const { runWorkflow } = await import("./index");
+
+    await runWorkflow(new Date("2025-12-15T00:00:00.000Z"));
+
+    // checkDeposit must be called with lotto-only minimum, not combined 10000
+    expect(checkDeposit).toHaveBeenCalledWith(expect.anything(), 5000);
+    expect(purchaseLottery).toHaveBeenCalledTimes(1);
   });
 
   it("should notify when checkWinning throws", async () => {
