@@ -20,7 +20,7 @@ import type {
 import { PURCHASE_CONSTANTS } from '../types/purchase.types';
 import { getNextSaturdayKst } from '../utils/date';
 import { PurchaseError } from '../utils/errors';
-import { formatKoreanNumber } from '../utils/format';
+import { formatCurrency, formatKoreanNumber } from '../utils/format';
 import { logger } from '../utils/logger';
 import { getAccountInfo } from './account';
 
@@ -164,6 +164,7 @@ export async function purchaseLottery(client: HttpClient): Promise<PurchaseOutco
           회차: `${roundNumber}회`,
           게임수: `${PURCHASE_CONSTANTS.GAME_COUNT}게임`,
           결제금액: `${formatKoreanNumber(PURCHASE_CONSTANTS.TOTAL_COST)}원`,
+          잔액: formatCurrency(accountInfo.balance - PURCHASE_CONSTANTS.TOTAL_COST),
         },
       });
 
