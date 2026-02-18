@@ -15,7 +15,12 @@ import type { CookieStore, HttpClient, HttpRequestOptions, HttpResponse } from '
 function parseCookie(setCookieValue: string): { name: string; value: string } {
   const parts = setCookieValue.split(';');
   const cookiePair = parts[0].trim();
-  const [name, value] = cookiePair.split('=');
+  const equalIndex = cookiePair.indexOf('=');
+  if (equalIndex < 0) {
+    return { name: cookiePair, value: '' };
+  }
+  const name = cookiePair.slice(0, equalIndex);
+  const value = cookiePair.slice(equalIndex + 1);
   return { name: name.trim(), value: value?.trim() || '' };
 }
 

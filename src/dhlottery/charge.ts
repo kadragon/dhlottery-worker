@@ -57,12 +57,15 @@ async function initializeChargePage(client: HttpClient): Promise<boolean> {
  * @returns true if purchase can proceed, false if charge is needed
  * @throws Error if account info cannot be retrieved (fail-safe)
  */
-export async function checkDeposit(client: HttpClient): Promise<boolean> {
+export async function checkDeposit(
+  client: HttpClient,
+  requiredAmount: number = MIN_DEPOSIT_AMOUNT
+): Promise<boolean> {
   // Fetch current account information
   const accountInfo = await getAccountInfo(client);
 
   // Check if balance is sufficient
-  if (accountInfo.balance >= MIN_DEPOSIT_AMOUNT) {
+  if (accountInfo.balance >= requiredAmount) {
     // Balance is sufficient - proceed with purchase
     return true;
   }
@@ -71,7 +74,7 @@ export async function checkDeposit(client: HttpClient): Promise<boolean> {
   logger.debug('Insufficient balance detected', {
     event: 'insufficient_balance',
     balance: accountInfo.balance,
-    required: MIN_DEPOSIT_AMOUNT,
+    required: requiredAmount,
   });
 
   // Initialize charge page
@@ -85,7 +88,7 @@ export async function checkDeposit(client: HttpClient): Promise<boolean> {
       message: '충전 페이지 초기화에 실패했습니다. 수동으로 입금해주세요.',
       details: {
         currentBalance: formatCurrency(accountInfo.balance),
-        minimumRequired: formatCurrency(MIN_DEPOSIT_AMOUNT),
+        minimumRequired: formatCurrency(requiredAmount),
       },
     });
 
@@ -100,7 +103,7 @@ export async function checkDeposit(client: HttpClient): Promise<boolean> {
       '잔액이 부족하여 로또 구매를 진행할 수 없습니다. 입금 후 다음 스케줄에서 재시도됩니다.',
     details: {
       currentBalance: formatCurrency(accountInfo.balance),
-      minimumRequired: formatCurrency(MIN_DEPOSIT_AMOUNT),
+      minimumRequired: formatCurrency(requiredAmount),
       chargeAmount: formatCurrency(CHARGE_AMOUNT),
     },
   });

@@ -25,6 +25,10 @@ vi.mock("./dhlottery/buy", () => ({
   purchaseLottery: vi.fn(),
 }));
 
+vi.mock("./dhlottery/pension-reserve", () => ({
+  reservePensionNextWeek: vi.fn(),
+}));
+
 vi.mock("./dhlottery/check", () => ({
   checkWinning: vi.fn(),
 }));
@@ -37,6 +41,7 @@ const { createHttpClient } = await import("./client/http");
 const { login } = await import("./dhlottery/auth");
 const { checkDeposit } = await import("./dhlottery/charge");
 const { purchaseLottery } = await import("./dhlottery/buy");
+const { reservePensionNextWeek } = await import("./dhlottery/pension-reserve");
 const { checkWinning } = await import("./dhlottery/check");
 const { sendNotification } = await import("./notify/telegram");
 
@@ -60,6 +65,11 @@ describe("Main Orchestration - runWorkflow", () => {
     (createHttpClient as Mock).mockReturnValue(mockClient);
     (login as Mock).mockResolvedValue(undefined);
     (checkDeposit as Mock).mockResolvedValue(true);
+    (reservePensionNextWeek as Mock).mockResolvedValue({
+      status: "success",
+      success: true,
+      skipped: false,
+    });
     (purchaseLottery as Mock).mockResolvedValue({ success: true } as PurchaseOutcome);
     (checkWinning as Mock).mockResolvedValue([]);
     vi.clearAllMocks();
@@ -76,7 +86,8 @@ describe("Main Orchestration - runWorkflow", () => {
 
     expect(createHttpClient).toHaveBeenCalledTimes(1);
     expect(login).toHaveBeenCalledTimes(1);
-    expect(checkDeposit).toHaveBeenCalledTimes(1);
+    expect(checkDeposit).toHaveBeenCalledWith(expect.anything(), 10000);
+    expect(reservePensionNextWeek).toHaveBeenCalledTimes(1);
     expect(purchaseLottery).toHaveBeenCalledTimes(1);
     expect(checkWinning).toHaveBeenCalledTimes(1);
   });
@@ -90,6 +101,7 @@ describe("Main Orchestration - runWorkflow", () => {
 
     expect(login).toHaveBeenCalledTimes(1);
     expect(checkDeposit).toHaveBeenCalledTimes(1);
+    expect(reservePensionNextWeek).not.toHaveBeenCalled();
     expect(purchaseLottery).not.toHaveBeenCalled();
     expect(checkWinning).toHaveBeenCalledTimes(1);
   });
@@ -127,6 +139,23 @@ describe("Main Orchestration - runWorkflow", () => {
     );
     expect(purchaseLottery).not.toHaveBeenCalled();
     expect(checkWinning).not.toHaveBeenCalled();
+  });
+
+  it("should continue to buy when pension reserve returns failure outcome", async () => {
+    (reservePensionNextWeek as Mock).mockResolvedValue({
+      status: "failure",
+      success: false,
+      skipped: false,
+      error: "reserve failed",
+    });
+
+    const { runWorkflow } = await import("./index");
+
+    await expect(runWorkflow(new Date("2025-12-15T00:00:00.000Z"))).resolves.toBeUndefined();
+
+    expect(reservePensionNextWeek).toHaveBeenCalledTimes(1);
+    expect(purchaseLottery).toHaveBeenCalledTimes(1);
+    expect(checkWinning).toHaveBeenCalledTimes(1);
   });
 
   it("should notify when buy throws and not continue to checkWinning", async () => {

@@ -17,6 +17,19 @@ export type {
   TelegramMessage,
 } from './notification.types';
 export type {
+  ElAddMyReserveResponse,
+  ElCheckMyReserveResponse,
+  ElDepositResponse,
+  ElDuplicateRound,
+  ElEncryptedResponse,
+  ElResultBase,
+  ElRoundRemainTimeResponse,
+  PensionReserveFailure,
+  PensionReserveOutcome,
+  PensionReserveSkipped,
+  PensionReserveSuccess,
+} from './pension.types';
+export type {
   GameSelection,
   PurchaseEnv,
   PurchaseFailure,

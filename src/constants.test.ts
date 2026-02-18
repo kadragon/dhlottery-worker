@@ -14,7 +14,9 @@ import {
   DEBUG,
   GAMES_PER_PURCHASE,
   MIN_DEPOSIT_AMOUNT,
+  PENSION_RESERVE_COST,
   TOTAL_PURCHASE_COST,
+  WEEKLY_COMBINED_REQUIRED_BALANCE,
 } from './constants';
 
 describe('TEST-UTILS-002: Shared business constants', () => {
@@ -24,6 +26,8 @@ describe('TEST-UTILS-002: Shared business constants', () => {
     expect(GAMES_PER_PURCHASE).toBe(5);
     expect(COST_PER_GAME).toBe(1000);
     expect(TOTAL_PURCHASE_COST).toBe(5000);
+    expect(PENSION_RESERVE_COST).toBe(5000);
+    expect(WEEKLY_COMBINED_REQUIRED_BALANCE).toBe(10000);
   });
 });
 
@@ -36,4 +40,3 @@ describe('TEST-REFACTOR-P2-LOG-001: DEBUG constant for conditional logging', () 
     expect(DEBUG).toBe(false);
   });
 });
-
