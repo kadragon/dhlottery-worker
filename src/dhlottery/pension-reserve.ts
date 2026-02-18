@@ -389,8 +389,7 @@ export async function reservePensionNextWeek(client: HttpClient): Promise<Pensio
     const errorMessage = error instanceof Error ? error.message : String(error);
     // DHLotteryError carries a structured code from the API or our own error constants;
     // generic runtime errors (TypeError, SyntaxError, etc.) get a fallback code.
-    const errorCode =
-      error instanceof DHLotteryError ? error.code : 'PENSION_UNEXPECTED_ERROR';
+    const errorCode = error instanceof DHLotteryError ? error.code : 'PENSION_UNEXPECTED_ERROR';
     await sendNotification({
       type: 'error',
       title: 'Pension Reserve Failed',
