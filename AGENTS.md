@@ -17,6 +17,15 @@
 - 스케줄: 매주 월요일 01:00 UTC (KST 10:00)
 - Secrets: `USER_ID`, `PASSWORD`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` (GitHub Secrets, `process.env`)
 
+## 개발/디버깅 명령
+
+- 로컬 실행: `bun run start`
+- 테스트/타입체크: `bun run test`, `bun run test:watch`, `bun run test:coverage`, `bun run typecheck`
+- 포맷/린트: `bun run check` (수정 포함은 `bun run check:fix`)
+- Git 훅: pre-commit에 `bun run precommit` 실행 (Biome fix + `tsc --noEmit`)
+- 로그인 디버깅: `bun tsx scripts/debug-login.ts` (환경 변수 `USER_ID`, `PASSWORD` 필요)
+- 구매 디버깅: `bun tsx scripts/debug-buy.ts` (환경 변수 `USER_ID`, `PASSWORD` 필요)
+
 ## 비즈니스 규칙 (핵심만)
 
 - 최소 잔액: 5,000 KRW (5게임 × 1,000)
