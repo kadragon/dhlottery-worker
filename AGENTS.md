@@ -21,10 +21,14 @@
 
 - 로컬 실행: `bun run start`
 - 테스트/타입체크: `bun run test`, `bun run test:watch`, `bun run test:coverage`, `bun run typecheck`
+- CI 커버리지 게이트: `bun run test:coverage:ci`
 - 포맷/린트: `bun run check` (수정 포함은 `bun run check:fix`)
+- 포맷/린트 개별 실행: `bun run format`, `bun run format:fix`, `bun run lint`, `bun run lint:fix`
 - Git 훅: pre-commit에 `bun run precommit` 실행 (Biome fix + `tsc --noEmit`)
 - 로그인 디버깅: `bun tsx scripts/debug-login.ts` (환경 변수 `USER_ID`, `PASSWORD` 필요)
 - 구매 디버깅: `bun tsx scripts/debug-buy.ts` (환경 변수 `USER_ID`, `PASSWORD` 필요)
+- 디버그 모드 실행: `DEBUG=true bun run start`
+- 테스트 상세 로그: `bun run test -- --reporter=verbose`
 
 ## 비즈니스 규칙 (핵심만)
 
