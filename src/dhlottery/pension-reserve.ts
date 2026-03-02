@@ -4,7 +4,7 @@
 
 import { PENSION_RESERVE_COST, USER_AGENT } from '../constants';
 import type { NotificationCollector } from '../notify/notification-collector';
-import { sendNotification } from '../notify/telegram';
+import { notify } from '../notify/utils';
 import type {
   ElAddMyReserveResponse,
   ElCheckMyReserveResponse,
@@ -12,7 +12,6 @@ import type {
   ElEncryptedResponse,
   ElRoundRemainTimeResponse,
   HttpClient,
-  NotificationPayload,
   PensionReserveFailure,
   PensionReserveOutcome,
   PensionReserveSkipped,
@@ -22,17 +21,6 @@ import { DHLotteryError } from '../utils/errors';
 import { formatKoreanNumber } from '../utils/format';
 import { logger } from '../utils/logger';
 import { decryptElQ, encryptElQ } from './pension-crypto';
-
-async function notify(
-  payload: NotificationPayload,
-  collector?: NotificationCollector
-): Promise<void> {
-  if (collector) {
-    collector.add(payload);
-  } else {
-    await sendNotification(payload);
-  }
-}
 
 const EL_BASE_URL = 'https://el.dhlottery.co.kr';
 const TOTAL_GAME_URL = `${EL_BASE_URL}/game/TotalGame.jsp?LottoId=LP72`;

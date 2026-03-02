@@ -55,6 +55,47 @@ function formatMessage(payload: NotificationPayload): string {
   return lines.join('\n');
 }
 
+async function sendTelegramMessage(
+  text: string,
+  failureEvent: 'telegram_send_failed' | 'telegram_combined_send_failed'
+): Promise<void> {
+  try {
+    const botToken = getEnv('TELEGRAM_BOT_TOKEN');
+    const chatId = getEnv('TELEGRAM_CHAT_ID');
+
+    const message: TelegramMessage = {
+      chat_id: chatId,
+      text,
+      parse_mode: 'Markdown',
+    };
+
+    const url = `https://api.telegram.org/bot${botToken}/sendMessage`;
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(message),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      logger.error('Telegram API error', {
+        event: 'telegram_api_error',
+        status: response.status,
+        statusText: response.statusText,
+        errorData,
+      });
+    }
+  } catch (error) {
+    logger.error('Failed to send Telegram notification', {
+      event: failureEvent,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
 /**
  * Format and send multiple notification payloads as a single Telegram message.
  * Each payload is separated by a `---` divider.
@@ -63,44 +104,8 @@ function formatMessage(payload: NotificationPayload): string {
 export async function sendCombinedNotification(payloads: NotificationPayload[]): Promise<void> {
   if (payloads.length === 0) return;
 
-  const sections = payloads.map((p) => formatMessage(p));
-  const combinedText = sections.join('\n\n---\n\n');
-
-  try {
-    const botToken = getEnv('TELEGRAM_BOT_TOKEN');
-    const chatId = getEnv('TELEGRAM_CHAT_ID');
-
-    const message: TelegramMessage = {
-      chat_id: chatId,
-      text: combinedText,
-      parse_mode: 'Markdown',
-    };
-
-    const url = `https://api.telegram.org/bot${botToken}/sendMessage`;
-
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(message),
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json();
-      logger.error('Telegram API error', {
-        event: 'telegram_api_error',
-        status: response.status,
-        statusText: response.statusText,
-        errorData,
-      });
-    }
-  } catch (error) {
-    logger.error('Failed to send combined Telegram notification', {
-      event: 'telegram_combined_send_failed',
-      error: error instanceof Error ? error.message : String(error),
-    });
-  }
+  const combinedText = payloads.map((p) => formatMessage(p)).join('\n\n---\n\n');
+  await sendTelegramMessage(combinedText, 'telegram_combined_send_failed');
 }
 
 /**
@@ -109,52 +114,6 @@ export async function sendCombinedNotification(payloads: NotificationPayload[]):
  * @param payload - Notification payload with type, title, message, and optional details
  */
 export async function sendNotification(payload: NotificationPayload): Promise<void> {
-  try {
-    // Format message text
-    const text = formatMessage(payload);
-
-    // Get Telegram credentials from environment
-    const botToken = getEnv('TELEGRAM_BOT_TOKEN');
-    const chatId = getEnv('TELEGRAM_CHAT_ID');
-
-    // Prepare Telegram API message
-    const message: TelegramMessage = {
-      chat_id: chatId,
-      text,
-      parse_mode: 'Markdown',
-    };
-
-    // Build API URL
-    const url = `https://api.telegram.org/bot${botToken}/sendMessage`;
-
-    // Send request to Telegram API
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(message),
-    });
-
-    // Check response
-    if (!response.ok) {
-      const errorData = await response.json();
-      logger.error('Telegram API error', {
-        event: 'telegram_api_error',
-        status: response.status,
-        statusText: response.statusText,
-        errorData,
-      });
-      return; // Do not retry, just log
-    }
-
-    // Success - no need to process response
-  } catch (error) {
-    // Log network errors or other failures
-    logger.error('Failed to send Telegram notification', {
-      event: 'telegram_send_failed',
-      error: error instanceof Error ? error.message : String(error),
-    });
-    // Do not throw - allow main execution to continue
-  }
+  const text = formatMessage(payload);
+  await sendTelegramMessage(text, 'telegram_send_failed');
 }

@@ -10,11 +10,10 @@
 
 import { USER_AGENT } from '../constants';
 import type { NotificationCollector } from '../notify/notification-collector';
-import { sendNotification } from '../notify/telegram';
+import { notify } from '../notify/utils';
 import type {
   GameSelection,
   HttpClient,
-  NotificationPayload,
   PurchaseOutcome,
   PurchaseReadyResponse,
   PurchaseResult,
@@ -25,17 +24,6 @@ import { PurchaseError } from '../utils/errors';
 import { formatCurrency, formatKoreanNumber } from '../utils/format';
 import { logger } from '../utils/logger';
 import { getAccountInfo } from './account';
-
-async function notify(
-  payload: NotificationPayload,
-  collector?: NotificationCollector
-): Promise<void> {
-  if (collector) {
-    collector.add(payload);
-  } else {
-    await sendNotification(payload);
-  }
-}
 
 const BASE_URL = 'https://ol.dhlottery.co.kr/olotto/game';
 const GAME_PAGE_URL = `${BASE_URL}/game645.do`;

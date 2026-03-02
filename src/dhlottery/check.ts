@@ -8,24 +8,13 @@
 
 import { USER_AGENT } from '../constants';
 import type { NotificationCollector } from '../notify/notification-collector';
-import { sendNotification } from '../notify/telegram';
-import type { HttpClient, NotificationPayload, WinningResult } from '../types';
+import { notify } from '../notify/utils';
+import type { HttpClient, WinningResult } from '../types';
 import type { PreviousWeekRange } from '../utils/date';
 import { calculatePreviousWeekRangeKst } from '../utils/date';
 import { DHLotteryError } from '../utils/errors';
 import { formatKoreanNumber } from '../utils/format';
 import { logger } from '../utils/logger';
-
-async function notify(
-  payload: NotificationPayload,
-  collector?: NotificationCollector
-): Promise<void> {
-  if (collector) {
-    collector.add(payload);
-  } else {
-    await sendNotification(payload);
-  }
-}
 
 const WINNING_LIST_URL = 'https://www.dhlottery.co.kr/myPage.do?method=lottoBuyList';
 
