@@ -7,7 +7,7 @@
  */
 
 import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
-import { sendNotification } from "./telegram";
+import { sendNotification, sendCombinedNotification } from "./telegram";
 
 describe("Telegram Notification Service", () => {
   let mockFetch: ReturnType<typeof vi.fn>;
@@ -513,5 +513,70 @@ describe("Telegram Notification Service", () => {
       // Cleanup
       consoleErrorSpy.mockRestore();
     });
+  });
+});
+
+describe("sendCombinedNotification", () => {
+  let mockFetch: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    vi.stubEnv('TELEGRAM_BOT_TOKEN', '123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11');
+    vi.stubEnv('TELEGRAM_CHAT_ID', '987654321');
+
+    mockFetch = vi.fn();
+    global.fetch = mockFetch as any;
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("should format multiple payloads separated by ---", async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ ok: true }),
+    });
+
+    await sendCombinedNotification([
+      { type: 'success', title: 'First', message: 'First message' },
+      { type: 'warning', title: 'Second', message: 'Second message' },
+    ]);
+
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    const requestBody = JSON.parse(mockFetch.mock.calls[0][1].body);
+    const text = requestBody.text;
+
+    expect(text).toContain('First');
+    expect(text).toContain('Second');
+    expect(text).toContain('---');
+  });
+
+  it("should send exactly one Telegram API request for multiple payloads", async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ ok: true }),
+    });
+
+    await sendCombinedNotification([
+      { type: 'success', title: 'A', message: 'msg A' },
+      { type: 'error', title: 'B', message: 'msg B' },
+      { type: 'warning', title: 'C', message: 'msg C' },
+    ]);
+
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("should not send any request when payload list is empty", async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ ok: true }),
+    });
+
+    await sendCombinedNotification([]);
+
+    expect(mockFetch).not.toHaveBeenCalled();
   });
 });

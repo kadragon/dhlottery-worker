@@ -55,31 +55,22 @@ function formatMessage(payload: NotificationPayload): string {
   return lines.join('\n');
 }
 
-/**
- * Send notification to Telegram
- *
- * @param payload - Notification payload with type, title, message, and optional details
- */
-export async function sendNotification(payload: NotificationPayload): Promise<void> {
+async function sendTelegramMessage(
+  text: string,
+  failureEvent: 'telegram_send_failed' | 'telegram_combined_send_failed'
+): Promise<void> {
   try {
-    // Format message text
-    const text = formatMessage(payload);
-
-    // Get Telegram credentials from environment
     const botToken = getEnv('TELEGRAM_BOT_TOKEN');
     const chatId = getEnv('TELEGRAM_CHAT_ID');
 
-    // Prepare Telegram API message
     const message: TelegramMessage = {
       chat_id: chatId,
       text,
       parse_mode: 'Markdown',
     };
 
-    // Build API URL
     const url = `https://api.telegram.org/bot${botToken}/sendMessage`;
 
-    // Send request to Telegram API
     const response = await fetch(url, {
       method: 'POST',
       headers: {
@@ -88,7 +79,6 @@ export async function sendNotification(payload: NotificationPayload): Promise<vo
       body: JSON.stringify(message),
     });
 
-    // Check response
     if (!response.ok) {
       const errorData = await response.json();
       logger.error('Telegram API error', {
@@ -97,16 +87,33 @@ export async function sendNotification(payload: NotificationPayload): Promise<vo
         statusText: response.statusText,
         errorData,
       });
-      return; // Do not retry, just log
     }
-
-    // Success - no need to process response
   } catch (error) {
-    // Log network errors or other failures
     logger.error('Failed to send Telegram notification', {
-      event: 'telegram_send_failed',
+      event: failureEvent,
       error: error instanceof Error ? error.message : String(error),
     });
-    // Do not throw - allow main execution to continue
   }
+}
+
+/**
+ * Format and send multiple notification payloads as a single Telegram message.
+ * Each payload is separated by a `---` divider.
+ * No-op if the payload list is empty.
+ */
+export async function sendCombinedNotification(payloads: NotificationPayload[]): Promise<void> {
+  if (payloads.length === 0) return;
+
+  const combinedText = payloads.map((p) => formatMessage(p)).join('\n\n---\n\n');
+  await sendTelegramMessage(combinedText, 'telegram_combined_send_failed');
+}
+
+/**
+ * Send notification to Telegram
+ *
+ * @param payload - Notification payload with type, title, message, and optional details
+ */
+export async function sendNotification(payload: NotificationPayload): Promise<void> {
+  const text = formatMessage(payload);
+  await sendTelegramMessage(text, 'telegram_send_failed');
 }

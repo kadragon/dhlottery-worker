@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { PENSION_RESERVE_COST } from '../constants';
+import { NotificationCollector } from '../notify/notification-collector';
 import type { HttpClient } from '../types';
 import { DHLotteryError } from '../utils/errors';
 import { reservePensionNextWeek } from './pension-reserve';
@@ -229,5 +230,56 @@ describe('pension reserve', () => {
         details: expect.objectContaining({ 오류코드: 'PENSION_UNEXPECTED_ERROR' }),
       })
     );
+  });
+
+  it('should add success payload to collector instead of calling sendNotification', async () => {
+    fetchMock
+      .mockResolvedValueOnce(createMockResponse(200, {}))
+      .mockResolvedValueOnce(createMockResponse(200, {}))
+      .mockResolvedValueOnce(
+        createMockResponse(200, { resultCode: '100', resultMsg: 'ok', ROUND: '303', DRAW_DATE: '2026-02-19' })
+      )
+      .mockResolvedValueOnce(
+        createMockResponse(200, { q: 'enc:{"resultCode":"100","resultMsg":"조회 성공","deposit":"10000"}' })
+      )
+      .mockResolvedValueOnce(
+        createMockResponse(200, { q: 'enc:{"resultCode":"100","resultMsg":"예약 조회 성공","doubleRound":[]}' })
+      )
+      .mockResolvedValueOnce(
+        createMockResponse(
+          200,
+          {
+            q: 'enc:{"resultCode":"100","resultMsg":"예약 성공","reserveOrderNo":"A-1","reserveOrderDate":"2026-02-18 17:00:00"}',
+          }
+        )
+      );
+
+    const collector = new NotificationCollector();
+    const result = await reservePensionNextWeek(mockClient, collector);
+
+    expect(result).toMatchObject({
+      status: 'success',
+      success: true,
+    });
+    expect(sendNotification).not.toHaveBeenCalled();
+    expect(collector.getPayloads()).toHaveLength(1);
+    expect(collector.getPayloads()[0]).toMatchObject({
+      type: 'success',
+      title: 'Pension Reserve Completed',
+    });
+  });
+
+  it('should add error payload to collector on failure', async () => {
+    fetchMock.mockRejectedValueOnce(new TypeError('fetch failed'));
+
+    const collector = new NotificationCollector();
+    await reservePensionNextWeek(mockClient, collector);
+
+    expect(sendNotification).not.toHaveBeenCalled();
+    expect(collector.getPayloads()).toHaveLength(1);
+    expect(collector.getPayloads()[0]).toMatchObject({
+      type: 'error',
+      title: 'Pension Reserve Failed',
+    });
   });
 });

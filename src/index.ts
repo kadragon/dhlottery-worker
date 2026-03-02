@@ -8,22 +8,13 @@
 
 import { TOTAL_PURCHASE_COST } from './constants';
 import { DHLotteryClient } from './dhlottery/client';
-import { sendNotification } from './notify/telegram';
-
-async function notifyOrchestrationError(error: unknown): Promise<void> {
-  const message = error instanceof Error ? error.message : String(error);
-
-  await sendNotification({
-    type: 'error',
-    title: 'Orchestration Error',
-    message: `워크플로우 실행 중 오류가 발생했습니다: ${message}`,
-  });
-}
+import { sendCombinedNotification } from './notify/telegram';
 
 /**
  * Runs the end-to-end workflow once.
  *
  * Non-throwing by design to avoid unintended retries that could repurchase.
+ * All notifications are collected and sent as a single Telegram message at the end.
  */
 export async function runWorkflow(now: Date = new Date()): Promise<void> {
   const client = new DHLotteryClient();
@@ -35,7 +26,13 @@ export async function runWorkflow(now: Date = new Date()): Promise<void> {
     try {
       canPurchase = await client.checkDeposit(TOTAL_PURCHASE_COST);
     } catch (error) {
-      await notifyOrchestrationError(error);
+      const message = error instanceof Error ? error.message : String(error);
+      client.collector.add({
+        type: 'error',
+        title: 'Orchestration Error',
+        message: `워크플로우 실행 중 오류가 발생했습니다: ${message}`,
+      });
+      await sendCombinedNotification(client.collector.getPayloads());
       return;
     }
 
@@ -46,6 +43,16 @@ export async function runWorkflow(now: Date = new Date()): Promise<void> {
 
     await client.checkWinning(now);
   } catch (error) {
-    await notifyOrchestrationError(error);
+    const message = error instanceof Error ? error.message : String(error);
+    client.collector.add({
+      type: 'error',
+      title: 'Orchestration Error',
+      message: `워크플로우 실행 중 오류가 발생했습니다: ${message}`,
+    });
+  }
+
+  // Single send at the end
+  if (!client.collector.isEmpty()) {
+    await sendCombinedNotification(client.collector.getPayloads());
   }
 }

@@ -10,6 +10,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { beforeEach, describe, expect, it, vi, afterEach } from "vitest";
 import type { HttpClient, HttpResponse } from "../types";
+import { NotificationCollector } from "../notify/notification-collector";
 import { DHLotteryError } from "../utils/errors";
 import {
   WINNING_PATTERNS,
@@ -428,6 +429,37 @@ describe("Winning Check", () => {
       } finally {
         loggerSpy.mockRestore();
       }
+    });
+  });
+
+  describe("Collector integration", () => {
+    it("should add win payload to collector instead of calling sendNotification", async () => {
+      const { sendNotification } = await import("../notify/telegram");
+
+      const mockResponse = {
+        status: 200,
+        statusText: "OK",
+        headers: new Headers({ "content-type": "text/html" }),
+        text: async () => fixtureHTML,
+        json: async () => ({}),
+      } as unknown as HttpResponse;
+
+      vi.mocked(mockHttpClient.fetch).mockResolvedValue(mockResponse);
+
+      const collector = new NotificationCollector();
+      const results = await checkWinning(
+        mockHttpClient,
+        new Date("2025-12-15T10:00:00+09:00"),
+        collector
+      );
+
+      expect(results.length).toBe(1);
+      expect(vi.mocked(sendNotification)).not.toHaveBeenCalled();
+      expect(collector.getPayloads()).toHaveLength(1);
+      expect(collector.getPayloads()[0]).toMatchObject({
+        type: "success",
+        title: "Lottery Jackpot Win!",
+      });
     });
   });
 });

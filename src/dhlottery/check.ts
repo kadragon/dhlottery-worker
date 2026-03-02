@@ -7,7 +7,8 @@
  */
 
 import { USER_AGENT } from '../constants';
-import { sendNotification } from '../notify/telegram';
+import type { NotificationCollector } from '../notify/notification-collector';
+import { notify } from '../notify/utils';
 import type { HttpClient, WinningResult } from '../types';
 import type { PreviousWeekRange } from '../utils/date';
 import { calculatePreviousWeekRangeKst } from '../utils/date';
@@ -149,7 +150,8 @@ export function filterJackpotWins(results: WinningResult[]): WinningResult[] {
  */
 export async function checkWinning(
   client: HttpClient,
-  now: Date = new Date()
+  now: Date = new Date(),
+  collector?: NotificationCollector
 ): Promise<WinningResult[]> {
   const { startDate, endDate } = calculatePreviousWeekRange(now);
 
@@ -190,19 +192,22 @@ export async function checkWinning(
     if (jackpotWins.length === 0) return [];
 
     for (const win of jackpotWins) {
-      await sendNotification({
-        type: 'success',
-        title: 'Lottery Jackpot Win!',
-        message: `${win.roundNumber}회차 로또 ${win.rank}등 당첨을 확인했습니다.`,
-        details: {
-          roundNumber: win.roundNumber,
-          rank: win.rank,
-          prizeAmount: win.prizeAmount,
-          prizeAmountKrw: `${formatKoreanNumber(win.prizeAmount)}원`,
-          matchCount: win.matchCount,
-          period: `${startDate} ~ ${endDate}`,
+      await notify(
+        {
+          type: 'success',
+          title: 'Lottery Jackpot Win!',
+          message: `${win.roundNumber}회차 로또 ${win.rank}등 당첨을 확인했습니다.`,
+          details: {
+            roundNumber: win.roundNumber,
+            rank: win.rank,
+            prizeAmount: win.prizeAmount,
+            prizeAmountKrw: `${formatKoreanNumber(win.prizeAmount)}원`,
+            matchCount: win.matchCount,
+            period: `${startDate} ~ ${endDate}`,
+          },
         },
-      });
+        collector
+      );
     }
 
     return jackpotWins;

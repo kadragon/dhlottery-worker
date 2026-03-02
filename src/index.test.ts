@@ -35,6 +35,7 @@ vi.mock("./dhlottery/check", () => ({
 
 vi.mock("./notify/telegram", () => ({
   sendNotification: vi.fn().mockResolvedValue(undefined),
+  sendCombinedNotification: vi.fn().mockResolvedValue(undefined),
 }));
 
 const { createHttpClient } = await import("./client/http");
@@ -43,7 +44,7 @@ const { checkDeposit } = await import("./dhlottery/charge");
 const { purchaseLottery } = await import("./dhlottery/buy");
 const { reservePensionNextWeek } = await import("./dhlottery/pension-reserve");
 const { checkWinning } = await import("./dhlottery/check");
-const { sendNotification } = await import("./notify/telegram");
+const { sendNotification, sendCombinedNotification } = await import("./notify/telegram");
 
 describe("Main Orchestration - runWorkflow", () => {
   let mockClient: HttpClient;
@@ -86,7 +87,7 @@ describe("Main Orchestration - runWorkflow", () => {
 
     expect(createHttpClient).toHaveBeenCalledTimes(1);
     expect(login).toHaveBeenCalledTimes(1);
-    expect(checkDeposit).toHaveBeenCalledWith(expect.anything(), 5000);
+    expect(checkDeposit).toHaveBeenCalledWith(expect.anything(), 5000, expect.anything());
     expect(reservePensionNextWeek).toHaveBeenCalledTimes(1);
     expect(purchaseLottery).toHaveBeenCalledTimes(1);
     expect(checkWinning).toHaveBeenCalledTimes(1);
@@ -106,37 +107,47 @@ describe("Main Orchestration - runWorkflow", () => {
     expect(checkWinning).toHaveBeenCalledTimes(1);
   });
 
-  it("TEST-ORCH-003: should notify and stop on fatal precondition errors", async () => {
+  it("TEST-ORCH-003: should send orchestration error via sendCombinedNotification on fatal errors", async () => {
     (login as Mock).mockRejectedValue(new Error("boom"));
 
     const { runWorkflow } = await import("./index");
 
     await runWorkflow(new Date("2025-12-15T00:00:00.000Z"));
 
-    expect(sendNotification).toHaveBeenCalledWith(
-      expect.objectContaining({
-        type: "error",
-        title: expect.stringContaining("Orchestration"),
-      }),
+    expect(sendCombinedNotification).toHaveBeenCalledTimes(1);
+    const payloads = (sendCombinedNotification as Mock).mock.calls[0][0];
+    expect(payloads).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "error",
+          title: "Orchestration Error",
+        }),
+      ]),
     );
+    expect(sendNotification).not.toHaveBeenCalled();
     expect(checkDeposit).not.toHaveBeenCalled();
     expect(purchaseLottery).not.toHaveBeenCalled();
   });
 
-  it("should notify and return early when checkDeposit throws", async () => {
+  it("should send orchestration error via sendCombinedNotification when checkDeposit throws", async () => {
     (checkDeposit as Mock).mockRejectedValue(new Error("deposit failed"));
 
     const { runWorkflow } = await import("./index");
 
     await expect(runWorkflow(new Date("2025-12-15T00:00:00.000Z"))).resolves.toBeUndefined();
 
-    expect(sendNotification).toHaveBeenCalledWith(
-      expect.objectContaining({
-        type: "error",
-        title: "Orchestration Error",
-        message: expect.stringContaining("deposit failed"),
-      }),
+    expect(sendCombinedNotification).toHaveBeenCalledTimes(1);
+    const payloads = (sendCombinedNotification as Mock).mock.calls[0][0];
+    expect(payloads).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "error",
+          title: "Orchestration Error",
+          message: expect.stringContaining("deposit failed"),
+        }),
+      ]),
     );
+    expect(sendNotification).not.toHaveBeenCalled();
     expect(purchaseLottery).not.toHaveBeenCalled();
     expect(checkWinning).not.toHaveBeenCalled();
   });
@@ -158,20 +169,25 @@ describe("Main Orchestration - runWorkflow", () => {
     expect(checkWinning).toHaveBeenCalledTimes(1);
   });
 
-  it("should notify when buy throws and not continue to checkWinning", async () => {
+  it("should send orchestration error via sendCombinedNotification when buy throws", async () => {
     (purchaseLottery as Mock).mockRejectedValue(new Error("buy failed"));
 
     const { runWorkflow } = await import("./index");
 
     await expect(runWorkflow(new Date("2025-12-15T00:00:00.000Z"))).resolves.toBeUndefined();
 
-    expect(sendNotification).toHaveBeenCalledWith(
-      expect.objectContaining({
-        type: "error",
-        title: "Orchestration Error",
-        message: expect.stringContaining("buy failed"),
-      }),
+    expect(sendCombinedNotification).toHaveBeenCalledTimes(1);
+    const payloads = (sendCombinedNotification as Mock).mock.calls[0][0];
+    expect(payloads).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "error",
+          title: "Orchestration Error",
+          message: expect.stringContaining("buy failed"),
+        }),
+      ]),
     );
+    expect(sendNotification).not.toHaveBeenCalled();
     expect(checkWinning).not.toHaveBeenCalled();
   });
 
@@ -189,24 +205,29 @@ describe("Main Orchestration - runWorkflow", () => {
     await runWorkflow(new Date("2025-12-15T00:00:00.000Z"));
 
     // checkDeposit must be called with lotto-only minimum, not combined 10000
-    expect(checkDeposit).toHaveBeenCalledWith(expect.anything(), 5000);
+    expect(checkDeposit).toHaveBeenCalledWith(expect.anything(), 5000, expect.anything());
     expect(purchaseLottery).toHaveBeenCalledTimes(1);
   });
 
-  it("should notify when checkWinning throws", async () => {
+  it("should send orchestration error via sendCombinedNotification when checkWinning throws", async () => {
     (checkWinning as Mock).mockRejectedValue(new Error("winning failed"));
 
     const { runWorkflow } = await import("./index");
 
     await expect(runWorkflow(new Date("2025-12-15T00:00:00.000Z"))).resolves.toBeUndefined();
 
-    expect(sendNotification).toHaveBeenCalledWith(
-      expect.objectContaining({
-        type: "error",
-        title: "Orchestration Error",
-        message: expect.stringContaining("winning failed"),
-      }),
+    expect(sendCombinedNotification).toHaveBeenCalledTimes(1);
+    const payloads = (sendCombinedNotification as Mock).mock.calls[0][0];
+    expect(payloads).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "error",
+          title: "Orchestration Error",
+          message: expect.stringContaining("winning failed"),
+        }),
+      ]),
     );
+    expect(sendNotification).not.toHaveBeenCalled();
   });
 
   it("should stringify non-Error failures in orchestration notifications", async () => {
@@ -216,12 +237,28 @@ describe("Main Orchestration - runWorkflow", () => {
 
     await expect(runWorkflow(new Date("2025-12-15T00:00:00.000Z"))).resolves.toBeUndefined();
 
-    expect(sendNotification).toHaveBeenCalledWith(
-      expect.objectContaining({
-        type: "error",
-        title: "Orchestration Error",
-        message: expect.stringContaining("string failure"),
-      }),
+    expect(sendCombinedNotification).toHaveBeenCalledTimes(1);
+    const payloads = (sendCombinedNotification as Mock).mock.calls[0][0];
+    expect(payloads).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "error",
+          title: "Orchestration Error",
+          message: expect.stringContaining("string failure"),
+        }),
+      ]),
     );
+    expect(sendNotification).not.toHaveBeenCalled();
+  });
+
+  it("should call sendCombinedNotification exactly once per runWorkflow", async () => {
+    const { runWorkflow } = await import("./index");
+
+    // Normal workflow - modules may add notifications via collector
+    await runWorkflow(new Date("2025-12-15T00:00:00.000Z"));
+
+    // sendCombinedNotification called at most once (may be 0 if collector empty)
+    expect((sendCombinedNotification as Mock).mock.calls.length).toBeLessThanOrEqual(1);
+    expect(sendNotification).not.toHaveBeenCalled();
   });
 });

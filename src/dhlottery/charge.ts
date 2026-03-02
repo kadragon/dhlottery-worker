@@ -7,7 +7,8 @@
  */
 
 import { CHARGE_AMOUNT, MIN_DEPOSIT_AMOUNT, USER_AGENT } from '../constants';
-import { sendNotification } from '../notify/telegram';
+import type { NotificationCollector } from '../notify/notification-collector';
+import { notify } from '../notify/utils';
 import type { HttpClient } from '../types';
 import { formatCurrency } from '../utils/format';
 import { logger } from '../utils/logger';
@@ -59,7 +60,8 @@ async function initializeChargePage(client: HttpClient): Promise<boolean> {
  */
 export async function checkDeposit(
   client: HttpClient,
-  requiredAmount: number = MIN_DEPOSIT_AMOUNT
+  requiredAmount: number = MIN_DEPOSIT_AMOUNT,
+  collector?: NotificationCollector
 ): Promise<boolean> {
   // Fetch current account information
   const accountInfo = await getAccountInfo(client);
@@ -82,31 +84,37 @@ export async function checkDeposit(
 
   if (!chargeSuccess) {
     // Charge initialization failed - send error notification
-    await sendNotification({
-      type: 'error',
-      title: 'Charge Initialization Failed',
-      message: '충전 페이지 초기화에 실패했습니다. 수동으로 입금해주세요.',
-      details: {
-        currentBalance: formatCurrency(accountInfo.balance),
-        minimumRequired: formatCurrency(requiredAmount),
+    await notify(
+      {
+        type: 'error',
+        title: 'Charge Initialization Failed',
+        message: '충전 페이지 초기화에 실패했습니다. 수동으로 입금해주세요.',
+        details: {
+          currentBalance: formatCurrency(accountInfo.balance),
+          minimumRequired: formatCurrency(requiredAmount),
+        },
       },
-    });
+      collector
+    );
 
     return false;
   }
 
   // Send warning notification about insufficient balance
-  await sendNotification({
-    type: 'warning',
-    title: 'Insufficient Balance',
-    message:
-      '잔액이 부족하여 로또 구매를 진행할 수 없습니다. 입금 후 다음 스케줄에서 재시도됩니다.',
-    details: {
-      currentBalance: formatCurrency(accountInfo.balance),
-      minimumRequired: formatCurrency(requiredAmount),
-      chargeAmount: formatCurrency(CHARGE_AMOUNT),
+  await notify(
+    {
+      type: 'warning',
+      title: 'Insufficient Balance',
+      message:
+        '잔액이 부족하여 로또 구매를 진행할 수 없습니다. 입금 후 다음 스케줄에서 재시도됩니다.',
+      details: {
+        currentBalance: formatCurrency(accountInfo.balance),
+        minimumRequired: formatCurrency(requiredAmount),
+        chargeAmount: formatCurrency(CHARGE_AMOUNT),
+      },
     },
-  });
+    collector
+  );
 
   // Block purchase
   return false;

@@ -137,3 +137,22 @@ Files: `auth.spec.ts.bak`, `auth.spec.ts.bak2` through `auth.spec.ts.bak7`
 - Run check.ts tests after status code simplification
 - Add logging tests for new Logger module
 - Verify all tests still pass after utility consolidation
+
+## Single Telegram Message — Collector Pattern
+
+> Consolidate all per-run Telegram notifications into one message via a collector.
+
+- [x] NotificationCollector.add() buffers payloads
+- [x] NotificationCollector.getPayloads() returns snapshot
+- [x] NotificationCollector.isEmpty() returns true when empty, false after add
+- [x] sendCombinedNotification formats multiple payloads with --- separator
+- [x] sendCombinedNotification sends single Telegram API request
+- [x] sendCombinedNotification handles empty payload list (no-op)
+- [x] checkDeposit uses collector.add() when collector is provided
+- [x] checkDeposit falls back to sendNotification when collector is absent
+- [x] purchaseLottery uses collector.add() when collector is provided
+- [x] checkWinning uses collector.add() when collector is provided
+- [x] reservePensionNextWeek uses collector.add() when collector is provided
+- [x] DHLotteryClient creates and passes collector to all modules
+- [x] runWorkflow sends exactly one message via sendCombinedNotification
+- [x] runWorkflow sends orchestration errors through collector too

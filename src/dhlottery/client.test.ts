@@ -7,6 +7,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { NotificationCollector } from '../notify/notification-collector';
 import { DHLotteryClient } from './client';
 import * as authModule from './auth';
 import * as accountModule from './account';
@@ -63,28 +64,28 @@ describe('DHLotteryClient', () => {
 
   it('TEST-ARCH-002: should delegate checkDeposit to charge module', async () => {
     await client.checkDeposit();
-    expect(chargeModule.checkDeposit).toHaveBeenCalledWith(expect.anything(), undefined);
+    expect(chargeModule.checkDeposit).toHaveBeenCalledWith(expect.anything(), undefined, client.collector);
   });
 
   it('should delegate checkDeposit with required amount to charge module', async () => {
     await client.checkDeposit(10000);
-    expect(chargeModule.checkDeposit).toHaveBeenCalledWith(expect.anything(), 10000);
+    expect(chargeModule.checkDeposit).toHaveBeenCalledWith(expect.anything(), 10000, client.collector);
   });
 
   it('TEST-ARCH-002: should delegate buy to buy module', async () => {
     await client.buy();
-    expect(buyModule.purchaseLottery).toHaveBeenCalledWith(expect.anything());
+    expect(buyModule.purchaseLottery).toHaveBeenCalledWith(expect.anything(), client.collector);
   });
 
   it('TEST-ARCH-002: should delegate checkWinning to check module', async () => {
     const now = new Date();
     await client.checkWinning(now);
-    expect(checkModule.checkWinning).toHaveBeenCalledWith(expect.anything(), now);
+    expect(checkModule.checkWinning).toHaveBeenCalledWith(expect.anything(), now, client.collector);
   });
 
   it('should delegate pension reserve to pension-reserve module', async () => {
     await client.reservePensionNextWeek();
-    expect(pensionReserveModule.reservePensionNextWeek).toHaveBeenCalledWith(expect.anything());
+    expect(pensionReserveModule.reservePensionNextWeek).toHaveBeenCalledWith(expect.anything(), client.collector);
   });
 
   /**
@@ -172,6 +173,47 @@ describe('DHLotteryClient', () => {
 
       // Verify delegation: first argument should be the HTTP client
       expect(accountModule.getAccountInfo).toHaveBeenCalledWith(expect.anything());
+    });
+  });
+
+  describe('Collector integration', () => {
+    it('should expose a NotificationCollector instance', () => {
+      expect(client.collector).toBeInstanceOf(NotificationCollector);
+    });
+
+    it('should pass collector to checkDeposit', async () => {
+      await client.checkDeposit(5000);
+      expect(chargeModule.checkDeposit).toHaveBeenCalledWith(
+        expect.anything(),
+        5000,
+        client.collector
+      );
+    });
+
+    it('should pass collector to buy', async () => {
+      await client.buy();
+      expect(buyModule.purchaseLottery).toHaveBeenCalledWith(
+        expect.anything(),
+        client.collector
+      );
+    });
+
+    it('should pass collector to checkWinning', async () => {
+      const now = new Date();
+      await client.checkWinning(now);
+      expect(checkModule.checkWinning).toHaveBeenCalledWith(
+        expect.anything(),
+        now,
+        client.collector
+      );
+    });
+
+    it('should pass collector to reservePensionNextWeek', async () => {
+      await client.reservePensionNextWeek();
+      expect(pensionReserveModule.reservePensionNextWeek).toHaveBeenCalledWith(
+        expect.anything(),
+        client.collector
+      );
     });
   });
 });

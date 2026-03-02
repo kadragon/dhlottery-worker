@@ -17,6 +17,7 @@ import type {
   HttpClient,
 } from "../types";
 import { PURCHASE_CONSTANTS } from "../types/purchase.types";
+import { NotificationCollector } from "../notify/notification-collector";
 
 // Mock dependencies
 vi.mock("../notify/telegram", () => ({
@@ -1125,5 +1126,88 @@ describe("Lottery Purchase - TEST-PURCHASE-005: Handle purchase failures", () =>
 		expect(result.success).toBe(false);
 		// Only 2 fetch calls (ready + failed execution attempt)
 		expect(mockFetch).toHaveBeenCalledTimes(2);
+	});
+});
+
+describe("Lottery Purchase - Collector integration", () => {
+	let mockFetch: Mock;
+	let mockClient: HttpClient;
+
+	beforeEach(() => {
+		vi.stubEnv('TELEGRAM_BOT_TOKEN', 'test-token');
+		vi.stubEnv('TELEGRAM_CHAT_ID', 'test-chat');
+
+		mockFetch = vi.fn();
+		mockClient = createMockClient(mockFetch);
+		vi.clearAllMocks();
+	});
+
+	afterEach(() => {
+		vi.unstubAllEnvs();
+	});
+
+	it("should add success payload to collector instead of calling sendNotification", async () => {
+		const mockAccountInfo: AccountInfo = {
+			balance: 50000,
+			currentRound: 1203,
+		};
+		(getAccountInfo as Mock).mockResolvedValue(mockAccountInfo);
+
+		const mockReadyResponse: PurchaseReadyResponse = {
+			direct_yn: "N",
+			ready_ip: "INTCOM2",
+			ready_time: "0",
+			ready_cnt: "0",
+		};
+
+		const mockPurchaseResult: PurchaseResult = {
+			loginYn: "Y",
+			result: {
+				resultCode: "100",
+				resultMsg: "Success",
+			},
+		};
+
+		mockFetch
+			.mockResolvedValueOnce({
+				ok: true,
+				status: 200,
+				json: async () => mockReadyResponse,
+			} as Response)
+			.mockResolvedValueOnce({
+				ok: true,
+				status: 200,
+				json: async () => mockPurchaseResult,
+			} as Response);
+
+		const collector = new NotificationCollector();
+		await purchaseLottery(mockClient, collector);
+
+		expect(sendNotification).not.toHaveBeenCalled();
+		expect(collector.getPayloads()).toHaveLength(1);
+		expect(collector.getPayloads()[0]).toMatchObject({
+			type: "success",
+			title: "Lottery Purchase Completed",
+		});
+	});
+
+	it("should add error payload to collector on failure", async () => {
+		const mockAccountInfo: AccountInfo = {
+			balance: 50000,
+			currentRound: 1203,
+		};
+		(getAccountInfo as Mock).mockResolvedValue(mockAccountInfo);
+
+		mockFetch.mockRejectedValueOnce(new Error("Network error"));
+
+		const collector = new NotificationCollector();
+		await purchaseLottery(mockClient, collector);
+
+		expect(sendNotification).not.toHaveBeenCalled();
+		expect(collector.getPayloads()).toHaveLength(1);
+		expect(collector.getPayloads()[0]).toMatchObject({
+			type: "error",
+			title: "Lottery Purchase Failed",
+		});
 	});
 });
