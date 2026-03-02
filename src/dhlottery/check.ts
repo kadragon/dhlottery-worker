@@ -7,13 +7,25 @@
  */
 
 import { USER_AGENT } from '../constants';
+import type { NotificationCollector } from '../notify/notification-collector';
 import { sendNotification } from '../notify/telegram';
-import type { HttpClient, WinningResult } from '../types';
+import type { HttpClient, NotificationPayload, WinningResult } from '../types';
 import type { PreviousWeekRange } from '../utils/date';
 import { calculatePreviousWeekRangeKst } from '../utils/date';
 import { DHLotteryError } from '../utils/errors';
 import { formatKoreanNumber } from '../utils/format';
 import { logger } from '../utils/logger';
+
+async function notify(
+  payload: NotificationPayload,
+  collector?: NotificationCollector
+): Promise<void> {
+  if (collector) {
+    collector.add(payload);
+  } else {
+    await sendNotification(payload);
+  }
+}
 
 const WINNING_LIST_URL = 'https://www.dhlottery.co.kr/myPage.do?method=lottoBuyList';
 
@@ -149,7 +161,8 @@ export function filterJackpotWins(results: WinningResult[]): WinningResult[] {
  */
 export async function checkWinning(
   client: HttpClient,
-  now: Date = new Date()
+  now: Date = new Date(),
+  collector?: NotificationCollector
 ): Promise<WinningResult[]> {
   const { startDate, endDate } = calculatePreviousWeekRange(now);
 
@@ -190,19 +203,22 @@ export async function checkWinning(
     if (jackpotWins.length === 0) return [];
 
     for (const win of jackpotWins) {
-      await sendNotification({
-        type: 'success',
-        title: 'Lottery Jackpot Win!',
-        message: `${win.roundNumber}회차 로또 ${win.rank}등 당첨을 확인했습니다.`,
-        details: {
-          roundNumber: win.roundNumber,
-          rank: win.rank,
-          prizeAmount: win.prizeAmount,
-          prizeAmountKrw: `${formatKoreanNumber(win.prizeAmount)}원`,
-          matchCount: win.matchCount,
-          period: `${startDate} ~ ${endDate}`,
+      await notify(
+        {
+          type: 'success',
+          title: 'Lottery Jackpot Win!',
+          message: `${win.roundNumber}회차 로또 ${win.rank}등 당첨을 확인했습니다.`,
+          details: {
+            roundNumber: win.roundNumber,
+            rank: win.rank,
+            prizeAmount: win.prizeAmount,
+            prizeAmountKrw: `${formatKoreanNumber(win.prizeAmount)}원`,
+            matchCount: win.matchCount,
+            period: `${startDate} ~ ${endDate}`,
+          },
         },
-      });
+        collector
+      );
     }
 
     return jackpotWins;

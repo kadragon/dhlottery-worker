@@ -7,6 +7,7 @@
  */
 
 import { createHttpClient } from '../client/http';
+import { NotificationCollector } from '../notify/notification-collector';
 import type {
   AccountInfo,
   HttpClient,
@@ -23,9 +24,11 @@ import { reservePensionNextWeek } from './pension-reserve';
 
 export class DHLotteryClient {
   private client: HttpClient;
+  readonly collector: NotificationCollector;
 
   constructor() {
     this.client = createHttpClient();
+    this.collector = new NotificationCollector();
   }
 
   /**
@@ -54,27 +57,27 @@ export class DHLotteryClient {
    * @returns true if balance is sufficient, false otherwise
    */
   async checkDeposit(requiredAmount?: number): Promise<boolean> {
-    return await checkDeposit(this.client, requiredAmount);
+    return await checkDeposit(this.client, requiredAmount, this.collector);
   }
 
   /**
    * Reserve next week's pension 720+ ticket (1 round, all groups, 1 ticket each)
    */
   async reservePensionNextWeek(): Promise<PensionReserveOutcome> {
-    return await reservePensionNextWeek(this.client);
+    return await reservePensionNextWeek(this.client, this.collector);
   }
 
   /**
    * Purchase lottery tickets (5 games, auto)
    */
   async buy(): Promise<PurchaseOutcome> {
-    return await purchaseLottery(this.client);
+    return await purchaseLottery(this.client, this.collector);
   }
 
   /**
    * Check winning results for the previous week
    */
   async checkWinning(now: Date = new Date()): Promise<WinningResult[]> {
-    return await checkWinning(this.client, now);
+    return await checkWinning(this.client, now, this.collector);
   }
 }

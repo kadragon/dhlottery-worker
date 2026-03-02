@@ -11,6 +11,7 @@ import { checkDeposit } from './charge';
 import type { HttpClient } from '../types';
 import * as accountModule from './account';
 import * as telegramModule from '../notify/telegram';
+import { NotificationCollector } from '../notify/notification-collector';
 import { MIN_DEPOSIT_AMOUNT, USER_AGENT, WEEKLY_COMBINED_REQUIRED_BALANCE } from '../constants';
 
 // Mock modules
@@ -403,6 +404,58 @@ describe('checkDeposit', () => {
 
       // And: No notification sent (error propagates)
       expect(telegramModule.sendNotification).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Collector integration', () => {
+    it('should add warning payload to collector instead of calling sendNotification', async () => {
+      vi.mocked(accountModule.getAccountInfo).mockResolvedValue({
+        balance: 4000,
+        currentRound: 1200,
+      });
+
+      vi.mocked(mockClient.fetch).mockResolvedValue({
+        status: 200,
+        statusText: 'OK',
+        headers: new Headers(),
+        text: async () => '<html></html>',
+        json: async <T>() => ({}) as T,
+      });
+
+      const collector = new NotificationCollector();
+      await checkDeposit(mockClient, undefined, collector);
+
+      expect(telegramModule.sendNotification).not.toHaveBeenCalled();
+      expect(collector.getPayloads()).toHaveLength(1);
+      expect(collector.getPayloads()[0]).toMatchObject({
+        type: 'warning',
+        title: 'Insufficient Balance',
+      });
+    });
+
+    it('should add error payload to collector when charge init fails', async () => {
+      vi.mocked(accountModule.getAccountInfo).mockResolvedValue({
+        balance: 3000,
+        currentRound: 1200,
+      });
+
+      vi.mocked(mockClient.fetch).mockResolvedValue({
+        status: 500,
+        statusText: 'Internal Server Error',
+        headers: new Headers(),
+        text: async () => '',
+        json: async <T>() => ({}) as T,
+      });
+
+      const collector = new NotificationCollector();
+      await checkDeposit(mockClient, undefined, collector);
+
+      expect(telegramModule.sendNotification).not.toHaveBeenCalled();
+      expect(collector.getPayloads()).toHaveLength(1);
+      expect(collector.getPayloads()[0]).toMatchObject({
+        type: 'error',
+        title: expect.stringContaining('Charge'),
+      });
     });
   });
 });

@@ -9,10 +9,12 @@
  */
 
 import { USER_AGENT } from '../constants';
+import type { NotificationCollector } from '../notify/notification-collector';
 import { sendNotification } from '../notify/telegram';
 import type {
   GameSelection,
   HttpClient,
+  NotificationPayload,
   PurchaseOutcome,
   PurchaseReadyResponse,
   PurchaseResult,
@@ -23,6 +25,17 @@ import { PurchaseError } from '../utils/errors';
 import { formatCurrency, formatKoreanNumber } from '../utils/format';
 import { logger } from '../utils/logger';
 import { getAccountInfo } from './account';
+
+async function notify(
+  payload: NotificationPayload,
+  collector?: NotificationCollector
+): Promise<void> {
+  if (collector) {
+    collector.add(payload);
+  } else {
+    await sendNotification(payload);
+  }
+}
 
 const BASE_URL = 'https://ol.dhlottery.co.kr/olotto/game';
 const GAME_PAGE_URL = `${BASE_URL}/game645.do`;
@@ -131,7 +144,10 @@ function addYearsAndDays(date: string, years: number, days: number): string {
  * @param client - HTTP client with active session
  * @returns Purchase outcome with success/failure details
  */
-export async function purchaseLottery(client: HttpClient): Promise<PurchaseOutcome> {
+export async function purchaseLottery(
+  client: HttpClient,
+  collector?: NotificationCollector
+): Promise<PurchaseOutcome> {
   try {
     // Get current lottery round number
     const accountInfo = await getAccountInfo(client);
@@ -156,17 +172,20 @@ export async function purchaseLottery(client: HttpClient): Promise<PurchaseOutco
       };
 
       // Send success notification
-      await sendNotification({
-        type: 'success',
-        title: 'Lottery Purchase Completed',
-        message: `${roundNumber}회 로또 ${PURCHASE_CONSTANTS.GAME_COUNT}게임을 ${formatKoreanNumber(PURCHASE_CONSTANTS.TOTAL_COST)}원에 구매했습니다.`,
-        details: {
-          회차: `${roundNumber}회`,
-          게임수: `${PURCHASE_CONSTANTS.GAME_COUNT}게임`,
-          결제금액: `${formatKoreanNumber(PURCHASE_CONSTANTS.TOTAL_COST)}원`,
-          잔액: formatCurrency(accountInfo.balance - PURCHASE_CONSTANTS.TOTAL_COST),
+      await notify(
+        {
+          type: 'success',
+          title: 'Lottery Purchase Completed',
+          message: `${roundNumber}회 로또 ${PURCHASE_CONSTANTS.GAME_COUNT}게임을 ${formatKoreanNumber(PURCHASE_CONSTANTS.TOTAL_COST)}원에 구매했습니다.`,
+          details: {
+            회차: `${roundNumber}회`,
+            게임수: `${PURCHASE_CONSTANTS.GAME_COUNT}게임`,
+            결제금액: `${formatKoreanNumber(PURCHASE_CONSTANTS.TOTAL_COST)}원`,
+            잔액: formatCurrency(accountInfo.balance - PURCHASE_CONSTANTS.TOTAL_COST),
+          },
         },
-      });
+        collector
+      );
 
       return successResult;
     }
@@ -179,14 +198,17 @@ export async function purchaseLottery(client: HttpClient): Promise<PurchaseOutco
     };
 
     // Send error notification
-    await sendNotification({
-      type: 'error',
-      title: 'Lottery Purchase Failed',
-      message: purchaseResult.result.resultMsg,
-      details: {
-        오류코드: purchaseResult.result.resultCode,
+    await notify(
+      {
+        type: 'error',
+        title: 'Lottery Purchase Failed',
+        message: purchaseResult.result.resultMsg,
+        details: {
+          오류코드: purchaseResult.result.resultCode,
+        },
       },
-    });
+      collector
+    );
 
     return failureResult;
   } catch (error) {
@@ -199,11 +221,14 @@ export async function purchaseLottery(client: HttpClient): Promise<PurchaseOutco
     };
 
     // Send error notification
-    await sendNotification({
-      type: 'error',
-      title: 'Lottery Purchase Failed',
-      message: `구매 중 오류가 발생했습니다: ${errorMessage}`,
-    });
+    await notify(
+      {
+        type: 'error',
+        title: 'Lottery Purchase Failed',
+        message: `구매 중 오류가 발생했습니다: ${errorMessage}`,
+      },
+      collector
+    );
 
     return failureResult;
   }

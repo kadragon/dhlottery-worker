@@ -56,6 +56,54 @@ function formatMessage(payload: NotificationPayload): string {
 }
 
 /**
+ * Format and send multiple notification payloads as a single Telegram message.
+ * Each payload is separated by a `---` divider.
+ * No-op if the payload list is empty.
+ */
+export async function sendCombinedNotification(payloads: NotificationPayload[]): Promise<void> {
+  if (payloads.length === 0) return;
+
+  const sections = payloads.map((p) => formatMessage(p));
+  const combinedText = sections.join('\n\n---\n\n');
+
+  try {
+    const botToken = getEnv('TELEGRAM_BOT_TOKEN');
+    const chatId = getEnv('TELEGRAM_CHAT_ID');
+
+    const message: TelegramMessage = {
+      chat_id: chatId,
+      text: combinedText,
+      parse_mode: 'Markdown',
+    };
+
+    const url = `https://api.telegram.org/bot${botToken}/sendMessage`;
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(message),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      logger.error('Telegram API error', {
+        event: 'telegram_api_error',
+        status: response.status,
+        statusText: response.statusText,
+        errorData,
+      });
+    }
+  } catch (error) {
+    logger.error('Failed to send combined Telegram notification', {
+      event: 'telegram_combined_send_failed',
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
+/**
  * Send notification to Telegram
  *
  * @param payload - Notification payload with type, title, message, and optional details

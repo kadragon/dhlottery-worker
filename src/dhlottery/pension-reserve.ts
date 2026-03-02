@@ -3,6 +3,7 @@
  */
 
 import { PENSION_RESERVE_COST, USER_AGENT } from '../constants';
+import type { NotificationCollector } from '../notify/notification-collector';
 import { sendNotification } from '../notify/telegram';
 import type {
   ElAddMyReserveResponse,
@@ -11,6 +12,7 @@ import type {
   ElEncryptedResponse,
   ElRoundRemainTimeResponse,
   HttpClient,
+  NotificationPayload,
   PensionReserveFailure,
   PensionReserveOutcome,
   PensionReserveSkipped,
@@ -20,6 +22,17 @@ import { DHLotteryError } from '../utils/errors';
 import { formatKoreanNumber } from '../utils/format';
 import { logger } from '../utils/logger';
 import { decryptElQ, encryptElQ } from './pension-crypto';
+
+async function notify(
+  payload: NotificationPayload,
+  collector?: NotificationCollector
+): Promise<void> {
+  if (collector) {
+    collector.add(payload);
+  } else {
+    await sendNotification(payload);
+  }
+}
 
 const EL_BASE_URL = 'https://el.dhlottery.co.kr';
 const TOTAL_GAME_URL = `${EL_BASE_URL}/game/TotalGame.jsp?LottoId=LP72`;
@@ -215,7 +228,10 @@ function createFailure(error: string, code?: string, targetRound?: number): Pens
   };
 }
 
-export async function reservePensionNextWeek(client: HttpClient): Promise<PensionReserveOutcome> {
+export async function reservePensionNextWeek(
+  client: HttpClient,
+  collector?: NotificationCollector
+): Promise<PensionReserveOutcome> {
   let targetRound: number | undefined;
 
   try {
@@ -233,26 +249,32 @@ export async function reservePensionNextWeek(client: HttpClient): Promise<Pensio
 
     if (depositData.resultCode !== '100') {
       const failure = createFailure(depositData.resultMsg, depositData.resultCode, targetRound);
-      await sendNotification({
-        type: 'error',
-        title: 'Pension Reserve Failed',
-        message: `연금복권 예치금 조회에 실패했습니다: ${depositData.resultMsg}`,
-        details: {
-          오류코드: depositData.resultCode,
-          대상회차: targetRound ? `${targetRound}회` : undefined,
+      await notify(
+        {
+          type: 'error',
+          title: 'Pension Reserve Failed',
+          message: `연금복권 예치금 조회에 실패했습니다: ${depositData.resultMsg}`,
+          details: {
+            오류코드: depositData.resultCode,
+            대상회차: targetRound ? `${targetRound}회` : undefined,
+          },
         },
-      });
+        collector
+      );
       return failure;
     }
 
     const deposit = Number(depositData.deposit);
     if (!Number.isFinite(deposit)) {
       const failure = createFailure('Invalid deposit value from EL API', 'PENSION_INVALID_DEPOSIT');
-      await sendNotification({
-        type: 'error',
-        title: 'Pension Reserve Failed',
-        message: '연금복권 예치금 값을 파싱하지 못했습니다.',
-      });
+      await notify(
+        {
+          type: 'error',
+          title: 'Pension Reserve Failed',
+          message: '연금복권 예치금 값을 파싱하지 못했습니다.',
+        },
+        collector
+      );
       return failure;
     }
 
@@ -262,16 +284,19 @@ export async function reservePensionNextWeek(client: HttpClient): Promise<Pensio
         'PENSION_INSUFFICIENT_DEPOSIT',
         targetRound
       );
-      await sendNotification({
-        type: 'warning',
-        title: 'Pension Reserve Skipped',
-        message: '연금복권 예약에 필요한 예치금이 부족하여 예약을 건너뜁니다.',
-        details: {
-          대상회차: `${targetRound}회`,
-          필요금액: `${formatKoreanNumber(PENSION_RESERVE_COST)}원`,
-          보유예치금: `${formatKoreanNumber(deposit)}원`,
+      await notify(
+        {
+          type: 'warning',
+          title: 'Pension Reserve Skipped',
+          message: '연금복권 예약에 필요한 예치금이 부족하여 예약을 건너뜁니다.',
+          details: {
+            대상회차: `${targetRound}회`,
+            필요금액: `${formatKoreanNumber(PENSION_RESERVE_COST)}원`,
+            보유예치금: `${formatKoreanNumber(deposit)}원`,
+          },
         },
-      });
+        collector
+      );
       return failure;
     }
 
@@ -292,15 +317,18 @@ export async function reservePensionNextWeek(client: HttpClient): Promise<Pensio
 
     if (duplicateData.resultCode !== '100') {
       const failure = createFailure(duplicateData.resultMsg, duplicateData.resultCode, targetRound);
-      await sendNotification({
-        type: 'error',
-        title: 'Pension Reserve Failed',
-        message: `연금복권 중복 예약 확인에 실패했습니다: ${duplicateData.resultMsg}`,
-        details: {
-          오류코드: duplicateData.resultCode,
-          대상회차: `${targetRound}회`,
+      await notify(
+        {
+          type: 'error',
+          title: 'Pension Reserve Failed',
+          message: `연금복권 중복 예약 확인에 실패했습니다: ${duplicateData.resultMsg}`,
+          details: {
+            오류코드: duplicateData.resultCode,
+            대상회차: `${targetRound}회`,
+          },
         },
-      });
+        collector
+      );
       return failure;
     }
 
@@ -320,14 +348,17 @@ export async function reservePensionNextWeek(client: HttpClient): Promise<Pensio
         duplicateRounds: duplicates,
       };
 
-      await sendNotification({
-        type: 'warning',
-        title: 'Pension Reserve Skipped',
-        message: `대상 회차(${targetRound}회)가 이미 예약되어 예약을 건너뜁니다.`,
-        details: {
-          중복회차: duplicates.join(', '),
+      await notify(
+        {
+          type: 'warning',
+          title: 'Pension Reserve Skipped',
+          message: `대상 회차(${targetRound}회)가 이미 예약되어 예약을 건너뜁니다.`,
+          details: {
+            중복회차: duplicates.join(', '),
+          },
         },
-      });
+        collector
+      );
       return skipped;
     }
 
@@ -348,15 +379,18 @@ export async function reservePensionNextWeek(client: HttpClient): Promise<Pensio
 
     if (reserveData.resultCode !== '100') {
       const failure = createFailure(reserveData.resultMsg, reserveData.resultCode, targetRound);
-      await sendNotification({
-        type: 'error',
-        title: 'Pension Reserve Failed',
-        message: `연금복권 예약 요청에 실패했습니다: ${reserveData.resultMsg}`,
-        details: {
-          오류코드: reserveData.resultCode,
-          대상회차: `${targetRound}회`,
+      await notify(
+        {
+          type: 'error',
+          title: 'Pension Reserve Failed',
+          message: `연금복권 예약 요청에 실패했습니다: ${reserveData.resultMsg}`,
+          details: {
+            오류코드: reserveData.resultCode,
+            대상회차: `${targetRound}회`,
+          },
         },
-      });
+        collector
+      );
       return failure;
     }
 
@@ -372,17 +406,20 @@ export async function reservePensionNextWeek(client: HttpClient): Promise<Pensio
       reserveOrderDate: reserveData.reserveOrderDate,
     };
 
-    await sendNotification({
-      type: 'success',
-      title: 'Pension Reserve Completed',
-      message: `${targetRound}회 연금복권720+ 예약(모든조, 1매씩)을 완료했습니다.`,
-      details: {
-        대상회차: `${targetRound}회`,
-        예약금액: `${formatKoreanNumber(PENSION_RESERVE_COST)}원`,
-        예약수량: `${TICKET_COUNT}매`,
-        예약번호: reserveData.reserveOrderNo,
+    await notify(
+      {
+        type: 'success',
+        title: 'Pension Reserve Completed',
+        message: `${targetRound}회 연금복권720+ 예약(모든조, 1매씩)을 완료했습니다.`,
+        details: {
+          대상회차: `${targetRound}회`,
+          예약금액: `${formatKoreanNumber(PENSION_RESERVE_COST)}원`,
+          예약수량: `${TICKET_COUNT}매`,
+          예약번호: reserveData.reserveOrderNo,
+        },
       },
-    });
+      collector
+    );
 
     return success;
   } catch (error) {
@@ -390,15 +427,18 @@ export async function reservePensionNextWeek(client: HttpClient): Promise<Pensio
     // DHLotteryError carries a structured code from the API or our own error constants;
     // generic runtime errors (TypeError, SyntaxError, etc.) get a fallback code.
     const errorCode = error instanceof DHLotteryError ? error.code : 'PENSION_UNEXPECTED_ERROR';
-    await sendNotification({
-      type: 'error',
-      title: 'Pension Reserve Failed',
-      message: `연금복권 예약 중 오류가 발생했습니다: ${errorMessage}`,
-      details: {
-        오류코드: errorCode,
-        대상회차: targetRound ? `${targetRound}회` : undefined,
+    await notify(
+      {
+        type: 'error',
+        title: 'Pension Reserve Failed',
+        message: `연금복권 예약 중 오류가 발생했습니다: ${errorMessage}`,
+        details: {
+          오류코드: errorCode,
+          대상회차: targetRound ? `${targetRound}회` : undefined,
+        },
       },
-    });
+      collector
+    );
     return createFailure(errorMessage, errorCode, targetRound);
   }
 }
