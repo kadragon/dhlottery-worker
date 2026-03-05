@@ -18,35 +18,69 @@ DHLottery(동행복권) 자동 구매와 알림을 위한 GitHub Actions 기반 
 - `src/`: 실행 코드
 - `.github/workflows/lottery.yml`: GitHub Actions 워크플로
 
-## 설치
+## 시작하기 (Fork & 설정)
 
 ### 사전 준비
 
-- Bun 1.x
-- GitHub 계정 (GitHub Actions 사용)
-- DHLottery 계정
-- Telegram 봇
+- GitHub 계정
+- [DHLottery(동행복권)](https://www.dhlottery.co.kr) 계정 (예치금 충전 필요)
+- Telegram 봇 토큰 및 채팅 ID
 
-### 설치 방법
+### 1. 저장소 Fork
 
-1. 저장소 클론:
+1. 이 저장소 우측 상단의 **Fork** 버튼을 클릭합니다.
+2. Fork된 저장소로 이동합니다.
+
+### 2. GitHub Actions 활성화
+
+Fork된 저장소는 기본적으로 Actions가 비활성화되어 있습니다.
+
+1. Fork된 저장소의 **Actions** 탭으로 이동합니다.
+2. "I understand my workflows, go ahead and enable them" 버튼을 클릭합니다.
+
+### 3. GitHub Secrets 설정
+
+저장소 **Settings** → **Secrets and variables** → **Actions** → **New repository secret**에서 아래 4개 항목을 추가합니다:
+
+| Secret 이름 | 설명 | 예시 |
+|---|---|---|
+| `USER_ID` | DHLottery 로그인 ID | `hong123` |
+| `PASSWORD` | DHLottery 로그인 비밀번호 | `mypassword` |
+| `TELEGRAM_BOT_TOKEN` | Telegram 봇 토큰 | `123456:ABC-DEF...` |
+| `TELEGRAM_CHAT_ID` | 알림 받을 Telegram 채팅 ID | `987654321` |
+
+> **Telegram 봇 생성 방법**: [@BotFather](https://t.me/BotFather)에게 `/newbot` 명령 → 봇 토큰 발급 → 봇과 대화 시작 후 [@userinfobot](https://t.me/userinfobot)에서 채팅 ID 확인
+
+### 4. 동작 확인
+
+1. **Actions** 탭 → **Lottery Automation** 워크플로 선택
+2. **Run workflow** 버튼으로 수동 실행
+3. 실행 로그와 Telegram 알림을 확인합니다.
+
+설정 완료 후 매주 월요일 10:00 KST에 자동 실행됩니다.
+
+### 로컬 개발 (선택)
+
+로컬에서 실행하려면 Bun 1.x가 필요합니다.
+
 ```bash
-git clone <repository-url>
+git clone <your-fork-url>
 cd dhlottery-worker
-```
-
-2. 의존성 설치:
-```bash
 bun install
 ```
 
-3. GitHub Secrets 설정:
-   - 저장소 Settings → Secrets and variables → Actions
-   - 다음 항목 추가:
-     - `USER_ID`: DHLottery 사용자 ID
-     - `PASSWORD`: DHLottery 비밀번호
-     - `TELEGRAM_BOT_TOKEN`: Telegram 봇 토큰
-     - `TELEGRAM_CHAT_ID`: Telegram 채팅 ID
+`.env` 파일을 생성하고 위 Secrets와 동일한 환경 변수를 설정합니다:
+
+```env
+USER_ID=hong123
+PASSWORD=mypassword
+TELEGRAM_BOT_TOKEN=123456:ABC-DEF...
+TELEGRAM_CHAT_ID=987654321
+```
+
+```bash
+bun run start
+```
 
 ## 개발
 
