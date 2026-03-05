@@ -5,9 +5,10 @@ DHLottery(동행복권) 자동 구매와 알림을 위한 GitHub Actions 기반 
 ## 주요 기능
 
 - 🎰 자동 로또 구매 (주 5게임)
+- 🎫 연금복권720+ 다음 주 예약 구매
 - 💰 잔액 모니터링
 - 🏆 당첨 확인
-- 📱 Telegram 알림
+- 📱 Telegram 통합 알림 (1회 실행당 단일 메시지)
 - ⏰ 스케줄 실행 (매주 월요일 10:00 KST)
 
 ## 구성
@@ -94,15 +95,18 @@ GitHub Actions로 자동 실행됩니다.
 3. **인증** → POST `/login/securityLoginCheck.do` (RSA 암호화 로그인)
 4. **계정 조회** → 잔액 `/mypage/selectUserMndp.do`, 회차 `/lt645/selectThsLt645Info.do`
 5. **잔액 확인** → 최소 잔액(5,000원) 확인
-6. **구매** → `/olotto/game/egovUserReadySocket.json` → `/olotto/game/execBuy.do`
-7. **당첨 확인** → `/myPage.do?method=lottoBuyList`
-8. **알림** → Telegram 메시지 전송
+6. **로또 구매** → `/olotto/game/egovUserReadySocket.json` → `/olotto/game/execBuy.do`
+7. **연금복권 예약** → 다음 주 연금복권720+ 자동 예약 구매
+8. **당첨 확인** → `/myPage.do?method=lottoBuyList`
+9. **통합 알림** → 모든 결과를 단일 Telegram 메시지로 전송
 
 ## 비즈니스 규칙
 
-- **최소 잔액**: 5,000원 (5게임 × 1,000원)
-- **구매 방식**: 자동 번호 생성 (genType "0")
+- **최소 잔액**: 5,000원 (로또 5게임 × 1,000원)
+- **로또 구매 방식**: 자동 번호 생성 (genType "0")
+- **연금복권720+**: 다음 주 회차 자동 예약, 별도 EL 예치금 사용
 - **당첨 확인 범위**: 이전 주(월~일, KST), 1등만 알림
+- **알림 방식**: 1회 실행당 모든 결과를 단일 Telegram 메시지로 통합 전송
 - **실행 시간**: 매주 월요일 10:00 KST
 
 ## 보안
@@ -171,14 +175,25 @@ DEBUG=true bun run start
 - 잔액: `/mypage/selectUserMndp.do` JSON API (`crntEntrsAmt`)
 - 회차: `/lt645/selectThsLt645Info.do` JSON API (`ltEpsd`)
 
-### 구매 프로토콜
+### 로또 구매 프로토콜
 - 2단계 원자적 구매 (ready → exec)
 - 필요 헤더 및 날짜 파라미터 포함
+- 성공 시 잔액 정보 포함 알림
 - 실패 시 전체 흐름 중단 없이 알림 처리
+
+### 연금복권720+ 예약
+- 다음 주 회차 자동 예약 구매
+- EL 예치금 잔액 별도 확인
+- 잔액 부족 시 에러 없이 건너뜀
 
 ### 당첨 확인
 - 이전 주 구매 내역만 조회, 1등만 알림
 - 파싱 실패는 빈 결과로 종료
+
+### 알림 통합
+- NotificationCollector로 실행 중 모든 알림을 버퍼링
+- 실행 종료 시 단일 Telegram 메시지로 통합 전송 (`---` 구분자)
+- 개별 모듈은 collector 없이도 동작 (하위 호환)
 
 ## 참고
 
