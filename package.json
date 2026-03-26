@@ -40,7 +40,7 @@
     "node-forge": "^1.4.0",
     "simple-git-hooks": "^2.13.1",
     "tsx": "^4.21.0",
-    "typescript": "^5.7.2",
+    "typescript": "^6.0.2",
     "vitest": "^4.1.1"
   }
 }
