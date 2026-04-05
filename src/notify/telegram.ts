@@ -11,6 +11,14 @@ import { getEnv } from '../utils/env';
 import { logger } from '../utils/logger';
 
 /**
+ * Escape Telegram Markdown v1 special characters
+ * Escapes \ first to avoid double-escaping, then _ * ` [
+ */
+function escapeTelegramMarkdown(text: string): string {
+  return text.replace(/\\/g, '\\\\').replace(/([_*`[])/g, '\\$1');
+}
+
+/**
  * Get emoji based on notification type
  */
 function getTypeEmoji(type: NotificationPayload['type']): string {
@@ -32,11 +40,11 @@ function formatMessage(payload: NotificationPayload): string {
   const lines: string[] = [];
 
   // Title with emoji
-  lines.push(`${emoji} **${payload.title}**`);
+  lines.push(`${emoji} **${escapeTelegramMarkdown(payload.title)}**`);
   lines.push('');
 
   // Main message
-  lines.push(payload.message);
+  lines.push(escapeTelegramMarkdown(payload.message));
 
   // Add details if present
   if (payload.details && Object.keys(payload.details).length > 0) {
@@ -48,7 +56,9 @@ function formatMessage(payload: NotificationPayload): string {
         .replace(/^./, (str) => str.toUpperCase())
         .trim();
 
-      lines.push(`- ${formattedKey}: ${value}`);
+      lines.push(
+        `- ${escapeTelegramMarkdown(formattedKey)}: ${escapeTelegramMarkdown(String(value))}`
+      );
     }
   }
 

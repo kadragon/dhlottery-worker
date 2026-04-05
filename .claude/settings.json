@@ -1,0 +1,58 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(bun run test:*)",
+      "Bash(bun run test)",
+      "Bash(bun run check:*)",
+      "Bash(bun run typecheck)",
+      "Bash(bun run format:*)",
+      "Bash(bun run lint:*)"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bunx biome format --write \"$CLAUDE_FILE_PATH\"",
+            "description": "Auto-format edited files with Biome"
+          }
+        ]
+      },
+      {
+        "matcher": "Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bunx biome format --write \"$CLAUDE_FILE_PATH\"",
+            "description": "Auto-format new files with Biome"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo \"$CLAUDE_FILE_PATH\" | grep -qE '\\.(env|env\\..*)$' && echo 'BLOCKED: Do not edit .env files' && exit 1 || exit 0",
+            "description": "Block editing .env files"
+          }
+        ]
+      },
+      {
+        "matcher": "Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo \"$CLAUDE_FILE_PATH\" | grep -qE '\\.(env|env\\..*)$' && echo 'BLOCKED: Do not write .env files' && exit 1 || exit 0",
+            "description": "Block writing .env files"
+          }
+        ]
+      }
+    ]
+  }
+}

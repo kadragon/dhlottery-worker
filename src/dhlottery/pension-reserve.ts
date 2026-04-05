@@ -17,6 +17,7 @@ import type {
   PensionReserveSkipped,
   PensionReserveSuccess,
 } from '../types';
+import { addDaysToYmd } from '../utils/date';
 import { DHLotteryError } from '../utils/errors';
 import { formatKoreanNumber } from '../utils/format';
 import { logger } from '../utils/logger';
@@ -55,20 +56,6 @@ function getSessionId(client: HttpClient): string {
     cookieKey: client.cookies.JSESSIONID ? 'JSESSIONID' : 'DHJSESSIONID',
   });
   return sessionId;
-}
-
-function addDaysToYmd(dateStr: string, days: number): string {
-  const normalized = dateStr.includes('-')
-    ? dateStr
-    : `${dateStr.slice(0, 4)}-${dateStr.slice(4, 6)}-${dateStr.slice(6, 8)}`;
-  const [year, month, day] = normalized.split('-').map((part) => Number(part));
-  // Date.UTC month is 0-indexed (0 = January), so subtract 1 from the parsed month.
-  const utcDate = new Date(Date.UTC(year, month - 1, day));
-  utcDate.setUTCDate(utcDate.getUTCDate() + days);
-  const nextYear = utcDate.getUTCFullYear();
-  const nextMonth = String(utcDate.getUTCMonth() + 1).padStart(2, '0');
-  const nextDay = String(utcDate.getUTCDate()).padStart(2, '0');
-  return `${nextYear}-${nextMonth}-${nextDay}`;
 }
 
 function toDotDate(ymd: string): string {
@@ -216,6 +203,208 @@ function createFailure(error: string, code?: string, targetRound?: number): Pens
   };
 }
 
+async function verifyDeposit(
+  client: HttpClient,
+  targetRound: number,
+  collector?: NotificationCollector
+): Promise<PensionReserveFailure | number> {
+  const depositData = await postEncrypted<ElDepositResponse>(
+    client,
+    CHECK_DEPOSIT_URL,
+    FRM_AUTO_SERIALIZED,
+    RESERVE_PAGE_URL
+  );
+
+  if (depositData.resultCode !== '100') {
+    await notify(
+      {
+        type: 'error',
+        title: 'Pension Reserve Failed',
+        message: `연금복권 예치금 조회에 실패했습니다: ${depositData.resultMsg}`,
+        details: {
+          오류코드: depositData.resultCode,
+          대상회차: `${targetRound}회`,
+        },
+      },
+      collector
+    );
+    return createFailure(depositData.resultMsg, depositData.resultCode, targetRound);
+  }
+
+  const deposit = Number(depositData.deposit);
+  if (!Number.isFinite(deposit)) {
+    await notify(
+      {
+        type: 'error',
+        title: 'Pension Reserve Failed',
+        message: '연금복권 예치금 값을 파싱하지 못했습니다.',
+      },
+      collector
+    );
+    return createFailure('Invalid deposit value from EL API', 'PENSION_INVALID_DEPOSIT');
+  }
+
+  if (deposit < PENSION_RESERVE_COST) {
+    await notify(
+      {
+        type: 'warning',
+        title: 'Pension Reserve Skipped',
+        message: '연금복권 예약에 필요한 예치금이 부족하여 예약을 건너뜁니다.',
+        details: {
+          대상회차: `${targetRound}회`,
+          필요금액: `${formatKoreanNumber(PENSION_RESERVE_COST)}원`,
+          보유예치금: `${formatKoreanNumber(deposit)}원`,
+        },
+      },
+      collector
+    );
+    return createFailure(
+      'Insufficient balance for pension reserve',
+      'PENSION_INSUFFICIENT_DEPOSIT',
+      targetRound
+    );
+  }
+
+  return deposit;
+}
+
+async function checkForDuplicates(
+  client: HttpClient,
+  roundInfo: { currentRound: number; nextRound: number; nextDrawDateDot: string },
+  deposit: number,
+  collector?: NotificationCollector
+): Promise<PensionReserveOutcome | null> {
+  const duplicatePayload = buildReserveFormPayload({
+    currentRound: roundInfo.currentRound,
+    nextRound: roundInfo.nextRound,
+    nextDrawDateDot: roundInfo.nextDrawDateDot,
+    deposit,
+    winDate: '',
+  });
+
+  const duplicateData = await postEncrypted<ElCheckMyReserveResponse>(
+    client,
+    CHECK_MY_RESERVE_URL,
+    duplicatePayload,
+    RESERVE_PAGE_URL
+  );
+
+  if (duplicateData.resultCode !== '100') {
+    await notify(
+      {
+        type: 'error',
+        title: 'Pension Reserve Failed',
+        message: `연금복권 중복 예약 확인에 실패했습니다: ${duplicateData.resultMsg}`,
+        details: {
+          오류코드: duplicateData.resultCode,
+          대상회차: `${roundInfo.nextRound}회`,
+        },
+      },
+      collector
+    );
+    return createFailure(duplicateData.resultMsg, duplicateData.resultCode, roundInfo.nextRound);
+  }
+
+  const duplicates = (duplicateData.doubleRound || [])
+    .filter((item) => Number(item.doubleRound) === roundInfo.nextRound)
+    .map((item) => `${item.doubleRound}회 ${item.doubleCnt}매`);
+
+  if (duplicates.length > 0) {
+    await notify(
+      {
+        type: 'warning',
+        title: 'Pension Reserve Skipped',
+        message: `대상 회차(${roundInfo.nextRound}회)가 이미 예약되어 예약을 건너뜁니다.`,
+        details: {
+          중복회차: duplicates.join(', '),
+        },
+      },
+      collector
+    );
+    return {
+      status: 'skipped',
+      success: true,
+      skipped: true,
+      targetRound: roundInfo.nextRound,
+      totalAmount: PENSION_RESERVE_COST,
+      ticketCount: TICKET_COUNT,
+      message: 'Duplicate reserve detected',
+      duplicateRounds: duplicates,
+    } satisfies PensionReserveSkipped;
+  }
+
+  return null;
+}
+
+async function submitReservation(
+  client: HttpClient,
+  roundInfo: { currentRound: number; nextRound: number; nextDrawDateDot: string },
+  deposit: number,
+  collector?: NotificationCollector
+): Promise<PensionReserveSuccess | PensionReserveFailure> {
+  const reservePayload = buildReserveFormPayload({
+    currentRound: roundInfo.currentRound,
+    nextRound: roundInfo.nextRound,
+    nextDrawDateDot: roundInfo.nextDrawDateDot,
+    deposit,
+    winDate: roundInfo.nextDrawDateDot,
+  });
+
+  const reserveData = await postEncrypted<ElAddMyReserveResponse>(
+    client,
+    ADD_MY_RESERVE_URL,
+    reservePayload,
+    RESERVE_PAGE_URL
+  );
+
+  const targetRound = roundInfo.nextRound;
+
+  if (reserveData.resultCode !== '100') {
+    await notify(
+      {
+        type: 'error',
+        title: 'Pension Reserve Failed',
+        message: `연금복권 예약 요청에 실패했습니다: ${reserveData.resultMsg}`,
+        details: {
+          오류코드: reserveData.resultCode,
+          대상회차: `${targetRound}회`,
+        },
+      },
+      collector
+    );
+    return createFailure(reserveData.resultMsg, reserveData.resultCode, targetRound);
+  }
+
+  const success: PensionReserveSuccess = {
+    status: 'success',
+    success: true,
+    skipped: false,
+    targetRound,
+    totalAmount: PENSION_RESERVE_COST,
+    ticketCount: TICKET_COUNT,
+    message: reserveData.resultMsg,
+    reserveOrderNo: reserveData.reserveOrderNo,
+    reserveOrderDate: reserveData.reserveOrderDate,
+  };
+
+  await notify(
+    {
+      type: 'success',
+      title: 'Pension Reserve Completed',
+      message: `${targetRound}회 연금복권720+ 예약(모든조, 1매씩)을 완료했습니다.`,
+      details: {
+        대상회차: `${targetRound}회`,
+        예약금액: `${formatKoreanNumber(PENSION_RESERVE_COST)}원`,
+        예약수량: `${TICKET_COUNT}매`,
+        예약번호: reserveData.reserveOrderNo,
+      },
+    },
+    collector
+  );
+
+  return success;
+}
+
 export async function reservePensionNextWeek(
   client: HttpClient,
   collector?: NotificationCollector
@@ -228,192 +417,15 @@ export async function reservePensionNextWeek(
     const roundInfo = await fetchRoundRemainTime(client);
     targetRound = roundInfo.nextRound;
 
-    const depositData = await postEncrypted<ElDepositResponse>(
-      client,
-      CHECK_DEPOSIT_URL,
-      FRM_AUTO_SERIALIZED,
-      RESERVE_PAGE_URL
-    );
+    const depositResult = await verifyDeposit(client, targetRound, collector);
+    if (typeof depositResult !== 'number') return depositResult;
 
-    if (depositData.resultCode !== '100') {
-      const failure = createFailure(depositData.resultMsg, depositData.resultCode, targetRound);
-      await notify(
-        {
-          type: 'error',
-          title: 'Pension Reserve Failed',
-          message: `연금복권 예치금 조회에 실패했습니다: ${depositData.resultMsg}`,
-          details: {
-            오류코드: depositData.resultCode,
-            대상회차: targetRound ? `${targetRound}회` : undefined,
-          },
-        },
-        collector
-      );
-      return failure;
-    }
+    const duplicateResult = await checkForDuplicates(client, roundInfo, depositResult, collector);
+    if (duplicateResult) return duplicateResult;
 
-    const deposit = Number(depositData.deposit);
-    if (!Number.isFinite(deposit)) {
-      const failure = createFailure('Invalid deposit value from EL API', 'PENSION_INVALID_DEPOSIT');
-      await notify(
-        {
-          type: 'error',
-          title: 'Pension Reserve Failed',
-          message: '연금복권 예치금 값을 파싱하지 못했습니다.',
-        },
-        collector
-      );
-      return failure;
-    }
-
-    if (deposit < PENSION_RESERVE_COST) {
-      const failure = createFailure(
-        'Insufficient balance for pension reserve',
-        'PENSION_INSUFFICIENT_DEPOSIT',
-        targetRound
-      );
-      await notify(
-        {
-          type: 'warning',
-          title: 'Pension Reserve Skipped',
-          message: '연금복권 예약에 필요한 예치금이 부족하여 예약을 건너뜁니다.',
-          details: {
-            대상회차: `${targetRound}회`,
-            필요금액: `${formatKoreanNumber(PENSION_RESERVE_COST)}원`,
-            보유예치금: `${formatKoreanNumber(deposit)}원`,
-          },
-        },
-        collector
-      );
-      return failure;
-    }
-
-    const duplicatePayload = buildReserveFormPayload({
-      currentRound: roundInfo.currentRound,
-      nextRound: roundInfo.nextRound,
-      nextDrawDateDot: roundInfo.nextDrawDateDot,
-      deposit,
-      winDate: '',
-    });
-
-    const duplicateData = await postEncrypted<ElCheckMyReserveResponse>(
-      client,
-      CHECK_MY_RESERVE_URL,
-      duplicatePayload,
-      RESERVE_PAGE_URL
-    );
-
-    if (duplicateData.resultCode !== '100') {
-      const failure = createFailure(duplicateData.resultMsg, duplicateData.resultCode, targetRound);
-      await notify(
-        {
-          type: 'error',
-          title: 'Pension Reserve Failed',
-          message: `연금복권 중복 예약 확인에 실패했습니다: ${duplicateData.resultMsg}`,
-          details: {
-            오류코드: duplicateData.resultCode,
-            대상회차: `${targetRound}회`,
-          },
-        },
-        collector
-      );
-      return failure;
-    }
-
-    const duplicates = (duplicateData.doubleRound || [])
-      .filter((item) => Number(item.doubleRound) === targetRound)
-      .map((item) => `${item.doubleRound}회 ${item.doubleCnt}매`);
-
-    if (duplicates.length > 0) {
-      const skipped: PensionReserveSkipped = {
-        status: 'skipped',
-        success: true,
-        skipped: true,
-        targetRound,
-        totalAmount: PENSION_RESERVE_COST,
-        ticketCount: TICKET_COUNT,
-        message: 'Duplicate reserve detected',
-        duplicateRounds: duplicates,
-      };
-
-      await notify(
-        {
-          type: 'warning',
-          title: 'Pension Reserve Skipped',
-          message: `대상 회차(${targetRound}회)가 이미 예약되어 예약을 건너뜁니다.`,
-          details: {
-            중복회차: duplicates.join(', '),
-          },
-        },
-        collector
-      );
-      return skipped;
-    }
-
-    const reservePayload = buildReserveFormPayload({
-      currentRound: roundInfo.currentRound,
-      nextRound: roundInfo.nextRound,
-      nextDrawDateDot: roundInfo.nextDrawDateDot,
-      deposit,
-      winDate: roundInfo.nextDrawDateDot,
-    });
-
-    const reserveData = await postEncrypted<ElAddMyReserveResponse>(
-      client,
-      ADD_MY_RESERVE_URL,
-      reservePayload,
-      RESERVE_PAGE_URL
-    );
-
-    if (reserveData.resultCode !== '100') {
-      const failure = createFailure(reserveData.resultMsg, reserveData.resultCode, targetRound);
-      await notify(
-        {
-          type: 'error',
-          title: 'Pension Reserve Failed',
-          message: `연금복권 예약 요청에 실패했습니다: ${reserveData.resultMsg}`,
-          details: {
-            오류코드: reserveData.resultCode,
-            대상회차: `${targetRound}회`,
-          },
-        },
-        collector
-      );
-      return failure;
-    }
-
-    const success: PensionReserveSuccess = {
-      status: 'success',
-      success: true,
-      skipped: false,
-      targetRound,
-      totalAmount: PENSION_RESERVE_COST,
-      ticketCount: TICKET_COUNT,
-      message: reserveData.resultMsg,
-      reserveOrderNo: reserveData.reserveOrderNo,
-      reserveOrderDate: reserveData.reserveOrderDate,
-    };
-
-    await notify(
-      {
-        type: 'success',
-        title: 'Pension Reserve Completed',
-        message: `${targetRound}회 연금복권720+ 예약(모든조, 1매씩)을 완료했습니다.`,
-        details: {
-          대상회차: `${targetRound}회`,
-          예약금액: `${formatKoreanNumber(PENSION_RESERVE_COST)}원`,
-          예약수량: `${TICKET_COUNT}매`,
-          예약번호: reserveData.reserveOrderNo,
-        },
-      },
-      collector
-    );
-
-    return success;
+    return await submitReservation(client, roundInfo, depositResult, collector);
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
-    // DHLotteryError carries a structured code from the API or our own error constants;
-    // generic runtime errors (TypeError, SyntaxError, etc.) get a fallback code.
     const errorCode = error instanceof DHLotteryError ? error.code : 'PENSION_UNEXPECTED_ERROR';
     await notify(
       {

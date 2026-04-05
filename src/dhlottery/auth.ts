@@ -294,8 +294,8 @@ export async function login(client: HttpClient): Promise<void> {
     }
 
     // Check for successful login via redirect (302 to loginSuccess.do)
-    // HttpClient uses redirect: 'manual', so we may not follow the redirect here.
-    // A userId cookie indicates successful login.
+    // HttpClient uses redirect: 'manual', so the redirect is not followed.
+    // Instead, a userId cookie indicates successful login.
     if (client.cookies.userId) {
       logger.debug('Login successful - session established', {
         module: 'auth',

@@ -138,7 +138,7 @@ async function parseBalanceFromApi(response: { json: () => Promise<unknown> }): 
   try {
     const data = (await response.json()) as BalanceApiResponse;
 
-    if (data?.data?.userMndp?.crntEntrsAmt === undefined) {
+    if (data?.data?.userMndp?.crntEntrsAmt == null) {
       throw new Error('Missing crntEntrsAmt in API response');
     }
 

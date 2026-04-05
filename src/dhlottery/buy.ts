@@ -19,7 +19,7 @@ import type {
   PurchaseResult,
 } from '../types';
 import { PURCHASE_CONSTANTS } from '../types/purchase.types';
-import { getNextSaturdayKst } from '../utils/date';
+import { addYearsAndDays, getNextSaturdayKst } from '../utils/date';
 import { PurchaseError } from '../utils/errors';
 import { formatCurrency, formatKoreanNumber } from '../utils/format';
 import { logger } from '../utils/logger';
@@ -113,17 +113,6 @@ async function executePurchase(
 
 function formatDateWithSlashes(date: string): string {
   return date.replace(/-/g, '/');
-}
-
-function addYearsAndDays(date: string, years: number, days: number): string {
-  const [year, month, day] = date.split('-').map((part) => Number(part));
-  const base = new Date(Date.UTC(year, month - 1, day));
-  base.setUTCFullYear(base.getUTCFullYear() + years);
-  base.setUTCDate(base.getUTCDate() + days);
-  const resultYear = base.getUTCFullYear();
-  const resultMonth = String(base.getUTCMonth() + 1).padStart(2, '0');
-  const resultDay = String(base.getUTCDate()).padStart(2, '0');
-  return `${resultYear}-${resultMonth}-${resultDay}`;
 }
 
 /**

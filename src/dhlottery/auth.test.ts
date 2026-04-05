@@ -486,6 +486,46 @@ describe("DHLottery Authentication", () => {
   });
 
   /**
+   * TEST-AUTH-005b: Succeed via userId cookie when response is 200
+   *
+   * Criteria:
+   * - Login response is 200 (not a redirect)
+   * - Response body has no isLoggedIn indicator
+   * - userId cookie is present → login succeeds
+   */
+  describe("TEST-AUTH-005b: Succeed via userId cookie path", () => {
+    it("should succeed when userId cookie is set after login response", async () => {
+      // Arrange
+      const { sessionInitResponse, rsaKeyResponse } = createMockResponses(false);
+
+      // Login response is 200 with no success indicator in body
+      const loginResponse200 = {
+        status: 200,
+        statusText: "OK",
+        headers: new Headers(),
+        text: async () => "<html><body>No login indicator here</body></html>",
+        json: async () => ({}),
+      } as unknown as HttpResponse;
+
+      // Simulate: after the login POST, the server sets userId cookie via Set-Cookie
+      // which HttpClient captures. We mock this by setting the cookie before the
+      // login response is processed.
+      const fetchMock = vi.mocked(mockHttpClient.fetch);
+      fetchMock
+        .mockResolvedValueOnce(sessionInitResponse)
+        .mockResolvedValueOnce(rsaKeyResponse)
+        .mockImplementationOnce(async () => {
+          // Simulate cookie being set by the HTTP response
+          mockHttpClient.cookies.userId = 'testuser';
+          return loginResponse200;
+        });
+
+      // Act & Assert
+      await expect(login(mockHttpClient)).resolves.not.toThrow();
+    });
+  });
+
+  /**
    * TEST-AUTH-006: Reject non-success 302 redirect
    *
    * Criteria:
