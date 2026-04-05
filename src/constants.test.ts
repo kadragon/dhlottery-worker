@@ -6,12 +6,11 @@
  *   task_id: TASK-010, TASK-REFACTOR-P2-002
  */
 
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   CHARGE_AMOUNT,
   COST_PER_GAME,
-  DEBUG,
   GAMES_PER_PURCHASE,
   MIN_DEPOSIT_AMOUNT,
   PENSION_RESERVE_COST,
@@ -32,11 +31,17 @@ describe('TEST-UTILS-002: Shared business constants', () => {
 });
 
 describe('TEST-REFACTOR-P2-LOG-001: DEBUG constant for conditional logging', () => {
-  it('should export DEBUG as a boolean', () => {
-    expect(typeof DEBUG).toBe('boolean');
+  beforeEach(() => {
+    vi.stubEnv('DEBUG', '');
   });
 
-  it('should default to false when DEBUG env is not set', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('should default to false when DEBUG env is not set', async () => {
+    const { DEBUG } = await import('./constants');
+    expect(typeof DEBUG).toBe('boolean');
     expect(DEBUG).toBe(false);
   });
 });

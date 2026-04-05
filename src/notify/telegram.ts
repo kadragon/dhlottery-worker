@@ -15,7 +15,7 @@ import { logger } from '../utils/logger';
  * Special chars: _ * ` [
  */
 function escapeTelegramMarkdown(text: string): string {
-  return text.replace(/([_*`[])/g, '\\$1');
+  return text.replace(/([_*`\[])/g, '\\$1');
 }
 
 /**

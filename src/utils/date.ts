@@ -122,11 +122,12 @@ export function addDaysToYmd(dateStr: string, days: number): string {
 }
 
 /**
- * Add years and days to a YYYY-MM-DD date string.
+ * Add years and days to a date string (YYYY-MM-DD or YYYYMMDD).
  * Returns YYYY-MM-DD format.
  */
 export function addYearsAndDays(date: string, years: number, days: number): string {
-  const [year, month, day] = date.split('-').map((part) => Number(part));
+  const normalized = normalizeYmdDate(date);
+  const [year, month, day] = normalized.split('-').map((part) => Number(part));
   const base = new Date(Date.UTC(year, month - 1, day));
   base.setUTCFullYear(base.getUTCFullYear() + years);
   base.setUTCDate(base.getUTCDate() + days);
