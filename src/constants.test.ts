@@ -36,7 +36,7 @@ describe('TEST-REFACTOR-P2-LOG-001: DEBUG constant for conditional logging', () 
     expect(typeof DEBUG).toBe('boolean');
   });
 
-  it('should have DEBUG set to false for production (suppress logs)', () => {
+  it('should default to false when DEBUG env is not set', () => {
     expect(DEBUG).toBe(false);
   });
 });

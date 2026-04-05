@@ -8,9 +8,9 @@
 
 /**
  * Debug flag for conditional logging
- * Set to true to enable console.log() output, false to suppress (production)
+ * Reads from DEBUG environment variable; defaults to false (production)
  */
-export const DEBUG = false;
+export const DEBUG = process.env.DEBUG === 'true';
 
 /**
  * Minimum deposit amount required for lottery purchase

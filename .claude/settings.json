@@ -12,26 +12,46 @@
   "hooks": {
     "PostToolUse": [
       {
-        "event": "Edit",
-        "command": "bunx biome format --write \"$CLAUDE_FILE_PATH\"",
-        "description": "Auto-format edited files with Biome"
+        "matcher": "Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bunx biome format --write \"$CLAUDE_FILE_PATH\"",
+            "description": "Auto-format edited files with Biome"
+          }
+        ]
       },
       {
-        "event": "Write",
-        "command": "bunx biome format --write \"$CLAUDE_FILE_PATH\"",
-        "description": "Auto-format new files with Biome"
+        "matcher": "Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bunx biome format --write \"$CLAUDE_FILE_PATH\"",
+            "description": "Auto-format new files with Biome"
+          }
+        ]
       }
     ],
     "PreToolUse": [
       {
-        "event": "Edit",
-        "command": "echo \"$CLAUDE_FILE_PATH\" | grep -qE '\\.(env|env\\..*)$' && echo 'BLOCKED: Do not edit .env files' && exit 1 || exit 0",
-        "description": "Block editing .env files"
+        "matcher": "Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo \"$CLAUDE_FILE_PATH\" | grep -qE '\\.(env|env\\..*)$' && echo 'BLOCKED: Do not edit .env files' && exit 1 || exit 0",
+            "description": "Block editing .env files"
+          }
+        ]
       },
       {
-        "event": "Write",
-        "command": "echo \"$CLAUDE_FILE_PATH\" | grep -qE '\\.(env|env\\..*)$' && echo 'BLOCKED: Do not write .env files' && exit 1 || exit 0",
-        "description": "Block writing .env files"
+        "matcher": "Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo \"$CLAUDE_FILE_PATH\" | grep -qE '\\.(env|env\\..*)$' && echo 'BLOCKED: Do not write .env files' && exit 1 || exit 0",
+            "description": "Block writing .env files"
+          }
+        ]
       }
     ]
   }

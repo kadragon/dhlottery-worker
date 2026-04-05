@@ -92,6 +92,46 @@ export function getNextSaturdayKst(now: Date = new Date()): string {
     daysUntilSaturday = 6 - kstDayOfWeek;
   }
 
-  const nextSaturday = new Date(kstNow.getTime() + daysUntilSaturday * ONE_DAY_MS);
+  const nextSaturday = new Date(now.getTime() + daysUntilSaturday * ONE_DAY_MS);
   return formatKstDateYyyyMmDd(nextSaturday);
+}
+
+/**
+ * Normalize a date string to YYYY-MM-DD format.
+ * Accepts both "YYYYMMDD" and "YYYY-MM-DD".
+ */
+function normalizeYmdDate(dateStr: string): string {
+  return dateStr.includes('-')
+    ? dateStr
+    : `${dateStr.slice(0, 4)}-${dateStr.slice(4, 6)}-${dateStr.slice(6, 8)}`;
+}
+
+/**
+ * Add days to a date string (YYYY-MM-DD or YYYYMMDD).
+ * Returns YYYY-MM-DD format.
+ */
+export function addDaysToYmd(dateStr: string, days: number): string {
+  const normalized = normalizeYmdDate(dateStr);
+  const [year, month, day] = normalized.split('-').map((part) => Number(part));
+  const utcDate = new Date(Date.UTC(year, month - 1, day));
+  utcDate.setUTCDate(utcDate.getUTCDate() + days);
+  const nextYear = utcDate.getUTCFullYear();
+  const nextMonth = String(utcDate.getUTCMonth() + 1).padStart(2, '0');
+  const nextDay = String(utcDate.getUTCDate()).padStart(2, '0');
+  return `${nextYear}-${nextMonth}-${nextDay}`;
+}
+
+/**
+ * Add years and days to a YYYY-MM-DD date string.
+ * Returns YYYY-MM-DD format.
+ */
+export function addYearsAndDays(date: string, years: number, days: number): string {
+  const [year, month, day] = date.split('-').map((part) => Number(part));
+  const base = new Date(Date.UTC(year, month - 1, day));
+  base.setUTCFullYear(base.getUTCFullYear() + years);
+  base.setUTCDate(base.getUTCDate() + days);
+  const resultYear = base.getUTCFullYear();
+  const resultMonth = String(base.getUTCMonth() + 1).padStart(2, '0');
+  const resultDay = String(base.getUTCDate()).padStart(2, '0');
+  return `${resultYear}-${resultMonth}-${resultDay}`;
 }
