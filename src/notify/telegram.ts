@@ -12,10 +12,10 @@ import { logger } from '../utils/logger';
 
 /**
  * Escape Telegram Markdown v1 special characters
- * Special chars: _ * ` [
+ * Escapes \ first to avoid double-escaping, then _ * ` [
  */
 function escapeTelegramMarkdown(text: string): string {
-  return text.replace(/([_*`\[])/g, '\\$1');
+  return text.replace(/\\/g, '\\\\').replace(/([_*`[])/g, '\\$1');
 }
 
 /**
