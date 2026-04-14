@@ -166,20 +166,15 @@ export async function checkWinning(
         'User-Agent': USER_AGENT,
       },
     });
-    // Accept 200 OK or 3xx redirect
-    if (response.status >= 300 && response.status < 400) {
-      logger.error('Winning fetch redirected', {
-        event: 'winning_fetch_redirect',
-        status: response.status,
-        location: response.headers.get('location') ?? undefined,
-      });
-      return [];
-    }
-
+    // Why: HttpClient uses redirect: 'manual', so 3xx is not a success here —
+    // it typically signals an expired session redirecting to login. Only 200
+    // returns parseable HTML; everything else is a non-fatal failure.
     if (response.status !== 200) {
+      const isRedirect = response.status >= 300 && response.status < 400;
       logger.error('Winning fetch failed', {
-        event: 'winning_fetch_failed',
+        event: isRedirect ? 'winning_fetch_redirect' : 'winning_fetch_failed',
         status: response.status,
+        location: isRedirect ? (response.headers.get('location') ?? undefined) : undefined,
       });
       return [];
     }
