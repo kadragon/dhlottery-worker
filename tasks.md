@@ -1,13 +1,5 @@
 # Tasks
 
-status: active
-
-## Scope
-
-## Acceptance Criteria
-
-## Evaluator Feedback
-
 ## Completed
 
 - [x] [doc] Fix misleading auth redirect comment — auth.ts:297 "may not follow" → "is not followed"
