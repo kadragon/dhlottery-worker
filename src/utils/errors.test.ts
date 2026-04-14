@@ -10,7 +10,6 @@ import { describe, it, expect } from 'vitest';
 import {
   DHLotteryError,
   AuthenticationError,
-  NetworkError,
   PurchaseError,
   wrapAuthError,
 } from './errors';
@@ -58,37 +57,6 @@ describe('DHLottery Error Classes', () => {
 
       expect(error.code).toBe('AUTH_INVALID_CREDENTIALS');
       expect(error.message).toBe('Invalid credentials');
-    });
-  });
-
-  /**
-   * Network Error Tests
-   */
-  describe('NetworkError', () => {
-    it('should extend DHLotteryError', () => {
-      const error = new NetworkError('Network failed');
-
-      expect(error).toBeInstanceOf(DHLotteryError);
-      expect(error).toBeInstanceOf(Error);
-    });
-
-    it('should have correct name', () => {
-      const error = new NetworkError('Network failed');
-
-      expect(error.name).toBe('NetworkError');
-    });
-
-    it('should use default code if not provided', () => {
-      const error = new NetworkError('Network failed');
-
-      expect(error.code).toBe('NETWORK_ERROR');
-    });
-
-    it('should accept custom error code', () => {
-      const error = new NetworkError('Timeout', 'NETWORK_TIMEOUT');
-
-      expect(error.code).toBe('NETWORK_TIMEOUT');
-      expect(error.message).toBe('Timeout');
     });
   });
 

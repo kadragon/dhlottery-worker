@@ -8,7 +8,7 @@
  * Implements automatic lottery purchase with 5 games
  */
 
-import { USER_AGENT } from '../constants';
+import { PURCHASE_CONSTANTS, USER_AGENT } from '../constants';
 import type { NotificationCollector } from '../notify/notification-collector';
 import { notify } from '../notify/utils';
 import type {
@@ -18,7 +18,6 @@ import type {
   PurchaseReadyResponse,
   PurchaseResult,
 } from '../types';
-import { PURCHASE_CONSTANTS } from '../types/purchase.types';
 import { addYearsAndDays, getNextSaturdayKst } from '../utils/date';
 import { PurchaseError } from '../utils/errors';
 import { formatCurrency, formatKoreanNumber } from '../utils/format';

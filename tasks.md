@@ -1,5 +1,13 @@
 # Tasks
 
+status: active
+
+## Scope
+
+## Acceptance Criteria
+
+## Evaluator Feedback
+
 ## Completed
 
 - [x] [doc] Fix misleading auth redirect comment — auth.ts:297 "may not follow" → "is not followed"
@@ -23,9 +31,9 @@
 
 ### Dead Code Cleanup
 
-- [ ] [debt] `NetworkError` 클래스 제거 — `src/utils/errors.ts:35-40`, 어디서도 throw/catch 안 함. `errors.test.ts`의 관련 테스트도 제거
-- [ ] [debt] 미사용 타입 정리 — `src/types/auth.types.ts`: `Credentials`, `LoginPayload`, `LoginResponse` 미사용. `src/types/index.ts:50`: `WorkerEnv` 미사용. `src/types/deposit.types.ts`: `DepositEnv` 미사용
-- [ ] [debt] types 파일의 런타임 값 분리 — `src/types/purchase.types.ts:80-86`의 `PURCHASE_CONSTANTS`와 `src/types/deposit.types.ts:19`의 `CHARGE_AMOUNT` re-export는 타입/값 경계 위반
+- [x] [debt] `NetworkError` 클래스 제거 — `src/utils/errors.ts:35-40`, 어디서도 throw/catch 안 함. `errors.test.ts`의 관련 테스트도 제거
+- [x] [debt] 미사용 타입 정리 — `src/types/auth.types.ts`: `Credentials`, `LoginPayload`, `LoginResponse` 미사용. `src/types/index.ts:50`: `WorkerEnv` 미사용. `src/types/deposit.types.ts`: `DepositEnv` 미사용
+- [x] [debt] types 파일의 런타임 값 분리 — `PURCHASE_CONSTANTS` → `src/constants.ts`로 이동. `deposit.types.ts` 파일 삭제 (내용 없음)
 
 ### Architecture Notes
 

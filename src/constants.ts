@@ -50,6 +50,17 @@ export const PENSION_RESERVE_COST = 5000;
 export const WEEKLY_COMBINED_REQUIRED_BALANCE = TOTAL_PURCHASE_COST + PENSION_RESERVE_COST;
 
 /**
+ * Grouped purchase constants for lottery buy flow
+ */
+export const PURCHASE_CONSTANTS = {
+  GAME_COUNT: GAMES_PER_PURCHASE,
+  COST_PER_GAME,
+  TOTAL_COST: TOTAL_PURCHASE_COST,
+  MODE: 'auto',
+  SUCCESS_CODE: '100',
+} as const;
+
+/**
  * Browser-like User-Agent for requests
  */
 export const USER_AGENT =

@@ -16,7 +16,7 @@ import type {
   AccountInfo,
   HttpClient,
 } from "../types";
-import { PURCHASE_CONSTANTS } from "../types/purchase.types";
+import { PURCHASE_CONSTANTS } from "../constants";
 import { NotificationCollector } from "../notify/notification-collector";
 
 // Mock dependencies

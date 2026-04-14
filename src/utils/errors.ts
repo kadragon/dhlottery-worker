@@ -30,16 +30,6 @@ export class AuthenticationError extends DHLotteryError {
 }
 
 /**
- * Network error
- */
-export class NetworkError extends DHLotteryError {
-  constructor(message: string, code = 'NETWORK_ERROR') {
-    super(message, code);
-    this.name = 'NetworkError';
-  }
-}
-
-/**
  * Purchase error
  */
 export class PurchaseError extends DHLotteryError {
