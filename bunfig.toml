@@ -1,0 +1,2 @@
+[test]
+preload = ["./scripts/block-bun-test.ts"]
