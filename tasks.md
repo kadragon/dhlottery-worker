@@ -34,6 +34,9 @@ status: active
 - [x] [debt] `NetworkError` 클래스 제거 — `src/utils/errors.ts:35-40`, 어디서도 throw/catch 안 함. `errors.test.ts`의 관련 테스트도 제거
 - [x] [debt] 미사용 타입 정리 — `src/types/auth.types.ts`: `Credentials`, `LoginPayload`, `LoginResponse` 미사용. `src/types/index.ts:50`: `WorkerEnv` 미사용. `src/types/deposit.types.ts`: `DepositEnv` 미사용
 - [x] [debt] types 파일의 런타임 값 분리 — `PURCHASE_CONSTANTS` → `src/constants.ts`로 이동. `deposit.types.ts` 파일 삭제 (내용 없음)
+- [x] [debt] `check.ts:170` 상태 체크 명확화 — 2xx-only 정책 채택, 3xx는 redirect 진단 메타만 log. 기존 302/500 테스트로 edge case 커버
+- [x] [debt] `wrapAuthError` 추출 완료 확인 — 이미 `src/utils/errors.ts:55`에 존재, auth.ts 3개 site에서 사용 중 (과거 리팩터에서 완료됨)
+- [x] [debt] `formatKoreanNumber` 통합 완료 확인 — 이미 `src/utils/format.ts` 단일 소스, buy/check/pension-reserve에서 import (과거 리팩터에서 완료됨)
 
 ### Architecture Notes
 
