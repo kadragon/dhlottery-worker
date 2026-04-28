@@ -10,8 +10,8 @@
 
 ### Design Decisions Required
 
-- [ ] [design] `checkDeposit` 실패 시 `checkWinning` 스킵 여부 — `src/index.ts:26-37`에서 `checkDeposit` catch가 `return`으로 `checkWinning`까지 건너뜀. 당첨 확인은 구매와 독립적이므로 스킵 불필요할 수 있음. 의도적이라면 주석 추가 필요.
-- [ ] [design] `WEEKLY_COMBINED_REQUIRED_BALANCE` 사용 여부 — `src/constants.ts:50`에 정의되어 있으나 `runWorkflow`에서 `TOTAL_PURCHASE_COST`(5000)만 사용. 연금복권 예약 포함 10,000원 체크가 원래 의도인지 확인 필요.
+- [x] [design] `checkDeposit` 실패 시 `checkWinning` 스킵 여부 — 버그로 판정. `checkDeposit` 실패 시 `canPurchase = false`로 설정 후 `checkWinning` 실행하도록 수정 (PR fix/orchestrator-winning-and-balance-gate).
+- [x] [design] `WEEKLY_COMBINED_REQUIRED_BALANCE` 사용 여부 — 게이트로 채택. `runWorkflow`에서 `TOTAL_PURCHASE_COST(5000)` → `WEEKLY_COMBINED_REQUIRED_BALANCE(10000)` 교체 (PR fix/orchestrator-winning-and-balance-gate).
 - [ ] [design] Telegram 전송 실패 시 fallback 전략 — `src/notify/telegram.ts:95-109`에서 실패를 로그만 남기고 삼킴. 서비스 핵심 가치가 알림인데 사일런트 실패. 재시도 또는 대체 채널 검토.
 
 ### Refactoring

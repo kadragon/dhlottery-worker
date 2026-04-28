@@ -87,7 +87,7 @@ describe("Main Orchestration - runWorkflow", () => {
 
     expect(createHttpClient).toHaveBeenCalledTimes(1);
     expect(login).toHaveBeenCalledTimes(1);
-    expect(checkDeposit).toHaveBeenCalledWith(expect.anything(), 5000, expect.anything());
+    expect(checkDeposit).toHaveBeenCalledWith(expect.anything(), 10000, expect.anything());
     expect(reservePensionNextWeek).toHaveBeenCalledTimes(1);
     expect(purchaseLottery).toHaveBeenCalledTimes(1);
     expect(checkWinning).toHaveBeenCalledTimes(1);
@@ -149,7 +149,7 @@ describe("Main Orchestration - runWorkflow", () => {
     );
     expect(sendNotification).not.toHaveBeenCalled();
     expect(purchaseLottery).not.toHaveBeenCalled();
-    expect(checkWinning).not.toHaveBeenCalled();
+    expect(checkWinning).toHaveBeenCalledTimes(1);
   });
 
   it("should continue to buy when pension reserve returns failure outcome", async () => {
@@ -191,22 +191,17 @@ describe("Main Orchestration - runWorkflow", () => {
     expect(checkWinning).not.toHaveBeenCalled();
   });
 
-  it("TEST-ORCH-007: should buy lotto when balance is 5000 (lotto-only range, pension precheck skipped)", async () => {
-    (checkDeposit as Mock).mockResolvedValue(true); // sufficient for lotto (5000)
-    (reservePensionNextWeek as Mock).mockResolvedValue({
-      status: "failure",
-      success: false,
-      skipped: false,
-      error: "insufficient pension deposit",
-    });
+  it("TEST-ORCH-007: should not purchase when balance is below combined gate (5000–9999), but should check winning", async () => {
+    (checkDeposit as Mock).mockResolvedValue(false); // balance < WEEKLY_COMBINED_REQUIRED_BALANCE
 
     const { runWorkflow } = await import("./index");
 
     await runWorkflow(new Date("2025-12-15T00:00:00.000Z"));
 
-    // checkDeposit must be called with lotto-only minimum, not combined 10000
-    expect(checkDeposit).toHaveBeenCalledWith(expect.anything(), 5000, expect.anything());
-    expect(purchaseLottery).toHaveBeenCalledTimes(1);
+    expect(checkDeposit).toHaveBeenCalledWith(expect.anything(), 10000, expect.anything());
+    expect(reservePensionNextWeek).not.toHaveBeenCalled();
+    expect(purchaseLottery).not.toHaveBeenCalled();
+    expect(checkWinning).toHaveBeenCalledTimes(1);
   });
 
   it("should send orchestration error via sendCombinedNotification when checkWinning throws", async () => {
