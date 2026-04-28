@@ -17,6 +17,10 @@
 | `bun run check:fix` | Biome lint + format (auto-fix) |
 | `bun run precommit` | Pre-commit hook (check:fix + typecheck) |
 | `bun run start` | Run workflow locally (needs .env) |
+| `DEBUG=true bun run start` | Run with debug-level HTTP logs |
+| `bun tsx scripts/debug-login.ts` | Debug login flow only (needs `USER_ID`, `PASSWORD`) |
+| `bun tsx scripts/debug-buy.ts` | Debug purchase flow only (needs `USER_ID`, `PASSWORD`) |
+| `bun run test -- --reporter=verbose` | Test run with per-test output |
 
 ## Environment Variables
 
@@ -32,7 +36,7 @@ Required in `.env` (local) or GitHub Secrets (CI):
 ## Deployment
 
 - **CI**: Push/PR to `main`/`develop` triggers `.github/workflows/ci.yml`
-- **Production**: `.github/workflows/lottery.yml` runs every Monday 10:00 KST via cron
+- **Production**: `.github/workflows/lottery.yml` — cron `0 1 * * 1` (every Monday 01:00 UTC = KST 10:00)
 - Manual trigger available via `workflow_dispatch`
 
 ## Common Failures
