@@ -39,6 +39,6 @@
 
 ### PR #41 — scaffold full agent harness: principles, hooks, conventions, and workflows (2026-04-28)
 
-- [ ] [doc] `docs/workflows.md` references `tasks.md` but file is not in AGENTS.md Docs Index — add entry or consolidate references into `backlog.md` (source: Claude Code)
-- [ ] [doc] `docs/architecture.md` Overview duplicates AGENTS.md opening paragraph — consider making one canonical and pointing the other to it (source: Claude Code)
-- [ ] [doc] `AGENTS.md:19` bun test guardrail — add bold "ALWAYS run tests from the project root" to reinforce the subdirectory bypass risk (source: Gemini)
+- [x] [doc] `docs/workflows.md` references `tasks.md` but file is not in AGENTS.md Docs Index — added `tasks.md / backlog.md` row to Docs Index (PR docs/pr-41-review-followup)
+- [x] [doc] `docs/architecture.md` Overview duplicates AGENTS.md opening paragraph — made `docs/architecture.md` canonical; added pointer line to AGENTS.md opening (PR docs/pr-41-review-followup)
+- [x] [doc] `AGENTS.md:19` bun test guardrail — bolded "always invoke from the repo root" in Test Runner section (PR docs/pr-41-review-followup)

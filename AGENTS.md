@@ -1,6 +1,6 @@
 # AGENTS.md
 
-DHLottery-worker: GitHub Actions scheduled job (every Monday 01:00 UTC) that logs in, purchases 5 lotto games, reserves the pension lottery, checks prior week's results, and sends a Telegram notification. TypeScript + Bun, zero external state.
+DHLottery-worker: GitHub Actions scheduled job (every Monday 01:00 UTC) that logs in, purchases 5 lotto games, reserves the pension lottery, checks prior week's results, and sends a Telegram notification. TypeScript + Bun, zero external state. For full pipeline overview, see `docs/architecture.md`.
 
 ## Docs Index (read on demand)
 
@@ -12,11 +12,12 @@ DHLottery-worker: GitHub Actions scheduled job (every Monday 01:00 UTC) that log
 | `docs/workflows.md` | When starting any implementation cycle |
 | `docs/eval-criteria.md` | When evaluating completed features |
 | `docs/runbook.md` | For build, test, deploy commands and troubleshooting |
+| `tasks.md` / `backlog.md` | Sprint contract & deferred work tracking |
 
 ## Test Runner
 
 - Use `bun run test` (Vitest). **Never** `bun test` — Bun's native runner does not support Vitest's `vi.*` API and fails ~60% of this project's tests.
-- Guardrail: `bunfig.toml` preloads `scripts/block-bun-test.ts` which aborts `bun test` when invoked from the repo root. Bun does not walk up for `bunfig.toml`, so running `bun test` from a subdirectory bypasses the guard — always invoke from the repo root.
+- Guardrail: `bunfig.toml` preloads `scripts/block-bun-test.ts` which aborts `bun test` when invoked from the repo root. Bun does not walk up for `bunfig.toml`, so running `bun test` from a subdirectory bypasses the guard — **always invoke from the repo root**.
 
 ## Golden Principles
 
