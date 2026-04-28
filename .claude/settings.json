@@ -30,6 +30,16 @@
             "description": "Auto-format new files with Biome"
           }
         ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/bash-output-cap.sh",
+            "description": "Truncate oversized Bash output to keep context lean"
+          }
+        ]
       }
     ],
     "PreToolUse": [

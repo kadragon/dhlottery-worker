@@ -1,0 +1,8 @@
+# Most exclusions are already handled by .gitignore
+# (node_modules/, coverage/, .env, .DS_Store, *.log, .vscode/, .idea/)
+
+# Lock files — large and not useful for code editing
+bun.lock
+
+# Source maps — generated, not source of truth
+*.map

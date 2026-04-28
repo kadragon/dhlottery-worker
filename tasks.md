@@ -34,3 +34,11 @@
 
 - [ ] [constraint] 쿠키 도메인 격리 없음 — `www`, `ol`, `el.dhlottery.co.kr` 모두 단일 `CookieStore` 사용. 동명 쿠키 덮어쓰기 위험. 구조적 테스트 추가 검토
 - [ ] [doc] 에러 처리 패턴 3가지 혼재 문서화 — throw(auth/account) vs return outcome(buy/charge/pension) vs return empty(check). `docs/architecture.md`에 패턴별 사용 기준 문서화
+
+## Review Backlog
+
+### PR #41 — scaffold full agent harness: principles, hooks, conventions, and workflows (2026-04-28)
+
+- [ ] [doc] `docs/workflows.md` references `tasks.md` but file is not in AGENTS.md Docs Index — add entry or consolidate references into `backlog.md` (source: Claude Code)
+- [ ] [doc] `docs/architecture.md` Overview duplicates AGENTS.md opening paragraph — consider making one canonical and pointing the other to it (source: Claude Code)
+- [ ] [doc] `AGENTS.md:19` bun test guardrail — add bold "ALWAYS run tests from the project root" to reinforce the subdirectory bypass risk (source: Gemini)
