@@ -19,7 +19,7 @@
 | `bun run start` | Run workflow locally (needs .env) |
 | `DEBUG=true bun run start` | Run with debug-level HTTP logs |
 | `bun tsx scripts/debug-login.ts` | Debug login flow only (needs `USER_ID`, `PASSWORD`) |
-| `bun tsx scripts/debug-buy.ts` | Debug purchase flow only (needs `USER_ID`, `PASSWORD`) |
+| `bun tsx scripts/debug-buy.ts` | Debug purchase flow only (needs `USER_ID`, `PASSWORD`, `TELEGRAM_BOT_TOKEN`) |
 | `bun run test -- --reporter=verbose` | Test run with per-test output |
 
 ## Environment Variables

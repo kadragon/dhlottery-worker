@@ -2,13 +2,13 @@
 
 ## Overview
 
-DHLottery 자동화: 세션 수립 → 로그인 → 잔액/회차 조회 → 잔액 부족 시 충전 init + 경고 → 구매(5게임) → 연금복권 예약 → 당첨 확인 → Telegram 알림.
+DHLottery automation: session init → login → check deposit → if sufficient: (pension reserve → lotto purchase) → check winning → Telegram notification.
 
-상태 저장 없음. 실행 단위 메모리 쿠키만 사용. 플랫폼: GitHub Actions 스케줄 실행 (매주 월요일 01:00 UTC = KST 10:00).
+Stateless. In-memory cookies only. Platform: GitHub Actions scheduled (every Monday 01:00 UTC = KST 10:00).
 
-핵심 워크플로우: `init session → login → fetch account → check deposit → (charge init + warn) or purchase → pension reserve → check winning → notify`
+Core workflow: `init session → login → check deposit → (charge init + warn) or (pension reserve → purchase) → check winning → notify`
 
-비치명 작업(충전 init, 연금 예약, 당첨 확인, Telegram 실패)은 전체 플로우를 중단하지 않음.
+Non-critical operations (charge init, pension reserve, winning check, Telegram failures) do not abort the workflow.
 
 ## Layer Map
 
@@ -61,19 +61,19 @@ run.ts                    ← GitHub Actions entry point
 
 ## Business Rules
 
-- **최소 잔액**: 5,000 KRW (5게임 × 1,000원). 부족 시 충전 init + 경고 알림 후 구매 스킵.
-- **구매**: 자동 번호 5게임, 총 5,000 KRW. 원자적 처리 — 부분 구매 금지.
-- **당첨 확인**: 이전 주(월~일, KST 기준). 1등만 Telegram 알림.
-- **연금복권 예약**: 다음 주 회차 자동 예약 (el.dhlottery.co.kr).
+- **Minimum balance**: 5,000 KRW (5 games × 1,000 KRW). If insufficient: charge init + warning; purchase skipped.
+- **Purchase**: 5 auto-pick games, 5,000 KRW total. Atomic — partial purchase not allowed.
+- **Winning check**: Previous week (Mon–Sun, KST). 1st-prize results only trigger Telegram alert.
+- **Pension reserve**: Next week's round, auto-reserved (el.dhlottery.co.kr).
 
 ## Key Decisions
 
-- **RSA 로그인 (2026-01)**: 평문 → RSA PKCS#1 v1.5 암호화 (node-forge). `securityLoginCheck.do` 사용.
-- **쿠키 (2026-01)**: `JSESSIONID` → `DHJSESSIONID`. 로그인 성공 판별은 302 Location에 `loginSuccess.do` 포함 여부 또는 `userId` 쿠키 존재 여부.
-- **도메인 (2026-01)**: `dhlottery.co.kr` non-www → `www.dhlottery.co.kr` 301. 세션/RSA init에서 301/302 최대 5회 추적.
-- **로그인 응답 모드**: manual redirect. 3xx 응답이 성공일 수 있으나 Location이 `loginSuccess.do`를 포함해야만 성공 처리.
-- **로또 회차 조회 (2026-01)**: HTML → `/lt645/selectThsLt645Info.do` JSON API (`ltEpsd` 필드). HTML은 JS 동적 로드로 파싱 불가.
-- **잔액 조회 (2026-01)**: `/mypage/home` HTML → `/mypage/selectUserMndp.do` JSON API (`crntEntrsAmt` 필드).
-- **구매 요청 보강 (2026-01)**: `execBuy.do`에 `saleMdaDcd=10`, `ROUND_DRAW_DATE`, `WAMT_PAY_TLMT_END_DT` 추가 필수. `Origin`/`Referer`/`X-Requested-With` 헤더 필수.
-- **당첨 확인 3xx**: 3xx 리다이렉트 시 HTML 파싱하지 않고 빈 결과 반환 (200 전용).
-- **el.dhlottery.co.kr 쿠키**: `JSESSIONID` 사용. 없으면 `DHJSESSIONID` fallback.
+- **RSA login (2026-01)**: Plaintext → RSA PKCS#1 v1.5 encryption (node-forge). Uses `securityLoginCheck.do`.
+- **Cookie (2026-01)**: `JSESSIONID` → `DHJSESSIONID`. Login success: 302 Location contains `loginSuccess.do` or `userId` cookie present.
+- **Domain (2026-01)**: `dhlottery.co.kr` non-www → `www.dhlottery.co.kr` 301. Session/RSA init follows up to 5 redirects (301/302).
+- **Login response mode**: manual redirect. 3xx may indicate success only if Location contains `loginSuccess.do`.
+- **Lottery round fetch (2026-01)**: HTML → `/lt645/selectThsLt645Info.do` JSON API (`ltEpsd` field). HTML unparseable (JS-rendered).
+- **Balance fetch (2026-01)**: `/mypage/home` HTML → `/mypage/selectUserMndp.do` JSON API (`crntEntrsAmt` field).
+- **Purchase request (2026-01)**: `execBuy.do` now requires `saleMdaDcd=10`, `ROUND_DRAW_DATE`, `WAMT_PAY_TLMT_END_DT`, and `Origin`/`Referer`/`X-Requested-With` headers.
+- **Winning check redirect**: On 3xx, return empty result without parsing (200-only).
+- **el.dhlottery.co.kr cookie**: Uses `JSESSIONID`; falls back to `DHJSESSIONID` if absent.
