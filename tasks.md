@@ -33,7 +33,7 @@
 ### Architecture Notes
 
 - [ ] [constraint] 쿠키 도메인 격리 없음 — `www`, `ol`, `el.dhlottery.co.kr` 모두 단일 `CookieStore` 사용. 동명 쿠키 덮어쓰기 위험. 구조적 테스트 추가 검토
-- [ ] [doc] 에러 처리 패턴 3가지 혼재 문서화 — throw(auth/account) vs return outcome(buy/charge/pension) vs return empty(check). `docs/architecture.md`에 패턴별 사용 기준 문서화
+- [x] [doc] 에러 처리 패턴 3가지 혼재 문서화 — throw(auth/account) vs return outcome(buy/charge/pension) vs return empty(check). `docs/conventions.md`에 패턴별 사용 기준 문서화 (PR docs/error-handling-patterns)
 
 ## Review Backlog
 
