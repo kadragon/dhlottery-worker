@@ -8,6 +8,21 @@ Rules Biome does NOT enforce — don't duplicate what tooling already catches.
 - Wrap unknown/external errors with `wrapAuthError(error, context)` at authentication boundaries; use `DHLotteryError` for other domains.
 - **Silent swallowing is forbidden.** If a non-critical operation catches an error, it must log it via `logger` and push a notification payload to the collector — never discard silently.
 
+### Patterns
+
+Three shapes are in use. Pick the one that matches the orchestrator's treatment of the step:
+
+| Pattern | When to use | Modules |
+|---------|------------|---------|
+| **Throw** | Downstream work cannot proceed without the return value. The orchestrator wraps the call in `try/catch` and converts the exception to a notification. | `auth.ts` (login, sessionInit, RSA fetch), `account.ts` (balance/round fetch) |
+| **Return outcome** | Failure must not abort the workflow, but the caller wants a typed result to branch on or log. Module catches internally, pushes its own notification, then returns. | `buy.ts` (`PurchaseOutcome`), `pension-reserve.ts` (`PensionReserveSuccess \| Failed \| Skipped`), `charge.ts` (`boolean canPurchase`) |
+| **Return empty** | Failure and "nothing to report" are indistinguishable to the caller. Notification only fires on non-empty results. | `check.ts` — `checkWinning()` returns `[]` on non-fatal HTTP/parse error |
+
+**Anti-patterns:**
+- Don't mix patterns in one function (sometimes throw, sometimes return failure).
+- Don't return `null` / `undefined` to signal failure — use one of the three patterns.
+- Don't silently migrate a throwing function to return-empty by adding `catch { return [] }` without a deliberate decision to make the step non-critical.
+
 ## HTTP Client
 
 - Domain modules receive an `HttpClient` interface — they never call `fetch` directly.
