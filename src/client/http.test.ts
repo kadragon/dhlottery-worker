@@ -292,6 +292,69 @@ describe("HTTP Client - Session Management", () => {
 		});
 	});
 
+	describe("Cookie overwrite detection", () => {
+		it("should warn when a cookie is overwritten with a different value", async () => {
+			const client = createHttpClient();
+			const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+			// Set initial cookie
+			mockFetch.mockResolvedValueOnce(
+				createMockResponse(200, new Headers({ "set-cookie": "session=abc; Path=/" }))
+			);
+			await client.fetch("https://example.com");
+
+			// Overwrite with different value
+			mockFetch.mockResolvedValueOnce(
+				createMockResponse(200, new Headers({ "set-cookie": "session=xyz; Path=/" }))
+			);
+			await client.fetch("https://example.com/page");
+
+			const warnCalls = warnSpy.mock.calls.map((c) => c[0] as string);
+			expect(warnCalls.some((msg) => msg.includes("cookie_overwritten"))).toBe(true);
+			expect(warnCalls.some((msg) => msg.includes('"name":"session"'))).toBe(true);
+			// Cookie value must NOT appear in logs
+			expect(warnCalls.every((msg) => !msg.includes("abc") && !msg.includes("xyz"))).toBe(true);
+
+			warnSpy.mockRestore();
+		});
+
+		it("should not warn when the same cookie is set to the same value", async () => {
+			const client = createHttpClient();
+			const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+			mockFetch.mockResolvedValueOnce(
+				createMockResponse(200, new Headers({ "set-cookie": "session=abc; Path=/" }))
+			);
+			await client.fetch("https://example.com");
+
+			mockFetch.mockResolvedValueOnce(
+				createMockResponse(200, new Headers({ "set-cookie": "session=abc; Path=/" }))
+			);
+			await client.fetch("https://example.com/page");
+
+			expect(warnSpy).not.toHaveBeenCalled();
+			warnSpy.mockRestore();
+		});
+
+		it("should not warn for a newly seen cookie name", async () => {
+			const client = createHttpClient();
+			const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+			mockFetch.mockResolvedValueOnce(
+				createMockResponse(200, new Headers({ "set-cookie": "DHJSESSIONID=aaa; Path=/" }))
+			);
+			await client.fetch("https://www.example.com");
+
+			mockFetch.mockResolvedValueOnce(
+				createMockResponse(200, new Headers({ "set-cookie": "JSESSIONID=bbb; Path=/" }))
+			);
+			await client.fetch("https://el.example.com");
+
+			expect(warnSpy).not.toHaveBeenCalled();
+			warnSpy.mockRestore();
+		});
+	});
+
 	describe("Cookie utility methods", () => {
 		it("getCookieHeader should return formatted cookie string", () => {
 			// Arrange

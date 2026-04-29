@@ -7,6 +7,7 @@
  */
 
 import type { CookieStore, HttpClient, HttpRequestOptions, HttpResponse } from '../types';
+import { logger } from '../utils/logger';
 
 /**
  * Parse Set-Cookie header value to extract cookie name and value
@@ -65,6 +66,12 @@ export function createHttpClient(): HttpClient {
       const setCookieHeaders = response.headers.getSetCookie();
       for (const setCookie of setCookieHeaders) {
         const { name, value } = parseCookie(setCookie);
+        if (cookieStore[name] !== undefined && cookieStore[name] !== value) {
+          logger.warn('Cookie overwritten with different value', {
+            event: 'cookie_overwritten',
+            name,
+          });
+        }
         cookieStore[name] = value;
       }
 
