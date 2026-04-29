@@ -15,8 +15,9 @@ import { sendCombinedNotification } from './notify/telegram';
  *
  * Non-throwing by design to avoid unintended retries that could repurchase.
  * All notifications are collected and sent as a single Telegram message at the end.
+ * Returns false if the Telegram send fails after all retries; true otherwise.
  */
-export async function runWorkflow(now: Date = new Date()): Promise<void> {
+export async function runWorkflow(now: Date = new Date()): Promise<boolean> {
   const client = new DHLotteryClient();
 
   try {
@@ -50,8 +51,9 @@ export async function runWorkflow(now: Date = new Date()): Promise<void> {
     });
   }
 
-  // Single send at the end
+  // Single send at the end; propagate delivery outcome to caller
   if (!client.collector.isEmpty()) {
-    await sendCombinedNotification(client.collector.getPayloads());
+    return sendCombinedNotification(client.collector.getPayloads());
   }
+  return true;
 }

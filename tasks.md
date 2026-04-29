@@ -12,7 +12,7 @@
 
 - [x] [design] `checkDeposit` 실패 시 `checkWinning` 스킵 여부 — 버그로 판정. `checkDeposit` 실패 시 `canPurchase = false`로 설정 후 `checkWinning` 실행하도록 수정 (PR fix/orchestrator-winning-and-balance-gate).
 - [x] [design] `WEEKLY_COMBINED_REQUIRED_BALANCE` 사용 여부 — 게이트로 채택. `runWorkflow`에서 `TOTAL_PURCHASE_COST(5000)` → `WEEKLY_COMBINED_REQUIRED_BALANCE(10000)` 교체 (PR fix/orchestrator-winning-and-balance-gate).
-- [ ] [design] Telegram 전송 실패 시 fallback 전략 — `src/notify/telegram.ts:95-109`에서 실패를 로그만 남기고 삼킴. 서비스 핵심 가치가 알림인데 사일런트 실패. 재시도 또는 대체 채널 검토.
+- [x] [design] Telegram 전송 실패 시 fallback 전략 — 3-attempt retry (500ms→1500ms backoff), `sendCombinedNotification` boolean 반환, `run.ts` exit(2). PR #45.
 
 ### Refactoring
 

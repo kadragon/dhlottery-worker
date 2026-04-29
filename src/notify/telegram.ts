@@ -10,6 +10,15 @@ import type { NotificationPayload, TelegramMessage } from '../types';
 import { getEnv } from '../utils/env';
 import { logger } from '../utils/logger';
 
+// Retried on transient errors (network, server-side, rate-limit).
+// Permanent client errors (4xx outside this set) are not retried.
+const RETRY_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504]);
+const RETRY_DELAYS = [500, 1500]; // ms between attempts; length + 1 = total attempts
+
+async function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 /**
  * Escape Telegram Markdown v1 special characters
  * Escapes \ first to avoid double-escaping, then _ * ` [
@@ -65,31 +74,56 @@ function formatMessage(payload: NotificationPayload): string {
   return lines.join('\n');
 }
 
+// Returns true on success, false after exhausting retries or a permanent error.
 async function sendTelegramMessage(
   text: string,
   failureEvent: 'telegram_send_failed' | 'telegram_combined_send_failed'
-): Promise<void> {
-  try {
-    const botToken = getEnv('TELEGRAM_BOT_TOKEN');
-    const chatId = getEnv('TELEGRAM_CHAT_ID');
+): Promise<boolean> {
+  const maxAttempts = RETRY_DELAYS.length + 1;
 
-    const message: TelegramMessage = {
-      chat_id: chatId,
-      text,
-      parse_mode: 'Markdown',
-    };
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      const botToken = getEnv('TELEGRAM_BOT_TOKEN');
+      const chatId = getEnv('TELEGRAM_CHAT_ID');
 
-    const url = `https://api.telegram.org/bot${botToken}/sendMessage`;
+      const message: TelegramMessage = {
+        chat_id: chatId,
+        text,
+        parse_mode: 'Markdown',
+      };
 
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(message),
-    });
+      const url = `https://api.telegram.org/bot${botToken}/sendMessage`;
 
-    if (!response.ok) {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(message),
+      });
+
+      if (response.ok) return true;
+
+      if (RETRY_STATUSES.has(response.status)) {
+        if (attempt < RETRY_DELAYS.length) {
+          logger.warn('Telegram API error, retrying', {
+            event: 'telegram_retry_attempt',
+            attempt: attempt + 1,
+            status: response.status,
+          });
+          await sleep(RETRY_DELAYS[attempt]);
+          continue;
+        }
+        logger.error('Telegram notification failed after retries', {
+          event: 'telegram_final_failure',
+          failureEvent,
+          attempts: maxAttempts,
+          status: response.status,
+        });
+        return false;
+      }
+
+      // Permanent client error — log and stop
       const errorData = await response.json();
       logger.error('Telegram API error', {
         event: 'telegram_api_error',
@@ -97,33 +131,44 @@ async function sendTelegramMessage(
         statusText: response.statusText,
         errorData,
       });
+      return false;
+    } catch (error) {
+      if (attempt < RETRY_DELAYS.length) {
+        logger.warn('Telegram send failed, retrying', {
+          event: 'telegram_retry_attempt',
+          attempt: attempt + 1,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        await sleep(RETRY_DELAYS[attempt]);
+        continue;
+      }
+      logger.error('Failed to send Telegram notification', {
+        event: failureEvent,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return false;
     }
-  } catch (error) {
-    logger.error('Failed to send Telegram notification', {
-      event: failureEvent,
-      error: error instanceof Error ? error.message : String(error),
-    });
   }
+  return false;
 }
 
 /**
  * Format and send multiple notification payloads as a single Telegram message.
  * Each payload is separated by a `---` divider.
- * No-op if the payload list is empty.
+ * Returns false if the send fails after all retries; true if sent or empty.
  */
-export async function sendCombinedNotification(payloads: NotificationPayload[]): Promise<void> {
-  if (payloads.length === 0) return;
+export async function sendCombinedNotification(payloads: NotificationPayload[]): Promise<boolean> {
+  if (payloads.length === 0) return true;
 
   const combinedText = payloads.map((p) => formatMessage(p)).join('\n\n---\n\n');
-  await sendTelegramMessage(combinedText, 'telegram_combined_send_failed');
+  return sendTelegramMessage(combinedText, 'telegram_combined_send_failed');
 }
 
 /**
- * Send notification to Telegram
- *
- * @param payload - Notification payload with type, title, message, and optional details
+ * Send notification to Telegram.
+ * Returns false if the send fails after all retries; true on success.
  */
-export async function sendNotification(payload: NotificationPayload): Promise<void> {
+export async function sendNotification(payload: NotificationPayload): Promise<boolean> {
   const text = formatMessage(payload);
-  await sendTelegramMessage(text, 'telegram_send_failed');
+  return sendTelegramMessage(text, 'telegram_send_failed');
 }

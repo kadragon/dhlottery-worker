@@ -5,7 +5,7 @@
 import { DEBUG } from '../constants';
 
 type LogDetails = Record<string, unknown>;
-type LogLevel = 'debug' | 'info' | 'error';
+type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
 function formatEntry(level: LogLevel, message: string, details?: LogDetails): string {
   return JSON.stringify({
@@ -25,6 +25,10 @@ export const logger = {
   info(message: string, details?: LogDetails): void {
     const output = formatEntry('info', message, details);
     console.log(output);
+  },
+  warn(message: string, details?: LogDetails): void {
+    const output = formatEntry('warn', message, details);
+    console.warn(output);
   },
   error(message: string, details?: LogDetails): void {
     const output = formatEntry('error', message, details);
