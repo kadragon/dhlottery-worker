@@ -21,12 +21,15 @@ async function main(): Promise<void> {
 
     logger.info('Starting lottery workflow');
 
-    // Run the workflow
-    await runWorkflow();
+    const notified = await runWorkflow();
 
-    logger.info('Lottery workflow completed successfully');
-
-    process.exit(0);
+    if (notified) {
+      logger.info('Lottery workflow completed successfully');
+      process.exit(0);
+    } else {
+      logger.error('Lottery workflow completed but Telegram notification failed');
+      process.exit(2);
+    }
   } catch (error) {
     logger.error('Lottery workflow failed', {
       error: error instanceof Error ? error.message : String(error),

@@ -34,8 +34,8 @@ vi.mock("./dhlottery/check", () => ({
 }));
 
 vi.mock("./notify/telegram", () => ({
-  sendNotification: vi.fn().mockResolvedValue(undefined),
-  sendCombinedNotification: vi.fn().mockResolvedValue(undefined),
+  sendNotification: vi.fn().mockResolvedValue(true),
+  sendCombinedNotification: vi.fn().mockResolvedValue(true),
 }));
 
 const { createHttpClient } = await import("./client/http");
@@ -134,7 +134,7 @@ describe("Main Orchestration - runWorkflow", () => {
 
     const { runWorkflow } = await import("./index");
 
-    await expect(runWorkflow(new Date("2025-12-15T00:00:00.000Z"))).resolves.toBeUndefined();
+    await expect(runWorkflow(new Date("2025-12-15T00:00:00.000Z"))).resolves.toBe(true);
 
     expect(sendCombinedNotification).toHaveBeenCalledTimes(1);
     const payloads = (sendCombinedNotification as Mock).mock.calls[0][0];
@@ -162,7 +162,7 @@ describe("Main Orchestration - runWorkflow", () => {
 
     const { runWorkflow } = await import("./index");
 
-    await expect(runWorkflow(new Date("2025-12-15T00:00:00.000Z"))).resolves.toBeUndefined();
+    await expect(runWorkflow(new Date("2025-12-15T00:00:00.000Z"))).resolves.toBe(true);
 
     expect(reservePensionNextWeek).toHaveBeenCalledTimes(1);
     expect(purchaseLottery).toHaveBeenCalledTimes(1);
@@ -174,7 +174,7 @@ describe("Main Orchestration - runWorkflow", () => {
 
     const { runWorkflow } = await import("./index");
 
-    await expect(runWorkflow(new Date("2025-12-15T00:00:00.000Z"))).resolves.toBeUndefined();
+    await expect(runWorkflow(new Date("2025-12-15T00:00:00.000Z"))).resolves.toBe(true);
 
     expect(sendCombinedNotification).toHaveBeenCalledTimes(1);
     const payloads = (sendCombinedNotification as Mock).mock.calls[0][0];
@@ -209,7 +209,7 @@ describe("Main Orchestration - runWorkflow", () => {
 
     const { runWorkflow } = await import("./index");
 
-    await expect(runWorkflow(new Date("2025-12-15T00:00:00.000Z"))).resolves.toBeUndefined();
+    await expect(runWorkflow(new Date("2025-12-15T00:00:00.000Z"))).resolves.toBe(true);
 
     expect(sendCombinedNotification).toHaveBeenCalledTimes(1);
     const payloads = (sendCombinedNotification as Mock).mock.calls[0][0];
@@ -230,7 +230,7 @@ describe("Main Orchestration - runWorkflow", () => {
 
     const { runWorkflow } = await import("./index");
 
-    await expect(runWorkflow(new Date("2025-12-15T00:00:00.000Z"))).resolves.toBeUndefined();
+    await expect(runWorkflow(new Date("2025-12-15T00:00:00.000Z"))).resolves.toBe(true);
 
     expect(sendCombinedNotification).toHaveBeenCalledTimes(1);
     const payloads = (sendCombinedNotification as Mock).mock.calls[0][0];
@@ -255,5 +255,23 @@ describe("Main Orchestration - runWorkflow", () => {
     // sendCombinedNotification called at most once (may be 0 if collector empty)
     expect((sendCombinedNotification as Mock).mock.calls.length).toBeLessThanOrEqual(1);
     expect(sendNotification).not.toHaveBeenCalled();
+  });
+
+  it("TEST-ORCH-008: should return false when sendCombinedNotification fails", async () => {
+    (sendCombinedNotification as Mock).mockResolvedValueOnce(false);
+    (login as Mock).mockRejectedValue(new Error("login error")); // trigger a notification
+
+    const { runWorkflow } = await import("./index");
+
+    await expect(runWorkflow(new Date("2025-12-15T00:00:00.000Z"))).resolves.toBe(false);
+  });
+
+  it("should return true when workflow runs successfully with empty collector", async () => {
+    // All domain mocks succeed without adding to collector → empty payload list
+    (sendCombinedNotification as Mock).mockResolvedValueOnce(true);
+
+    const { runWorkflow } = await import("./index");
+
+    await expect(runWorkflow(new Date("2025-12-15T00:00:00.000Z"))).resolves.toBe(true);
   });
 });

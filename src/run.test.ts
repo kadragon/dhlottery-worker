@@ -34,7 +34,7 @@ describe('GitHub Actions entrypoint - run.ts', () => {
     const { logger } = await import('./utils/logger');
 
     (validateEnv as Mock).mockImplementation(() => undefined);
-    (runWorkflow as Mock).mockResolvedValue(undefined);
+    (runWorkflow as Mock).mockResolvedValue(true);
 
     await import('./run');
 
@@ -43,6 +43,25 @@ describe('GitHub Actions entrypoint - run.ts', () => {
       expect(logger.info).toHaveBeenCalledWith('Starting lottery workflow');
       expect(logger.info).toHaveBeenCalledWith('Lottery workflow completed successfully');
       expect(process.exit).toHaveBeenCalledWith(0);
+    });
+  });
+
+  it('exits with code 2 when workflow succeeds but Telegram notification fails', async () => {
+    const { runWorkflow } = await import('./index');
+    const { validateEnv } = await import('./utils/env');
+    const { logger } = await import('./utils/logger');
+
+    (validateEnv as Mock).mockImplementation(() => undefined);
+    (runWorkflow as Mock).mockResolvedValue(false);
+
+    await import('./run');
+
+    await vi.waitFor(() => {
+      expect(runWorkflow).toHaveBeenCalledTimes(1);
+      expect(logger.error).toHaveBeenCalledWith(
+        'Lottery workflow completed but Telegram notification failed'
+      );
+      expect(process.exit).toHaveBeenCalledWith(2);
     });
   });
 
