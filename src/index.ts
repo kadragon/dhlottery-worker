@@ -30,7 +30,7 @@ export async function runWorkflow(now: Date = new Date()): Promise<boolean> {
       const message = error instanceof Error ? error.message : String(error);
       client.collector.add({
         type: 'error',
-        title: 'Orchestration Error',
+        title: '워크플로 오류',
         message: `워크플로우 실행 중 오류가 발생했습니다: ${message}`,
       });
       canPurchase = false;
@@ -46,7 +46,7 @@ export async function runWorkflow(now: Date = new Date()): Promise<boolean> {
     const message = error instanceof Error ? error.message : String(error);
     client.collector.add({
       type: 'error',
-      title: 'Orchestration Error',
+      title: '워크플로 오류',
       message: `워크플로우 실행 중 오류가 발생했습니다: ${message}`,
     });
   }

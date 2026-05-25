@@ -223,7 +223,7 @@ describe('checkDeposit', () => {
       expect(telegramModule.sendNotification).toHaveBeenCalledWith(
         expect.objectContaining({
           type: 'error',
-          title: expect.stringContaining('Charge'),
+          title: '충전 초기화 실패',
         }),
       );
     });
@@ -429,7 +429,7 @@ describe('checkDeposit', () => {
       expect(collector.getPayloads()).toHaveLength(1);
       expect(collector.getPayloads()[0]).toMatchObject({
         type: 'warning',
-        title: 'Insufficient Balance',
+        title: '예치금 부족',
       });
     });
 
@@ -454,7 +454,7 @@ describe('checkDeposit', () => {
       expect(collector.getPayloads()).toHaveLength(1);
       expect(collector.getPayloads()[0]).toMatchObject({
         type: 'error',
-        title: expect.stringContaining('Charge'),
+        title: '충전 초기화 실패',
       });
     });
   });
