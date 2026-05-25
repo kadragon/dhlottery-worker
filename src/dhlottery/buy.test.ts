@@ -806,7 +806,88 @@ describe("Lottery Purchase - TEST-PURCHASE-004: Telegram success notification", 
 		);
 	});
 
+	it("should include 결제금액 in notification details", async () => {
+		const mockAccountInfo: AccountInfo = {
+			balance: 50000,
+			currentRound: 1203,
+		};
+		(getAccountInfo as Mock).mockResolvedValue(mockAccountInfo);
 
+		const mockReadyResponse: PurchaseReadyResponse = {
+			direct_yn: "N",
+			ready_ip: "INTCOM2",
+			ready_time: "0",
+			ready_cnt: "0",
+		};
+
+		const mockPurchaseResult: PurchaseResult = {
+			loginYn: "Y",
+			result: {
+				resultCode: "100",
+				resultMsg: "Success",
+			},
+		};
+
+		mockFetch
+			.mockResolvedValueOnce({
+				ok: true,
+				status: 200,
+				json: async () => mockReadyResponse,
+			} as Response)
+			.mockResolvedValueOnce({
+				ok: true,
+				status: 200,
+				json: async () => mockPurchaseResult,
+			} as Response);
+
+		await purchaseLottery(mockClient);
+
+		const notificationCall = (sendNotification as Mock).mock.calls[0];
+		const details = notificationCall[0].details;
+		expect(details).toHaveProperty("결제금액");
+		expect(details["결제금액"]).toContain(PURCHASE_CONSTANTS.TOTAL_COST.toLocaleString());
+	});
+
+	it("should include 잔액 in notification details", async () => {
+		const mockAccountInfo: AccountInfo = {
+			balance: 50000,
+			currentRound: 1203,
+		};
+		(getAccountInfo as Mock).mockResolvedValue(mockAccountInfo);
+
+		const mockReadyResponse: PurchaseReadyResponse = {
+			direct_yn: "N",
+			ready_ip: "INTCOM2",
+			ready_time: "0",
+			ready_cnt: "0",
+		};
+
+		const mockPurchaseResult: PurchaseResult = {
+			loginYn: "Y",
+			result: {
+				resultCode: "100",
+				resultMsg: "Success",
+			},
+		};
+
+		mockFetch
+			.mockResolvedValueOnce({
+				ok: true,
+				status: 200,
+				json: async () => mockReadyResponse,
+			} as Response)
+			.mockResolvedValueOnce({
+				ok: true,
+				status: 200,
+				json: async () => mockPurchaseResult,
+			} as Response);
+
+		await purchaseLottery(mockClient);
+
+		const notificationCall = (sendNotification as Mock).mock.calls[0];
+		const details = notificationCall[0].details;
+		expect(details).toHaveProperty("잔액");
+	});
 
 	it("should include lottery round number in notification", async () => {
 		const mockAccountInfo: AccountInfo = {

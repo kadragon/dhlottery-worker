@@ -395,6 +395,7 @@ async function submitReservation(
       details: {
         대상회차: `${targetRound}회`,
         예약금액: `${formatKoreanNumber(PENSION_RESERVE_COST)}원`,
+        예약번호: reserveData.reserveOrderNo,
       },
     },
     collector

@@ -98,6 +98,7 @@ describe('pension reserve', () => {
       expect.objectContaining({
         type: 'success',
         title: '연금복권 예약 완료',
+        details: expect.objectContaining({ 예약번호: 'A-1' }),
       })
     );
   });
