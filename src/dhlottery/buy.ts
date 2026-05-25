@@ -151,11 +151,10 @@ export async function purchaseLottery(
       await notify(
         {
           type: 'success',
-          title: 'Lottery Purchase Completed',
-          message: `${roundNumber}회 로또 ${PURCHASE_CONSTANTS.GAME_COUNT}게임을 ${formatKoreanNumber(PURCHASE_CONSTANTS.TOTAL_COST)}원에 구매했습니다.`,
+          title: '로또 구매 완료',
+          message: `${roundNumber}회 로또 구매를 완료했습니다.`,
           details: {
             회차: `${roundNumber}회`,
-            게임수: `${PURCHASE_CONSTANTS.GAME_COUNT}게임`,
             결제금액: `${formatKoreanNumber(PURCHASE_CONSTANTS.TOTAL_COST)}원`,
             잔액: formatCurrency(accountInfo.balance - PURCHASE_CONSTANTS.TOTAL_COST),
           },
@@ -177,7 +176,7 @@ export async function purchaseLottery(
     await notify(
       {
         type: 'error',
-        title: 'Lottery Purchase Failed',
+        title: '로또 구매 실패',
         message: purchaseResult.result.resultMsg,
         details: {
           오류코드: purchaseResult.result.resultCode,
@@ -200,7 +199,7 @@ export async function purchaseLottery(
     await notify(
       {
         type: 'error',
-        title: 'Lottery Purchase Failed',
+        title: '로또 구매 실패',
         message: `구매 중 오류가 발생했습니다: ${errorMessage}`,
       },
       collector
