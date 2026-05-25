@@ -190,7 +190,7 @@ export async function checkWinning(
       await notify(
         {
           type: 'success',
-          title: 'Lottery Jackpot Win!',
+          title: '로또 당첨!',
           message: `${win.roundNumber}회차 로또 ${win.rank}등 당첨을 확인했습니다.`,
           details: {
             roundNumber: win.roundNumber,

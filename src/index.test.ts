@@ -120,7 +120,7 @@ describe("Main Orchestration - runWorkflow", () => {
       expect.arrayContaining([
         expect.objectContaining({
           type: "error",
-          title: "Orchestration Error",
+          title: "워크플로 오류",
         }),
       ]),
     );
@@ -142,7 +142,7 @@ describe("Main Orchestration - runWorkflow", () => {
       expect.arrayContaining([
         expect.objectContaining({
           type: "error",
-          title: "Orchestration Error",
+          title: "워크플로 오류",
           message: expect.stringContaining("deposit failed"),
         }),
       ]),
@@ -182,7 +182,7 @@ describe("Main Orchestration - runWorkflow", () => {
       expect.arrayContaining([
         expect.objectContaining({
           type: "error",
-          title: "Orchestration Error",
+          title: "워크플로 오류",
           message: expect.stringContaining("buy failed"),
         }),
       ]),
@@ -217,7 +217,7 @@ describe("Main Orchestration - runWorkflow", () => {
       expect.arrayContaining([
         expect.objectContaining({
           type: "error",
-          title: "Orchestration Error",
+          title: "워크플로 오류",
           message: expect.stringContaining("winning failed"),
         }),
       ]),
@@ -238,7 +238,7 @@ describe("Main Orchestration - runWorkflow", () => {
       expect.arrayContaining([
         expect.objectContaining({
           type: "error",
-          title: "Orchestration Error",
+          title: "워크플로 오류",
           message: expect.stringContaining("string failure"),
         }),
       ]),

@@ -135,7 +135,7 @@ describe("Telegram Notification Service", () => {
 
       await sendNotification({
         type: "warning",
-        title: "Insufficient Balance",
+        title: "예치금 부족",
         message: "Please deposit funds manually",
         details: { currentBalance: 2000, minimumBalance: 30000 },
       });
@@ -143,7 +143,7 @@ describe("Telegram Notification Service", () => {
       const requestBody = JSON.parse(mockFetch.mock.calls[0][1].body);
       const text = requestBody.text;
 
-      expect(text).toContain("Insufficient Balance");
+      expect(text).toContain("예치금 부족");
       expect(text).toContain("2000");
       expect(text).toContain("30000");
       expect(text).toMatch(/deposit|manually/i);

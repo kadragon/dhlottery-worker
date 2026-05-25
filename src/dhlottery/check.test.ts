@@ -458,7 +458,7 @@ describe("Winning Check", () => {
       expect(collector.getPayloads()).toHaveLength(1);
       expect(collector.getPayloads()[0]).toMatchObject({
         type: "success",
-        title: "Lottery Jackpot Win!",
+        title: "로또 당첨!",
       });
     });
   });

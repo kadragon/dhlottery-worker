@@ -87,7 +87,7 @@ export async function checkDeposit(
     await notify(
       {
         type: 'error',
-        title: 'Charge Initialization Failed',
+        title: '충전 초기화 실패',
         message: '충전 페이지 초기화에 실패했습니다. 수동으로 입금해주세요.',
         details: {
           currentBalance: formatCurrency(accountInfo.balance),
@@ -104,7 +104,7 @@ export async function checkDeposit(
   await notify(
     {
       type: 'warning',
-      title: 'Insufficient Balance',
+      title: '예치금 부족',
       message:
         '잔액이 부족하여 로또 구매를 진행할 수 없습니다. 입금 후 다음 스케줄에서 재시도됩니다.',
       details: {
