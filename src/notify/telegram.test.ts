@@ -94,7 +94,7 @@ describe("Telegram Notification Service", () => {
 
       await sendNotification({
         type: "success",
-        title: "Lottery Purchase Completed",
+        title: "로또 구매 완료",
         message: "Successfully purchased lottery tickets",
         details: { gameCount: 5, totalCost: 5000, roundNumber: 1145 },
       });
@@ -102,7 +102,7 @@ describe("Telegram Notification Service", () => {
       const requestBody = JSON.parse(mockFetch.mock.calls[0][1].body);
       const text = requestBody.text;
 
-      expect(text).toContain("Lottery Purchase Completed");
+      expect(text).toContain("로또 구매 완료");
       expect(text).toContain("5");
       expect(text).toContain("5000");
       expect(text).toContain("1145");

@@ -219,7 +219,7 @@ async function verifyDeposit(
     await notify(
       {
         type: 'error',
-        title: 'Pension Reserve Failed',
+        title: '연금복권 예약 실패',
         message: `연금복권 예치금 조회에 실패했습니다: ${depositData.resultMsg}`,
         details: {
           오류코드: depositData.resultCode,
@@ -236,7 +236,7 @@ async function verifyDeposit(
     await notify(
       {
         type: 'error',
-        title: 'Pension Reserve Failed',
+        title: '연금복권 예약 실패',
         message: '연금복권 예치금 값을 파싱하지 못했습니다.',
       },
       collector
@@ -248,7 +248,7 @@ async function verifyDeposit(
     await notify(
       {
         type: 'warning',
-        title: 'Pension Reserve Skipped',
+        title: '연금복권 예약 건너뜀',
         message: '연금복권 예약에 필요한 예치금이 부족하여 예약을 건너뜁니다.',
         details: {
           대상회차: `${targetRound}회`,
@@ -293,7 +293,7 @@ async function checkForDuplicates(
     await notify(
       {
         type: 'error',
-        title: 'Pension Reserve Failed',
+        title: '연금복권 예약 실패',
         message: `연금복권 중복 예약 확인에 실패했습니다: ${duplicateData.resultMsg}`,
         details: {
           오류코드: duplicateData.resultCode,
@@ -313,7 +313,7 @@ async function checkForDuplicates(
     await notify(
       {
         type: 'warning',
-        title: 'Pension Reserve Skipped',
+        title: '연금복권 예약 건너뜀',
         message: `대상 회차(${roundInfo.nextRound}회)가 이미 예약되어 예약을 건너뜁니다.`,
         details: {
           중복회차: duplicates.join(', '),
@@ -363,7 +363,7 @@ async function submitReservation(
     await notify(
       {
         type: 'error',
-        title: 'Pension Reserve Failed',
+        title: '연금복권 예약 실패',
         message: `연금복권 예약 요청에 실패했습니다: ${reserveData.resultMsg}`,
         details: {
           오류코드: reserveData.resultCode,
@@ -390,13 +390,11 @@ async function submitReservation(
   await notify(
     {
       type: 'success',
-      title: 'Pension Reserve Completed',
-      message: `${targetRound}회 연금복권720+ 예약(모든조, 1매씩)을 완료했습니다.`,
+      title: '연금복권 예약 완료',
+      message: `${targetRound}회 연금복권 예약을 완료했습니다.`,
       details: {
         대상회차: `${targetRound}회`,
         예약금액: `${formatKoreanNumber(PENSION_RESERVE_COST)}원`,
-        예약수량: `${TICKET_COUNT}매`,
-        예약번호: reserveData.reserveOrderNo,
       },
     },
     collector
@@ -430,7 +428,7 @@ export async function reservePensionNextWeek(
     await notify(
       {
         type: 'error',
-        title: 'Pension Reserve Failed',
+        title: '연금복권 예약 실패',
         message: `연금복권 예약 중 오류가 발생했습니다: ${errorMessage}`,
         details: {
           오류코드: errorCode,

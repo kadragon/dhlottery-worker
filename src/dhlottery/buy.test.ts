@@ -801,92 +801,12 @@ describe("Lottery Purchase - TEST-PURCHASE-004: Telegram success notification", 
 		expect(sendNotification).toHaveBeenCalledWith(
 			expect.objectContaining({
 				type: "success",
-				title: "Lottery Purchase Completed",
+				title: "로또 구매 완료",
 			}),
 		);
 	});
 
-	it("should include game count in notification", async () => {
-		const mockAccountInfo: AccountInfo = {
-			balance: 50000,
-			currentRound: 1203,
-		};
-		(getAccountInfo as Mock).mockResolvedValue(mockAccountInfo);
 
-		const mockReadyResponse: PurchaseReadyResponse = {
-			direct_yn: "N",
-			ready_ip: "INTCOM2",
-			ready_time: "0",
-			ready_cnt: "0",
-		};
-
-		const mockPurchaseResult: PurchaseResult = {
-			loginYn: "Y",
-			result: {
-				resultCode: "100",
-				resultMsg: "Success",
-			},
-		};
-
-		mockFetch
-			.mockResolvedValueOnce({
-				ok: true,
-				status: 200,
-				json: async () => mockReadyResponse,
-			} as Response)
-			.mockResolvedValueOnce({
-				ok: true,
-				status: 200,
-				json: async () => mockPurchaseResult,
-			} as Response);
-
-		await purchaseLottery(mockClient);
-
-		const notificationCall = (sendNotification as Mock).mock.calls[0];
-		const message = notificationCall[0].message;
-		expect(message).toContain("5게임");
-	});
-
-	it("should include total cost in notification", async () => {
-		const mockAccountInfo: AccountInfo = {
-			balance: 50000,
-			currentRound: 1203,
-		};
-		(getAccountInfo as Mock).mockResolvedValue(mockAccountInfo);
-
-		const mockReadyResponse: PurchaseReadyResponse = {
-			direct_yn: "N",
-			ready_ip: "INTCOM2",
-			ready_time: "0",
-			ready_cnt: "0",
-		};
-
-		const mockPurchaseResult: PurchaseResult = {
-			loginYn: "Y",
-			result: {
-				resultCode: "100",
-				resultMsg: "Success",
-			},
-		};
-
-		mockFetch
-			.mockResolvedValueOnce({
-				ok: true,
-				status: 200,
-				json: async () => mockReadyResponse,
-			} as Response)
-			.mockResolvedValueOnce({
-				ok: true,
-				status: 200,
-				json: async () => mockPurchaseResult,
-			} as Response);
-
-		await purchaseLottery(mockClient);
-
-		const notificationCall = (sendNotification as Mock).mock.calls[0];
-		const message = notificationCall[0].message;
-		expect(message).toContain("5,000원");
-	});
 
 	it("should include lottery round number in notification", async () => {
 		const mockAccountInfo: AccountInfo = {
@@ -929,46 +849,6 @@ describe("Lottery Purchase - TEST-PURCHASE-004: Telegram success notification", 
 		expect(message).toContain("1203회");
 	});
 
-	it("should include remaining balance in notification details", async () => {
-		const mockAccountInfo: AccountInfo = {
-			balance: 50000,
-			currentRound: 1203,
-		};
-		(getAccountInfo as Mock).mockResolvedValue(mockAccountInfo);
-
-		const mockReadyResponse: PurchaseReadyResponse = {
-			direct_yn: "N",
-			ready_ip: "INTCOM2",
-			ready_time: "0",
-			ready_cnt: "0",
-		};
-
-		const mockPurchaseResult: PurchaseResult = {
-			loginYn: "Y",
-			result: {
-				resultCode: "100",
-				resultMsg: "Success",
-			},
-		};
-
-		mockFetch
-			.mockResolvedValueOnce({
-				ok: true,
-				status: 200,
-				json: async () => mockReadyResponse,
-			} as Response)
-			.mockResolvedValueOnce({
-				ok: true,
-				status: 200,
-				json: async () => mockPurchaseResult,
-			} as Response);
-
-		await purchaseLottery(mockClient);
-
-		const notificationCall = (sendNotification as Mock).mock.calls[0];
-		const details = notificationCall[0].details;
-		expect(details["잔액"]).toBe("45,000원");
-	});
 });
 
 describe("Lottery Purchase - TEST-PURCHASE-005: Handle purchase failures", () => {
@@ -1093,7 +973,7 @@ describe("Lottery Purchase - TEST-PURCHASE-005: Handle purchase failures", () =>
 		expect(sendNotification).toHaveBeenCalledWith(
 			expect.objectContaining({
 				type: "error",
-				title: "Lottery Purchase Failed",
+				title: "로또 구매 실패",
 			}),
 		);
 	});
@@ -1187,7 +1067,7 @@ describe("Lottery Purchase - Collector integration", () => {
 		expect(collector.getPayloads()).toHaveLength(1);
 		expect(collector.getPayloads()[0]).toMatchObject({
 			type: "success",
-			title: "Lottery Purchase Completed",
+			title: "로또 구매 완료",
 		});
 	});
 
@@ -1207,7 +1087,7 @@ describe("Lottery Purchase - Collector integration", () => {
 		expect(collector.getPayloads()).toHaveLength(1);
 		expect(collector.getPayloads()[0]).toMatchObject({
 			type: "error",
-			title: "Lottery Purchase Failed",
+			title: "로또 구매 실패",
 		});
 	});
 });

@@ -97,7 +97,7 @@ describe('pension reserve', () => {
     expect(sendNotification).toHaveBeenCalledWith(
       expect.objectContaining({
         type: 'success',
-        title: 'Pension Reserve Completed',
+        title: '연금복권 예약 완료',
       })
     );
   });
@@ -131,7 +131,7 @@ describe('pension reserve', () => {
     expect(sendNotification).toHaveBeenCalledWith(
       expect.objectContaining({
         type: 'warning',
-        title: 'Pension Reserve Skipped',
+        title: '연금복권 예약 건너뜀',
       })
     );
   });
@@ -159,7 +159,7 @@ describe('pension reserve', () => {
     expect(sendNotification).toHaveBeenCalledWith(
       expect.objectContaining({
         type: 'warning',
-        title: 'Pension Reserve Skipped',
+        title: '연금복권 예약 건너뜀',
       })
     );
   });
@@ -189,7 +189,7 @@ describe('pension reserve', () => {
     expect(sendNotification).toHaveBeenCalledWith(
       expect.objectContaining({
         type: 'error',
-        title: 'Pension Reserve Failed',
+        title: '연금복권 예약 실패',
       })
     );
   });
@@ -265,7 +265,7 @@ describe('pension reserve', () => {
     expect(collector.getPayloads()).toHaveLength(1);
     expect(collector.getPayloads()[0]).toMatchObject({
       type: 'success',
-      title: 'Pension Reserve Completed',
+      title: '연금복권 예약 완료',
     });
   });
 
@@ -279,7 +279,7 @@ describe('pension reserve', () => {
     expect(collector.getPayloads()).toHaveLength(1);
     expect(collector.getPayloads()[0]).toMatchObject({
       type: 'error',
-      title: 'Pension Reserve Failed',
+      title: '연금복권 예약 실패',
     });
   });
 });
