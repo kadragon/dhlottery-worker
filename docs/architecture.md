@@ -13,51 +13,74 @@ Non-critical operations (charge init, pension reserve, winning check, Telegram f
 ## Layer Map
 
 ```
-run.ts                    ← GitHub Actions entry point
-  └─ index.ts             ← Orchestrator (runWorkflow)
-       └─ DHLotteryClient ← Facade (src/dhlottery/client.ts)
-            ├─ auth.ts         ← Login (cookie-based session)
-            ├─ account.ts      ← Balance/round info
-            ├─ charge.ts       ← Deposit check & top-up
-            ├─ buy.ts          ← Lotto purchase (5 games, auto)
-            ├─ pension-reserve.ts  ← Pension 720+ reservation
-            ├─ pension-crypto.ts   ← Encryption for pension API
-            ├─ check.ts        ← Winning results check
-            └─ NotificationCollector ← Collects all notifications
-                 └─ telegram.ts ← Single combined send
+cmd/worker/main.go              ← GitHub Actions entry point (run() int)
+  └─ internal/workflow          ← Orchestrator (RunWorkflow)
+       └─ dhlottery.Client      ← Facade (internal/dhlottery/client.go)
+            ├─ auth.go              ← Login (RSA, cookie-based session)
+            ├─ account.go           ← Balance/round info
+            ├─ charge.go            ← Deposit check & top-up
+            ├─ buy.go               ← Lotto purchase (5 games, auto)
+            ├─ pension_reserve.go   ← Pension 720+ reservation
+            ├─ pension_crypto.go    ← Encryption for pension API
+            ├─ check.go             ← Winning results check
+            └─ notify.Collector     ← Collects all notifications
+                 └─ notify/telegram.go ← Single combined send
 ```
 
 ## Dependency Rules
 
-1. **Domain modules** (`src/dhlottery/*`) depend on `HttpClient` interface, never on concrete HTTP implementation.
-2. **Notification** flows one way: domain → collector → telegram. Domain modules never send directly.
-3. **Types** are centralized in `src/types/` — no inline type definitions in domain modules.
-4. **Utils** (`src/utils/`) are leaf nodes — they depend on nothing in `src/`.
-5. **Constants** (`src/constants.ts`) are pure values — no imports from other src modules.
+1. **Domain package** (`internal/dhlottery`) depends on the concrete `*httpclient.Client`, which takes an injectable `Doer` so tests drive it with fakes (no client mock).
+2. **Notification** flows one way: domain → `notify.Collector` → `notify.SendCombinedNotification`. Domain code never sends directly.
+3. **Types** live with their package — domain types in `internal/dhlottery/types.go`, payloads in `internal/notify`, the HTTP `Response` in `internal/httpclient`.
+4. **Leaf packages** (`internal/{env,format,datekst,dherr,logger,constants}`) depend on nothing else in the repo (datekst→none; others→none), keeping the import graph acyclic.
 
 ## Module Registry
 
-| Module | Responsibility | Key exports |
-|--------|---------------|-------------|
-| `src/index.ts` | Orchestration | `runWorkflow()` |
-| `src/run.ts` | Process entry | `main()` |
-| `src/dhlottery/client.ts` | Facade | `DHLotteryClient` |
-| `src/dhlottery/auth.ts` | Authentication | `login()` |
-| `src/dhlottery/account.ts` | Account info | `getAccountInfo()` |
-| `src/dhlottery/charge.ts` | Deposit management | `checkDeposit()` |
-| `src/dhlottery/buy.ts` | Lotto purchase | `purchaseLottery()` |
-| `src/dhlottery/pension-reserve.ts` | Pension 720+ | `reservePensionNextWeek()` |
-| `src/dhlottery/pension-crypto.ts` | Encryption | Crypto helpers |
-| `src/dhlottery/check.ts` | Winning check | `checkWinning()` |
-| `src/client/http.ts` | HTTP client | `createHttpClient()` |
-| `src/notify/telegram.ts` | Telegram API | `sendCombinedNotification()` |
-| `src/notify/notification-collector.ts` | Collect payloads | `NotificationCollector` |
-| `src/utils/logger.ts` | Logging | `logger` |
-| `src/utils/env.ts` | Env validation | `validateEnv()` |
-| `src/utils/errors.ts` | Error types | Custom error classes |
-| `src/utils/format.ts` | Formatting | `formatKoreanNumber()` |
-| `src/utils/date.ts` | Date helpers | Date utilities |
-| `src/constants.ts` | Business constants | Amounts, counts |
+| Package / file | Responsibility | Key exports |
+|----------------|---------------|-------------|
+| `cmd/worker/main.go` | Process entry | `run() int`, `main()` |
+| `internal/workflow` | Orchestration | `RunWorkflow()` |
+| `internal/dhlottery/client.go` | Facade | `Client` |
+| `internal/dhlottery/auth.go` | Authentication | `login()` |
+| `internal/dhlottery/account.go` | Account info | `getAccountInfo()` |
+| `internal/dhlottery/charge.go` | Deposit management | `checkDeposit()` |
+| `internal/dhlottery/buy.go` | Lotto purchase | `purchaseLottery()` |
+| `internal/dhlottery/pension_reserve.go` | Pension 720+ | `reservePensionNextWeek()` |
+| `internal/dhlottery/pension_crypto.go` | Encryption | `EncryptElQ`/`DecryptElQ` |
+| `internal/dhlottery/check.go` | Winning check | `checkWinning()` |
+| `internal/httpclient` | HTTP client | `New`, `NewWithDoer`, `Client`, `Response` |
+| `internal/notify/telegram.go` | Telegram API | `SendCombinedNotification` |
+| `internal/notify/collector.go` | Collect payloads | `Collector` |
+| `internal/logger` | Logging | `Debug`/`Info`/`Warn`/`Error` (JSON line) |
+| `internal/env` | Env boundary | `Get`, `Validate` |
+| `internal/dherr` | Error types | `Error`, `New`/`NewAuth`/`NewPurchase`, `WrapAuth` |
+| `internal/format` | Formatting | `KoreanNumber`, `Currency` |
+| `internal/datekst` | Date helpers | KST date utilities |
+| `internal/constants` | Business constants | Amounts, counts, User-Agent |
+| `internal/testutil` | Test fake `Doer` | `StubDoer`, `Sequence` |
+
+## Porting Decisions (TS → Go, 2026)
+
+The Go port preserves observable behavior. A few deliberate choices differ from
+the original TypeScript and are intentional improvements, validated by an
+adversarial TS-vs-Go diff review:
+
+- **RSA**: `crypto/rsa.EncryptPKCS1v15` (hex output) replaces node-forge. Padding
+  is randomized, so ciphertext is not byte-comparable; correctness is via
+  pubkey-parse + server acceptance.
+- **EL `q` URL-decode**: uses `url.PathUnescape` (not `QueryUnescape`) to match
+  JS `decodeURIComponent` — a literal `+` in the server's raw base64 is preserved
+  rather than turned into a space.
+- **Telegram credentials**: read inside the retry loop; a missing/empty token
+  yields no outbound request (matching the original throw-and-retry), instead of
+  sending a malformed request.
+- **Stricter numeric parsing** (improvement): `ltEpsd`/`crntEntrsAmt` decode into
+  Go `int`, rejecting non-integer JSON numbers the TS would have accepted. Real
+  API values are always integers.
+- **Empty-name `Set-Cookie`** (improvement): cookies with an empty name are
+  dropped rather than stored and serialized as `=value`.
+- **Logging**: `log/slog`-style JSON lines via `internal/logger`; debug gated by
+  `DEBUG=true`.
 
 ## Business Rules
 

@@ -13,9 +13,10 @@ DHLottery(동행복권) 자동 구매와 알림을 위한 GitHub Actions 기반 
 
 ## 구성
 
-- `agents.md`: 운영 규칙과 개발 원칙
+- `AGENTS.md`: 운영 규칙과 개발 원칙
 - `plan.md`: 리팩터링/개선 계획과 현황
-- `src/`: 실행 코드
+- `cmd/worker/`: 실행 진입점
+- `internal/`: 도메인/유틸 패키지
 - `.github/workflows/lottery.yml`: GitHub Actions 워크플로
 
 ## 시작하기 (Fork & 설정)
@@ -61,57 +62,46 @@ Fork된 저장소는 기본적으로 Actions가 비활성화되어 있습니다.
 
 ### 로컬 개발 (선택)
 
-로컬에서 실행하려면 Bun 1.x가 필요합니다.
+로컬에서 실행하려면 Go 1.26+ 가 필요합니다.
 
 ```bash
 git clone <your-fork-url>
 cd dhlottery-worker
-bun install
 ```
 
-`.env` 파일을 생성하고 위 Secrets와 동일한 환경 변수를 설정합니다:
-
-```env
-USER_ID=hong123
-PASSWORD=mypassword
-TELEGRAM_BOT_TOKEN=123456:ABC-DEF...
-TELEGRAM_CHAT_ID=987654321
-```
+환경 변수를 설정합니다 (별도 `.env` 로더는 없습니다):
 
 ```bash
-bun run start
+export USER_ID=hong123
+export PASSWORD=mypassword
+export TELEGRAM_BOT_TOKEN=123456:ABC-DEF...
+export TELEGRAM_CHAT_ID=987654321
+
+go run ./cmd/worker
 ```
 
 ## 개발
 
-로컬 실행 (.env 파일 필요):
+로컬 실행 (환경 변수 필요):
 ```bash
-bun run start
+go run ./cmd/worker
 ```
 
 테스트 실행:
 ```bash
-bun run test
+go test ./...
 ```
 
 커버리지 실행:
 ```bash
-bun run test:coverage
+go test ./... -coverprofile=coverage.out
+go tool cover -func=coverage.out
 ```
 
-CI 커버리지 게이트 실행:
+정적 분석 / 포맷:
 ```bash
-bun run test:coverage:ci
-```
-
-테스트 감시 모드:
-```bash
-bun run test:watch
-```
-
-타입 체크:
-```bash
-bun run typecheck
+go vet ./...
+gofmt -l ./cmd ./internal
 ```
 
 ## 배포
@@ -160,20 +150,9 @@ GitHub Actions로 자동 실행됩니다.
 
 ### 테스트 커버리지
 
-- 커버리지 임계치(글로벌):
-  - Statements: **85%**
-  - Branches: **75%**
-  - Functions: **85%**
-  - Lines: **85%**
-- DHLottery 실 HTML 기반 픽스처
-- HTTP 클라이언트 모킹으로 결정적 테스트
-
-#### 커버리지 트러블슈팅
-
-- `Cannot find dependency '@vitest/coverage-v8'` 오류가 발생하면 의존성을 다시 설치하세요:
-  ```bash
-  bun install
-  ```
+- 커버리지 게이트: 전체 statement **85%** 이상 (CI에서 강제)
+- DHLottery 실 HTML 기반 픽스처 (`internal/dhlottery/testdata/`)
+- 주입형 `Doer`(`internal/testutil`)로 실제 `httpclient.Client`를 구동하는 결정적 통합 테스트
 
 ## 유지보수
 
@@ -181,7 +160,7 @@ GitHub Actions로 자동 실행됩니다.
 
 1. `plan.md`에 작업 목적/범위 정리
 2. 테스트 작성 후 구현 (RED → GREEN → REFACTOR)
-3. 변경 사항을 `agents.md` 규칙에 맞게 정리
+3. 변경 사항을 `AGENTS.md` 규칙에 맞게 정리
 
 ### 디버깅
 
@@ -190,12 +169,12 @@ GitHub Actions 로그 확인:
 
 로컬 테스트 상세 로그:
 ```bash
-bun run test -- --reporter=verbose
+go test ./... -v
 ```
 
 디버그 모드:
 ```bash
-DEBUG=true bun run start
+DEBUG=true go run ./cmd/worker
 ```
 
 ## 구현 메모

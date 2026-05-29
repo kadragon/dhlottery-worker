@@ -6,9 +6,9 @@ Each completed feature is evaluated against these criteria. Threshold: all must 
 
 ### Correctness
 - [ ] All acceptance criteria from backlog met
-- [ ] All existing tests still pass (236 baseline)
+- [ ] All existing tests still pass (`go test ./...`)
 - [ ] New behavior has corresponding tests
-- [ ] No regressions in coverage thresholds
+- [ ] No regression below the 85% statement coverage gate
 
 ### Safety
 - [ ] No secrets or credentials in code
@@ -17,10 +17,10 @@ Each completed feature is evaluated against these criteria. Threshold: all must 
 - [ ] No duplicate purchase risk introduced
 
 ### Code Quality
-- [ ] Biome check passes (lint + format)
-- [ ] TypeScript strict mode — no type errors
+- [ ] `gofmt -l ./cmd ./internal` is empty (formatted)
+- [ ] `go vet ./...` passes
 - [ ] No new duplication introduced
-- [ ] Follows existing patterns (pure functions + facade)
+- [ ] Follows existing patterns (package functions + facade)
 
 ### Documentation
 - [ ] Architecture docs updated if module structure changed

@@ -13,7 +13,7 @@ All endpoints verified against current source code (2026-04-28).
 
 Non-www (`dhlottery.co.kr`) redirects to `www` with 301. Always use `www` as base.
 
-## Session & Authentication (`src/dhlottery/auth.ts`)
+## Session & Authentication (`internal/dhlottery/auth.go`)
 
 | Endpoint | Method | Purpose |
 |----------|--------|---------|
@@ -21,9 +21,9 @@ Non-www (`dhlottery.co.kr`) redirects to `www` with 301. Always use `www` as bas
 | `/login/selectRsaModulus.do` | GET | Fetch RSA public key (`rsaModulus`, `publicExponent`) |
 | `/login/securityLoginCheck.do` | POST | Submit RSA-encrypted credentials; success = 302 to `loginSuccess.do` or `userId` cookie |
 
-**2026-01 change:** Plaintext POST login → RSA PKCS#1 v1.5 encryption (node-forge, compatible with DHLottery jsbn.js). Cookie renamed JSESSIONID → DHJSESSIONID. Session/RSA init follows up to 5 redirects (301/302).
+**2026-01 change:** Plaintext POST login → RSA PKCS#1 v1.5 encryption (Go `crypto/rsa`, compatible with DHLottery jsbn.js). Cookie renamed JSESSIONID → DHJSESSIONID. Session/RSA init follows up to 5 redirects (301/302).
 
-## Account Info (`src/dhlottery/account.ts`)
+## Account Info (`internal/dhlottery/account.go`)
 
 | Endpoint | Method | Purpose | Key field |
 |----------|--------|---------|-----------|
@@ -32,7 +32,7 @@ Non-www (`dhlottery.co.kr`) redirects to `www` with 301. Always use `www` as bas
 
 **2026-01 change:** `/mypage/home` HTML unparseable (JS-rendered) → `/mypage/selectUserMndp.do` JSON API. `/common.do?method=main` → `/lt645/selectThsLt645Info.do` JSON API.
 
-## Purchase (`src/dhlottery/buy.ts`)
+## Purchase (`internal/dhlottery/buy.go`)
 
 Base: `https://ol.dhlottery.co.kr/olotto/game`
 
@@ -43,19 +43,19 @@ Base: `https://ol.dhlottery.co.kr/olotto/game`
 
 Both require `Origin`, `Referer`, `X-Requested-With` headers.
 
-## Charge Init (`src/dhlottery/charge.ts`)
+## Charge Init (`internal/dhlottery/charge.go`)
 
 | Endpoint | Method | Purpose |
 |----------|--------|---------|
 | `/kbank.do?method=kbankProcess&PayMethod=VBANK&...` | GET | K-Bank virtual account charge page init (access only — no payment executed) |
 
-## Winning Check (`src/dhlottery/check.ts`)
+## Winning Check (`internal/dhlottery/check.go`)
 
 | Endpoint | Method | Purpose |
 |----------|--------|---------|
 | `/myPage.do?method=lottoBuyList` | GET | Parse winning results from HTML. 200 only; 3xx returns empty result after logging. |
 
-## Pension 720+ Reservation (`src/dhlottery/pension-reserve.ts`)
+## Pension 720+ Reservation (`internal/dhlottery/pension_reserve.go`)
 
 Base: `https://el.dhlottery.co.kr`
 
@@ -70,7 +70,7 @@ Base: `https://el.dhlottery.co.kr`
 
 `el.dhlottery.co.kr` uses `JSESSIONID` cookie; falls back to `DHJSESSIONID` if absent.
 
-## Telegram (`src/notify/telegram.ts`)
+## Telegram (`internal/notify/telegram.go`)
 
 | Endpoint | Method | Purpose |
 |----------|--------|---------|
