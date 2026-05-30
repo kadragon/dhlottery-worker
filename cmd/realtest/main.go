@@ -13,12 +13,21 @@ import (
 
 	"github.com/kadragon/dhlottery-worker/internal/dhlottery"
 	"github.com/kadragon/dhlottery-worker/internal/env"
+	"github.com/kadragon/dhlottery-worker/internal/notify"
 )
+
+type smokeClient interface {
+	Login() error
+	GetAccountInfo() (dhlottery.AccountInfo, error)
+	CheckWinning(time.Time) []dhlottery.WinningResult
+	Collector() *notify.Collector
+}
 
 // Indirected for tests.
 var (
 	validateEnv = env.Validate
 	runChecks   = defaultRunChecks
+	newClient   = func() smokeClient { return dhlottery.NewClient() }
 	nowFn       = time.Now
 )
 
@@ -37,7 +46,7 @@ func run() int {
 }
 
 func defaultRunChecks() int {
-	c := dhlottery.NewClient()
+	c := newClient()
 
 	fmt.Println("== 1) Login (RSA + cookie session) ==")
 	if err := c.Login(); err != nil {
@@ -49,6 +58,7 @@ func defaultRunChecks() int {
 	fmt.Println("\n== 2) GetAccountInfo (balance + round JSON parse) ==")
 	if info, err := c.GetAccountInfo(); err != nil {
 		fmt.Println("❌ account info failed:", err)
+		return 1
 	} else {
 		fmt.Printf("✅ balance=%d KRW  currentRound=%d\n", info.Balance, info.CurrentRound)
 	}
