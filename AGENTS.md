@@ -1,6 +1,6 @@
 # AGENTS.md
 
-DHLottery-worker: GitHub Actions scheduled job (every Monday 01:00 UTC) that logs in, purchases 5 lotto games, reserves the pension lottery, checks prior week's results, and sends a Telegram notification. TypeScript + Bun, zero external state. For full pipeline overview, see `docs/architecture.md`.
+DHLottery-worker: GitHub Actions scheduled job (every Monday 01:00 UTC) that logs in, purchases 5 lotto games, reserves the pension lottery, checks prior week's results, and sends a Telegram notification. Go (1.26+), zero external state. For full pipeline overview, see `docs/architecture.md`.
 
 ## Docs Index (read on demand)
 
@@ -16,14 +16,14 @@ DHLottery-worker: GitHub Actions scheduled job (every Monday 01:00 UTC) that log
 
 ## Test Runner
 
-- Use `bun run test` (Vitest). **Never** `bun test` — Bun's native runner does not support Vitest's `vi.*` API and fails ~60% of this project's tests.
-- Guardrail: `bunfig.toml` preloads `scripts/block-bun-test.ts` which aborts `bun test` when invoked from the repo root. Bun does not walk up for `bunfig.toml`, so running `bun test` from a subdirectory bypasses the guard — **always invoke from the repo root**.
+- `go test ./...` runs the suite (no cache: add `-count=1`). Tests are colocated `_test.go` files; integration-style tests drive the real `httpclient.Client` through an injected fake `Doer` (`internal/testutil`), not mocks of our own code.
+- Entry point is `func run() int` + `main(){ os.Exit(run()) }` so exit codes are unit-testable.
 
 ## Golden Principles
 
-1. **All env reads via `validateEnv()`** — Domain modules never read `process.env.*` directly; `src/utils/env.ts` is the sole boundary.
-2. **Non-throwing orchestrator** — Non-critical operations (charge init, pension reserve, winning check, Telegram) must never abort `runWorkflow()`. Errors are collected and reported, not re-thrown to the top level.
-3. **Notifications via `NotificationCollector` only** — Domain modules push to the collector; direct calls to `sendCombinedNotification()` are forbidden. One send at the end of the workflow.
+1. **All env reads via `internal/env`** — Domain modules never call `os.Getenv` directly; `internal/env` (`Get`/`Validate`) is the sole boundary.
+2. **Non-throwing orchestrator** — Non-critical operations (charge init, pension reserve, winning check, Telegram) must never abort `workflow.RunWorkflow()`. `ReservePensionNextWeek`/`Buy`/`CheckWinning` return outcomes, not errors; only `Login`/`CheckDeposit` return errors, which are collected and reported.
+3. **Notifications via `notify.Collector` only** — Domain modules push to the collector via `notify.Notify(payload, collector)`; direct calls to `notify.SendCombinedNotification()` from domain code are forbidden. One send at the end of the workflow.
 
 ## Token Economy
 
@@ -35,9 +35,9 @@ DHLottery-worker: GitHub Actions scheduled job (every Monday 01:00 UTC) that log
 
 ## Working with Existing Code
 
-- Tests are colocated (e.g., `src/dhlottery/auth.test.ts`). New modules require a test file.
-- Coverage thresholds: lines/functions/statements 85%, branches 75%. Run `bun run test:coverage` to verify.
-- Pre-commit: `bun run precommit` (Biome check:fix + typecheck). Fix all errors before committing.
+- Tests are colocated (e.g., `internal/dhlottery/auth_test.go`). New packages/modules require a test file.
+- Coverage gate: total statement coverage ≥ 85% (`go test ./... -coverprofile=coverage.out && go tool cover -func=coverage.out`). CI enforces it.
+- Before committing: `gofmt -w ./cmd ./internal && go vet ./... && go test ./...` must all pass.
 
 ## Language Policy
 

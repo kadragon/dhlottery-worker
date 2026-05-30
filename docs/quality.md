@@ -1,5 +1,9 @@
 # Quality Grades
 
+> ⚠️ Historical snapshot of the pre-2026 **TypeScript** codebase. File names and
+> grades below (e.g. `buy.ts`, Vitest counts) predate the Go port and are kept
+> for reference only. See `docs/architecture.md` for the current Go structure.
+
 ## Coverage (as of init)
 
 - **Tests**: 236 passing across 21 test files

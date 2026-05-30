@@ -12,6 +12,11 @@ dist/
 
 # Testing
 coverage/
+coverage.out
+
+# Go build outputs
+/worker
+cmd/worker/worker
 
 # IDE
 .vscode/

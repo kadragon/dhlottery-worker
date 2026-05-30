@@ -12,9 +12,9 @@ The primary cycle for behavioral changes.
 
 **Step 2: Sprint Contract** — Define "done" before writing code. Write concrete acceptance criteria (testable conditions, not impressions). Add to `tasks.md` or the backlog item.
 
-**Step 3: Implement** — Red → Green → Refactor (TDD). New behavior must have tests. Coverage must stay above thresholds (lines/functions/statements 85%, branches 75%).
+**Step 3: Implement** — Red → Green → Refactor (TDD). New behavior must have tests. Total statement coverage must stay ≥ 85%.
 
-**Step 4: Verify** — Run `bun run test` (never `bun test`). Run `bun run precommit`. Fix everything before committing.
+**Step 4: Verify** — Run `go test ./...`, `go vet ./...`, and `gofmt -l ./cmd ./internal` (must be empty). Fix everything before committing.
 
 **Step 5: Evaluate** — Grade against `docs/eval-criteria.md`. All criteria must be pass or acceptable before the feature is done.
 
@@ -42,7 +42,7 @@ Write or update `docs/`. Ground every claim in current code. Never modify produc
 
 Run between features or when entropy is visible.
 
-1. Run `bun run check` and `bun run test:coverage`.
+1. Run `gofmt -l ./cmd ./internal`, `go vet ./...`, and `go test ./... -coverprofile=coverage.out`.
 2. Review open items in `tasks.md` — close completed ones, escalate stale ones.
 3. Check `docs/` for staleness against current code.
 4. Tag new findings as `[doc]`, `[constraint]`, `[debt]`, or `[harness]` in `tasks.md`.
