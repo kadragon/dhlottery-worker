@@ -3,7 +3,6 @@ package dhlottery
 import (
 	"fmt"
 	"net/url"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -16,111 +15,66 @@ import (
 	"github.com/kadragon/dhlottery-worker/internal/notify"
 )
 
-const winningListURL = "https://www.dhlottery.co.kr/myPage.do?method=lottoBuyList"
+// 2026-01: the legacy lottoBuyList HTML page (myPage.do?method=lottoBuyList)
+// was retired and now 302-redirects to /errorPage. Purchase/winning history is
+// served by this JSON ledger API, which covers both lotto (LO40) and pension
+// (LP72) in one feed.
+const winningLedgerURL = "https://www.dhlottery.co.kr/mypage/selectMyLotteryledger.do"
 
-// Winning-results HTML parsing patterns.
-var (
-	rowRe        = regexp.MustCompile(`(?is)<tr\b.*?</tr>`)
-	tableCellRe  = regexp.MustCompile(`(?is)<td\b[^>]*>(.*?)</td>`)
-	thRe         = regexp.MustCompile(`(?i)<th\b`)
-	detailPopRe  = regexp.MustCompile(`(?i)detailPop\(\s*'[^']*'\s*,\s*'[^']*'\s*,\s*'(\d+)'\s*\)`)
-	digitRe      = regexp.MustCompile(`(\d+)`)
-	matchCountRe = regexp.MustCompile(`(\d+)\s*개`)
-	htmlTagRe    = regexp.MustCompile(`<[^>]+>`)
-	whitespaceRe = regexp.MustCompile(`\s+`)
-	nonDigitRe   = regexp.MustCompile(`[^\d]`)
-)
-
-func stripHTMLTags(input string) string {
-	s := htmlTagRe.ReplaceAllString(input, " ")
-	s = whitespaceRe.ReplaceAllString(s, " ")
-	return strings.TrimSpace(s)
+// ledgerResponse is the /mypage/selectMyLotteryledger.do payload.
+type ledgerResponse struct {
+	Data struct {
+		Total int         `json:"total"`
+		List  []ledgerRow `json:"list"`
+	} `json:"data"`
 }
 
-func extractTdTexts(rowHTML string) []string {
-	matches := tableCellRe.FindAllStringSubmatch(rowHTML, -1)
-	out := make([]string, 0, len(matches))
-	for _, m := range matches {
-		out = append(out, stripHTMLTags(m[1]))
-	}
-	return out
+// ledgerRow is one purchase/winning record. LtWnAmt distinguishes the three
+// states: nil = not yet drawn, 0 = lost, > 0 = won.
+type ledgerRow struct {
+	LtGdsCd    string `json:"ltGdsCd"`
+	LtGdsNm    string `json:"ltGdsNm"`
+	LtEpsd     int    `json:"ltEpsd"`
+	LtWnResult string `json:"ltWnResult"`
+	LtWnAmt    *int   `json:"ltWnAmt"`
+	WnRnk      *int   `json:"wnRnk"`
+	EpsdRflDt  string `json:"epsdRflDt"`
 }
 
-// parseWinningResultsFromHTML parses winning rows from lottoBuyList HTML.
-// Row layout: 0 buyDate, 1 gameName, 2 detail, 3 count, 4 result, 5 prize, 6 drawDate.
-func parseWinningResultsFromHTML(html string) []WinningResult {
-	var results []WinningResult
-	for _, row := range rowRe.FindAllString(html, -1) {
-		if thRe.MatchString(row) {
+// extractWins keeps rows with a positive win amount. A nil LtWnAmt (undrawn) or
+// zero (lost) is skipped, so a win is detected on LtWnAmt > 0 rather than on
+// wnRnk — whose encoding for winning rows is not observable from lost/undrawn
+// data, and which is therefore unsafe to gate the notification on.
+func extractWins(rows []ledgerRow) []WinningResult {
+	var wins []WinningResult
+	for _, row := range rows {
+		if row.LtWnAmt == nil || *row.LtWnAmt <= 0 {
 			continue
 		}
-		cells := extractTdTexts(row)
-		if len(cells) < 6 {
-			continue
-		}
-
-		issue := detailPopRe.FindStringSubmatch(row)
-		roundOK := issue != nil
-		roundNumber := 0
-		if roundOK {
-			roundNumber, _ = strconv.Atoi(issue[1])
-		}
-
-		resultCell := cells[4]
-		rankMatch := digitRe.FindStringSubmatch(resultCell)
-		rankOK := rankMatch != nil
 		rank := 0
-		if rankOK {
-			rank, _ = strconv.Atoi(rankMatch[1])
+		if row.WnRnk != nil {
+			rank = *row.WnRnk
 		}
-
-		var matchCount *int
-		if mc := matchCountRe.FindStringSubmatch(resultCell); mc != nil {
-			v, _ := strconv.Atoi(mc[1])
-			matchCount = &v
-		}
-
-		prizeDigits := nonDigitRe.ReplaceAllString(cells[5], "")
-		prizeOK := prizeDigits != ""
-		prize := 0
-		if prizeOK {
-			prize, _ = strconv.Atoi(prizeDigits)
-		}
-
-		if !roundOK || !rankOK || !prizeOK {
-			continue
-		}
-		if rank < 1 || prize < 0 {
-			continue
-		}
-
-		results = append(results, WinningResult{
-			RoundNumber: roundNumber,
+		wins = append(wins, WinningResult{
+			RoundNumber: row.LtEpsd,
 			Rank:        rank,
-			PrizeAmount: prize,
-			MatchCount:  matchCount,
+			PrizeAmount: *row.LtWnAmt,
+			Product:     row.LtGdsNm,
+			WinResult:   row.LtWnResult,
 		})
 	}
-	return results
+	return wins
 }
 
-// filterJackpotWins keeps rank 1 (jackpot) wins only.
-func filterJackpotWins(results []WinningResult) []WinningResult {
-	var out []WinningResult
-	for _, r := range results {
-		if r.Rank == 1 {
-			out = append(out, r)
-		}
-	}
-	return out
-}
+func compactYmd(date string) string { return strings.ReplaceAll(date, "-", "") }
 
-// checkWinning fetches the previous week's results and notifies jackpot wins.
-// Non-fatal by design: network/parse errors return an empty slice.
+// checkWinning fetches the previous week's ledger and notifies on every win
+// (lotto and pension). Non-fatal by design: network/parse errors and 3xx
+// redirects return an empty slice.
 func checkWinning(client *httpclient.Client, now time.Time, collector *notify.Collector) []WinningResult {
 	r := datekst.CalculatePreviousWeekRange(now)
 
-	u, err := url.Parse(winningListURL)
+	u, err := url.Parse(winningLedgerURL)
 	if err != nil {
 		logger.Error("Winning check failed (non-fatal)", logger.Fields{
 			"event": "winning_check_failed", "error": err.Error(),
@@ -128,13 +82,25 @@ func checkWinning(client *httpclient.Client, now time.Time, collector *notify.Co
 		return nil
 	}
 	q := u.Query()
-	q.Set("searchStartDate", r.StartDate)
-	q.Set("searchEndDate", r.EndDate)
-	q.Set("nowPage", "1")
+	q.Set("srchStrDt", compactYmd(r.StartDate))
+	q.Set("srchEndDt", compactYmd(r.EndDate))
+	q.Set("sort", "")
+	q.Set("ltGdsCd", "")
+	q.Set("winResult", "")
+	q.Set("lramSmam", "")
+	q.Set("pageNum", "1")
+	q.Set("recordCountPerPage", "50")
 	u.RawQuery = q.Encode()
 
 	resp, err := client.Fetch(u.String(), httpclient.RequestOptions{
-		Headers: map[string]string{"User-Agent": constants.UserAgent},
+		Headers: map[string]string{
+			"User-Agent":       constants.UserAgent,
+			"Accept":           "application/json, text/javascript, */*; q=0.01",
+			"Content-Type":     "application/json;charset=UTF-8",
+			"X-Requested-With": "XMLHttpRequest",
+			"ajax":             "true",
+			"Referer":          "https://www.dhlottery.co.kr/mypage/mylotteryledger",
+		},
 	})
 	if err != nil {
 		logger.Error("Winning check failed (non-fatal)", logger.Fields{
@@ -143,8 +109,8 @@ func checkWinning(client *httpclient.Client, now time.Time, collector *notify.Co
 		return nil
 	}
 
-	// redirect: 'manual' means a 3xx is not success — it usually signals an
-	// expired session. Only 200 returns parseable HTML.
+	// redirect: 'manual' means a 3xx is not success — usually an expired
+	// session. Only 200 returns parseable JSON.
 	if resp.Status != 200 {
 		isRedirect := resp.Status >= 300 && resp.Status < 400
 		fields := logger.Fields{"status": resp.Status}
@@ -158,38 +124,39 @@ func checkWinning(client *httpclient.Client, now time.Time, collector *notify.Co
 		return nil
 	}
 
-	html, err := resp.Text("euc-kr")
-	if err != nil {
+	var data ledgerResponse
+	if err := resp.JSON(&data); err != nil {
 		logger.Error("Winning check failed (non-fatal)", logger.Fields{
 			"event": "winning_check_failed", "error": err.Error(),
 		})
 		return nil
 	}
 
-	jackpotWins := filterJackpotWins(parseWinningResultsFromHTML(html))
-	if len(jackpotWins) == 0 {
-		return nil
-	}
-
-	for _, win := range jackpotWins {
+	wins := extractWins(data.Data.List)
+	for _, win := range wins {
 		details := []notify.KV{
+			{Key: "product", Value: win.Product},
 			{Key: "roundNumber", Value: strconv.Itoa(win.RoundNumber)},
-			{Key: "rank", Value: strconv.Itoa(win.Rank)},
-			{Key: "prizeAmount", Value: strconv.Itoa(win.PrizeAmount)},
-			{Key: "prizeAmountKrw", Value: format.KoreanNumber(win.PrizeAmount) + "원"},
 		}
-		if win.MatchCount != nil {
-			details = append(details, notify.KV{Key: "matchCount", Value: strconv.Itoa(*win.MatchCount)})
+		if win.Rank > 0 {
+			details = append(details, notify.KV{Key: "rank", Value: strconv.Itoa(win.Rank)})
 		}
-		details = append(details, notify.KV{Key: "period", Value: r.StartDate + " ~ " + r.EndDate})
+		if win.WinResult != "" {
+			details = append(details, notify.KV{Key: "winResult", Value: win.WinResult})
+		}
+		details = append(details,
+			notify.KV{Key: "prizeAmount", Value: strconv.Itoa(win.PrizeAmount)},
+			notify.KV{Key: "prizeAmountKrw", Value: format.KoreanNumber(win.PrizeAmount) + "원"},
+			notify.KV{Key: "period", Value: r.StartDate + " ~ " + r.EndDate},
+		)
 
 		notify.Notify(notify.Payload{
 			Type:    notify.Success,
-			Title:   "로또 당첨!",
-			Message: fmt.Sprintf("%d회차 로또 %d등 당첨을 확인했습니다.", win.RoundNumber, win.Rank),
+			Title:   "복권 당첨!",
+			Message: fmt.Sprintf("%s %d회차 당첨을 확인했습니다.", win.Product, win.RoundNumber),
 			Details: details,
 		}, collector)
 	}
 
-	return jackpotWins
+	return wins
 }
