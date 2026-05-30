@@ -5,6 +5,7 @@
 package datekst
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -110,18 +111,6 @@ func formatYmd(year, month, day int) string {
 	return pad4(year) + "-" + pad2(month) + "-" + pad2(day)
 }
 
-func pad2(n int) string {
-	s := strconv.Itoa(n)
-	if len(s) < 2 {
-		return "0" + s
-	}
-	return s
-}
+func pad2(n int) string { return fmt.Sprintf("%02d", n) }
 
-func pad4(n int) string {
-	s := strconv.Itoa(n)
-	for len(s) < 4 {
-		s = "0" + s
-	}
-	return s
-}
+func pad4(n int) string { return fmt.Sprintf("%04d", n) }
