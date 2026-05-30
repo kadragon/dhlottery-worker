@@ -57,8 +57,8 @@ func executePurchase(client *httpclient.Client, ready PurchaseReadyResponse, rou
 	payLimitDate := datekst.AddYearsAndDays(drawDate, 1, 1)
 
 	games := make([]gameSelection, 0, constants.GamesPerPurchase)
-	for _, alpabet := range []string{"A", "B", "C", "D", "E"} {
-		games = append(games, gameSelection{GenType: "0", ArrGameChoiceNum: nil, Alpabet: alpabet})
+	for i := 0; i < constants.GamesPerPurchase; i++ {
+		games = append(games, gameSelection{GenType: "0", ArrGameChoiceNum: nil, Alpabet: "ABCDEFGHIJKLMNOPQRSTUVWXYZ"[i : i+1]})
 	}
 	gamesJSON, err := json.Marshal(games)
 	if err != nil {
