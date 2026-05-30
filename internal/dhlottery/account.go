@@ -15,14 +15,15 @@ import (
 const (
 	lottoRoundAPIURL = "https://www.dhlottery.co.kr/lt645/selectThsLt645Info.do"
 	balanceAPIURL    = "https://www.dhlottery.co.kr/mypage/selectUserMndp.do"
+	accountModule    = "account"
 )
 
 // getAccountInfo fetches the current round and available balance.
 func getAccountInfo(client *httpclient.Client) (AccountInfo, error) {
-	logger.Debug("Fetching lotto round API", logger.Fields{"module": "account", "url": lottoRoundAPIURL})
+	logger.Debug("Fetching lotto round API", logger.Fields{logger.FieldModule: accountModule, "url": lottoRoundAPIURL})
 
 	roundResp, err := client.Fetch(lottoRoundAPIURL, httpclient.RequestOptions{
-		Headers: map[string]string{"User-Agent": constants.UserAgent},
+		Headers: map[string]string{constants.HeaderUserAgent: constants.UserAgent},
 	})
 	if err != nil {
 		return AccountInfo{}, err
@@ -39,12 +40,12 @@ func getAccountInfo(client *httpclient.Client) (AccountInfo, error) {
 		return AccountInfo{}, err
 	}
 
-	logger.Debug("Fetching balance API", logger.Fields{"module": "account", "url": balanceAPIURL})
+	logger.Debug("Fetching balance API", logger.Fields{logger.FieldModule: accountModule, "url": balanceAPIURL})
 
 	balanceResp, err := client.Fetch(balanceAPIURL, httpclient.RequestOptions{
 		Headers: map[string]string{
-			"User-Agent": constants.UserAgent,
-			"Referer":    "https://www.dhlottery.co.kr/mypage/home",
+			constants.HeaderUserAgent: constants.UserAgent,
+			constants.HeaderReferer:   "https://www.dhlottery.co.kr/mypage/home",
 		},
 	})
 	if err != nil {
@@ -93,7 +94,7 @@ func parseRoundFromAPI(resp *httpclient.Response) (int, error) {
 		return 0, dherr.New("Failed to parse lottery round from API: missing or invalid ltEpsd", "ACCOUNT_PARSE_ROUND_FAILED")
 	}
 	logger.Debug("Found current round from API", logger.Fields{
-		"module": "account", "round": round, "drawDate": data.Data.Result.LtRflYmd,
+		logger.FieldModule: accountModule, "round": round, "drawDate": data.Data.Result.LtRflYmd,
 	})
 	return round, nil
 }
@@ -113,7 +114,7 @@ func parseBalanceFromAPI(resp *httpclient.Response) (int, error) {
 		return 0, dherr.New("Failed to parse balance from API: Missing crntEntrsAmt in API response", "ACCOUNT_PARSE_BALANCE_FAILED")
 	}
 	balance := *data.Data.UserMndp.CrntEntrsAmt
-	logger.Debug("Found balance from API", logger.Fields{"module": "account", "balance": balance})
+	logger.Debug("Found balance from API", logger.Fields{logger.FieldModule: accountModule, "balance": balance})
 	return balance, nil
 }
 

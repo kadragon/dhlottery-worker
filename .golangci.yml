@@ -1,0 +1,41 @@
+version: "2"
+
+linters:
+  enable:
+    # Tier 1: High ROI
+    - staticcheck
+    - errcheck
+    - bodyclose
+    # Tier 2: Medium ROI
+    - gosec
+    - predeclared
+    - noctx
+    # Tier 3: Lower urgency
+    - exhaustive
+    - unparam
+    - goconst
+
+  settings:
+    errcheck:
+      check-type-assertions: false
+      check-blank: false
+    gosec:
+      excludes:
+        - G404  # math/rand — no crypto use case here
+    goconst:
+      min-len: 4
+      min-occurrences: 4
+    exhaustive:
+      default-signifies-exhaustive: true
+
+  exclusions:
+    rules:
+      - path: "_test\\.go"
+        linters:
+          - gosec
+          - goconst
+          - unparam
+          - noctx
+          - bodyclose
+          - errcheck
+          - predeclared

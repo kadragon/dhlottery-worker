@@ -62,10 +62,10 @@ func NextSaturdayKst(now time.Time) string {
 	dow := int(kstNow.Weekday())
 
 	var daysUntilSaturday int
-	switch {
-	case dow == 6:
+	switch dow {
+	case 6:
 		daysUntilSaturday = 0
-	case dow == 0:
+	case 0:
 		daysUntilSaturday = 6
 	default:
 		daysUntilSaturday = 6 - dow

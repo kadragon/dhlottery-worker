@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math/big"
+	"net/http"
 	"net/url"
 	"regexp"
 	"strings"
@@ -26,6 +27,7 @@ const (
 	rsaModulusURL = "https://www.dhlottery.co.kr/login/selectRsaModulus.do"
 	loginURL      = "https://www.dhlottery.co.kr/login/securityLoginCheck.do"
 	maxRedirects  = 5
+	authModule    = "auth"
 )
 
 var (
@@ -57,7 +59,7 @@ func fetchWithRedirects(client *httpclient.Client, rawURL string, opts httpclien
 			}
 			currentURL = next
 			logger.Debug(context+" redirect", logger.Fields{
-				"module": "auth", "status": resp.Status, "location": currentURL,
+				logger.FieldModule: authModule, logger.FieldStatus: resp.Status, "location": currentURL,
 			})
 			continue
 		}
@@ -90,7 +92,7 @@ func rsaEncrypt(text, modulusHex, exponentHex string) (string, error) {
 		return "", dherr.NewAuth("Invalid RSA exponent", "AUTH_RSA_KEY_ERROR")
 	}
 	pub := &rsa.PublicKey{N: n, E: int(e.Int64())}
-	encrypted, err := rsa.EncryptPKCS1v15(rand.Reader, pub, []byte(text))
+	encrypted, err := rsa.EncryptPKCS1v15(rand.Reader, pub, []byte(text)) //nolint:staticcheck // DHLottery site requires PKCS#1 v1.5; cannot migrate to OAEP
 	if err != nil {
 		return "", err
 	}
@@ -99,17 +101,17 @@ func rsaEncrypt(text, modulusHex, exponentHex string) (string, error) {
 
 func initSession(client *httpclient.Client) error {
 	resp, err := fetchWithRedirects(client, loginPageURL, httpclient.RequestOptions{
-		Method: "GET",
+		Method: http.MethodGet,
 		Headers: map[string]string{
-			"Accept-Charset": "UTF-8",
-			"User-Agent":     constants.UserAgent,
+			"Accept-Charset":          "UTF-8",
+			constants.HeaderUserAgent: constants.UserAgent,
 		},
 	}, "Session initialization", "AUTH_SESSION_INIT_ERROR")
 	if err != nil {
 		return dherr.WrapAuth(err, "Session initialization")
 	}
 
-	logger.Debug("Session initialized", logger.Fields{"module": "auth", "status": resp.Status})
+	logger.Debug("Session initialized", logger.Fields{logger.FieldModule: authModule, logger.FieldStatus: resp.Status})
 
 	if client.Cookie("DHJSESSIONID") == "" {
 		return dherr.WrapAuth(
@@ -121,14 +123,14 @@ func initSession(client *httpclient.Client) error {
 
 func fetchRsaKey(client *httpclient.Client) (modulus, exponent string, err error) {
 	resp, err := fetchWithRedirects(client, rsaModulusURL, httpclient.RequestOptions{
-		Method: "GET",
+		Method: http.MethodGet,
 		Headers: map[string]string{
-			"Accept":           "application/json, text/javascript, */*; q=0.01",
-			"Content-Type":     "application/json;charset=UTF-8",
-			"User-Agent":       constants.UserAgent,
-			"X-Requested-With": "XMLHttpRequest",
-			"Referer":          loginPageURL,
-			"ajax":             "true",
+			"Accept":                       "application/json, text/javascript, */*; q=0.01",
+			constants.HeaderContentType:    "application/json;charset=UTF-8",
+			constants.HeaderUserAgent:      constants.UserAgent,
+			constants.HeaderXRequestedWith: constants.HeaderXRequestedWithValue,
+			constants.HeaderReferer:        loginPageURL,
+			"ajax":                         "true",
 		},
 	}, "RSA key fetch", "AUTH_RSA_KEY_ERROR")
 	if err != nil {
@@ -150,7 +152,7 @@ func fetchRsaKey(client *httpclient.Client) (modulus, exponent string, err error
 		return "", "", dherr.NewAuth("Invalid RSA key response format", "AUTH_RSA_KEY_ERROR")
 	}
 
-	logger.Debug("RSA key fetched", logger.Fields{"module": "auth", "modulusLength": len(data.Data.RsaModulus)})
+	logger.Debug("RSA key fetched", logger.Fields{logger.FieldModule: authModule, "modulusLength": len(data.Data.RsaModulus)})
 	return data.Data.RsaModulus, data.Data.PublicExponent, nil
 }
 
@@ -189,12 +191,12 @@ func login(client *httpclient.Client) error {
 	form.Set("inpUserId", userID)
 
 	resp, err := client.Fetch(loginURL, httpclient.RequestOptions{
-		Method: "POST",
+		Method: http.MethodPost,
 		Headers: map[string]string{
-			"Content-Type":              "application/x-www-form-urlencoded",
-			"User-Agent":                constants.UserAgent,
+			constants.HeaderContentType: "application/x-www-form-urlencoded",
+			constants.HeaderUserAgent:   constants.UserAgent,
 			"Origin":                    "https://www.dhlottery.co.kr",
-			"Referer":                   loginPageURL,
+			constants.HeaderReferer:     loginPageURL,
 			"Upgrade-Insecure-Requests": "1",
 			"Cache-Control":             "max-age=0",
 		},
@@ -204,7 +206,7 @@ func login(client *httpclient.Client) error {
 		return dherr.WrapAuth(err, "Login")
 	}
 
-	logger.Debug("Login response received", logger.Fields{"module": "auth", "status": resp.Status})
+	logger.Debug("Login response received", logger.Fields{logger.FieldModule: authModule, logger.FieldStatus: resp.Status})
 
 	// Manual redirects: a 302 to loginSuccess.do is success.
 	if resp.Status >= 300 && resp.Status < 400 {

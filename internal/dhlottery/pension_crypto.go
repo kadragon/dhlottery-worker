@@ -138,7 +138,7 @@ func pkcs7Pad(data []byte, blockSize int) []byte {
 	padLen := blockSize - len(data)%blockSize
 	pad := make([]byte, padLen)
 	for i := range pad {
-		pad[i] = byte(padLen)
+		pad[i] = byte(padLen) //nolint:gosec // G115: padLen = blockSize - x%blockSize; AES blockSize=16, so 1≤padLen≤16, safe
 	}
 	return append(data, pad...)
 }

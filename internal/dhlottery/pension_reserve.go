@@ -3,6 +3,7 @@ package dhlottery
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
@@ -27,6 +28,10 @@ const (
 	// Empty frmAuto serialization accepted as-is for session-scoped queries.
 	frmAutoSerialized = "ROUND=&SEL_NO=&BUY_CNT=&AUTO_SEL_SET=&SEL_CLASS=&ACCS_TYPE=01"
 	ticketCount       = 5
+
+	titlePensionFail  = "연금복권 예약 실패"
+	titlePensionSkip  = "연금복권 예약 건너뜀"
+	detailTargetRound = "대상회차"
 )
 
 type roundInfo struct {
@@ -37,11 +42,11 @@ type roundInfo struct {
 
 func createAjaxHeaders(referer string) map[string]string {
 	return map[string]string{
-		"Content-Type":     "application/x-www-form-urlencoded; charset=UTF-8",
-		"User-Agent":       constants.UserAgent,
-		"Origin":           elBaseURL,
-		"Referer":          referer,
-		"X-Requested-With": "XMLHttpRequest",
+		constants.HeaderContentType:    "application/x-www-form-urlencoded; charset=UTF-8",
+		constants.HeaderUserAgent:      constants.UserAgent,
+		"Origin":                       elBaseURL,
+		constants.HeaderReferer:        referer,
+		constants.HeaderXRequestedWith: constants.HeaderXRequestedWithValue,
 	}
 }
 
@@ -86,7 +91,7 @@ func buildReserveFormPayload(ri roundInfo, deposit int, winDate string) string {
 
 func bootstrapElSession(client *httpclient.Client) error {
 	totalResp, err := client.Fetch(totalGameURL, httpclient.RequestOptions{
-		Headers: map[string]string{"User-Agent": constants.UserAgent},
+		Headers: map[string]string{constants.HeaderUserAgent: constants.UserAgent},
 	})
 	if err != nil {
 		return err
@@ -96,7 +101,10 @@ func bootstrapElSession(client *httpclient.Client) error {
 	}
 
 	reserveResp, err := client.Fetch(reservePageURL, httpclient.RequestOptions{
-		Headers: map[string]string{"User-Agent": constants.UserAgent, "Referer": totalGameURL},
+		Headers: map[string]string{
+			constants.HeaderUserAgent: constants.UserAgent,
+			constants.HeaderReferer:   totalGameURL,
+		},
 	})
 	if err != nil {
 		return err
@@ -109,7 +117,7 @@ func bootstrapElSession(client *httpclient.Client) error {
 
 func fetchRoundRemainTime(client *httpclient.Client) (roundInfo, error) {
 	resp, err := client.Fetch(roundRemainTimeURL, httpclient.RequestOptions{
-		Method:  "POST",
+		Method:  http.MethodPost,
 		Headers: createAjaxHeaders(reservePageURL),
 		Body:    frmAutoSerialized,
 	})
@@ -152,7 +160,7 @@ func postEncrypted(client *httpclient.Client, endpoint, plainForm, referer strin
 	}
 
 	resp, err := client.Fetch(endpoint, httpclient.RequestOptions{
-		Method:  "POST",
+		Method:  http.MethodPost,
 		Headers: createAjaxHeaders(referer),
 		Body:    url.Values{"q": {encryptedQ}}.Encode(),
 	})
@@ -180,7 +188,7 @@ func postEncrypted(client *httpclient.Client, endpoint, plainForm, referer strin
 
 func createFailure(message, code string, targetRound int, hasTargetRound bool) PensionReserveOutcome {
 	return PensionReserveOutcome{
-		Status:         "failure",
+		Status:         "failure", //nolint:goconst // only 1 prod occurrence; test files inflate the count
 		Success:        false,
 		Skipped:        false,
 		TargetRound:    targetRound,
@@ -201,11 +209,11 @@ func verifyDeposit(client *httpclient.Client, targetRound int, collector *notify
 	if depositData.ResultCode != "100" {
 		notify.Notify(notify.Payload{
 			Type:    notify.Error,
-			Title:   "연금복권 예약 실패",
+			Title:   titlePensionFail,
 			Message: "연금복권 예치금 조회에 실패했습니다: " + depositData.ResultMsg,
 			Details: []notify.KV{
-				{Key: "오류코드", Value: depositData.ResultCode},
-				{Key: "대상회차", Value: fmt.Sprintf("%d회", targetRound)},
+				{Key: detailErrCode, Value: depositData.ResultCode},
+				{Key: detailTargetRound, Value: fmt.Sprintf("%d회", targetRound)},
 			},
 		}, collector)
 		f := createFailure(depositData.ResultMsg, depositData.ResultCode, targetRound, true)
@@ -216,7 +224,7 @@ func verifyDeposit(client *httpclient.Client, targetRound int, collector *notify
 	if err != nil {
 		notify.Notify(notify.Payload{
 			Type:    notify.Error,
-			Title:   "연금복권 예약 실패",
+			Title:   titlePensionFail,
 			Message: "연금복권 예치금 값을 파싱하지 못했습니다.",
 		}, collector)
 		f := createFailure("Invalid deposit value from EL API", "PENSION_INVALID_DEPOSIT", 0, false)
@@ -226,10 +234,10 @@ func verifyDeposit(client *httpclient.Client, targetRound int, collector *notify
 	if deposit < constants.PensionReserveCost {
 		notify.Notify(notify.Payload{
 			Type:    notify.Warning,
-			Title:   "연금복권 예약 건너뜀",
+			Title:   titlePensionSkip,
 			Message: "연금복권 예약에 필요한 예치금이 부족하여 예약을 건너뜁니다.",
 			Details: []notify.KV{
-				{Key: "대상회차", Value: fmt.Sprintf("%d회", targetRound)},
+				{Key: detailTargetRound, Value: fmt.Sprintf("%d회", targetRound)},
 				{Key: "필요금액", Value: format.KoreanNumber(constants.PensionReserveCost) + "원"},
 				{Key: "보유예치금", Value: format.KoreanNumber(deposit) + "원"},
 			},
@@ -251,11 +259,11 @@ func checkForDuplicates(client *httpclient.Client, ri roundInfo, deposit int, co
 	if dupData.ResultCode != "100" {
 		notify.Notify(notify.Payload{
 			Type:    notify.Error,
-			Title:   "연금복권 예약 실패",
+			Title:   titlePensionFail,
 			Message: "연금복권 중복 예약 확인에 실패했습니다: " + dupData.ResultMsg,
 			Details: []notify.KV{
-				{Key: "오류코드", Value: dupData.ResultCode},
-				{Key: "대상회차", Value: fmt.Sprintf("%d회", ri.nextRound)},
+				{Key: detailErrCode, Value: dupData.ResultCode},
+				{Key: detailTargetRound, Value: fmt.Sprintf("%d회", ri.nextRound)},
 			},
 		}, collector)
 		f := createFailure(dupData.ResultMsg, dupData.ResultCode, ri.nextRound, true)
@@ -272,7 +280,7 @@ func checkForDuplicates(client *httpclient.Client, ri roundInfo, deposit int, co
 	if len(duplicates) > 0 {
 		notify.Notify(notify.Payload{
 			Type:    notify.Warning,
-			Title:   "연금복권 예약 건너뜀",
+			Title:   titlePensionSkip,
 			Message: fmt.Sprintf("대상 회차(%d회)가 이미 예약되어 예약을 건너뜁니다.", ri.nextRound),
 			Details: []notify.KV{{Key: "중복회차", Value: strings.Join(duplicates, ", ")}},
 		}, collector)
@@ -305,11 +313,11 @@ func submitReservation(client *httpclient.Client, ri roundInfo, deposit int, col
 	if data.ResultCode != "100" {
 		notify.Notify(notify.Payload{
 			Type:    notify.Error,
-			Title:   "연금복권 예약 실패",
+			Title:   titlePensionFail,
 			Message: "연금복권 예약 요청에 실패했습니다: " + data.ResultMsg,
 			Details: []notify.KV{
-				{Key: "오류코드", Value: data.ResultCode},
-				{Key: "대상회차", Value: fmt.Sprintf("%d회", targetRound)},
+				{Key: detailErrCode, Value: data.ResultCode},
+				{Key: detailTargetRound, Value: fmt.Sprintf("%d회", targetRound)},
 			},
 		}, collector)
 		return createFailure(data.ResultMsg, data.ResultCode, targetRound, true), nil
@@ -320,7 +328,7 @@ func submitReservation(client *httpclient.Client, ri roundInfo, deposit int, col
 		Title:   "연금복권 예약 완료",
 		Message: fmt.Sprintf("%d회 연금복권 예약을 완료했습니다.", targetRound),
 		Details: []notify.KV{
-			{Key: "대상회차", Value: fmt.Sprintf("%d회", targetRound)},
+			{Key: detailTargetRound, Value: fmt.Sprintf("%d회", targetRound)},
 			{Key: "예약금액", Value: format.KoreanNumber(constants.PensionReserveCost) + "원"},
 			{Key: "예약번호", Value: data.ReserveOrderNo},
 		},
@@ -382,13 +390,13 @@ func reservePensionNextWeek(client *httpclient.Client, collector *notify.Collect
 		if code == "" {
 			code = "PENSION_UNEXPECTED_ERROR"
 		}
-		details := []notify.KV{{Key: "오류코드", Value: code}}
+		details := []notify.KV{{Key: detailErrCode, Value: code}}
 		if hasTarget {
-			details = append(details, notify.KV{Key: "대상회차", Value: fmt.Sprintf("%d회", targetRound)})
+			details = append(details, notify.KV{Key: detailTargetRound, Value: fmt.Sprintf("%d회", targetRound)})
 		}
 		notify.Notify(notify.Payload{
 			Type:    notify.Error,
-			Title:   "연금복권 예약 실패",
+			Title:   titlePensionFail,
 			Message: "연금복권 예약 중 오류가 발생했습니다: " + err.Error(),
 			Details: details,
 		}, collector)

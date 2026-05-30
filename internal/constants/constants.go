@@ -30,4 +30,11 @@ const (
 
 	// UserAgent is the browser-like User-Agent sent with every request.
 	UserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.77 Safari/537.36"
+
+	// HTTP request header names and common values used in DHLottery API calls.
+	HeaderUserAgent           = "User-Agent"
+	HeaderReferer             = "Referer"
+	HeaderContentType         = "Content-Type"
+	HeaderXRequestedWith      = "X-Requested-With"
+	HeaderXRequestedWithValue = "XMLHttpRequest"
 )
