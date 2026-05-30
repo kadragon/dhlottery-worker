@@ -77,7 +77,7 @@ func checkWinning(client *httpclient.Client, now time.Time, collector *notify.Co
 	u, err := url.Parse(winningLedgerURL)
 	if err != nil {
 		logger.Error("Winning check failed (non-fatal)", logger.Fields{
-			"event": "winning_check_failed", "error": err.Error(),
+			logger.FieldEvent: "winning_check_failed", logger.FieldError: err.Error(),
 		})
 		return nil
 	}
@@ -94,17 +94,17 @@ func checkWinning(client *httpclient.Client, now time.Time, collector *notify.Co
 
 	resp, err := client.Fetch(u.String(), httpclient.RequestOptions{
 		Headers: map[string]string{
-			"User-Agent":       constants.UserAgent,
-			"Accept":           "application/json, text/javascript, */*; q=0.01",
-			"Content-Type":     "application/json;charset=UTF-8",
-			"X-Requested-With": "XMLHttpRequest",
-			"ajax":             "true",
-			"Referer":          "https://www.dhlottery.co.kr/mypage/mylotteryledger",
+			constants.HeaderUserAgent:      constants.UserAgent,
+			"Accept":                       "application/json, text/javascript, */*; q=0.01",
+			constants.HeaderContentType:    "application/json;charset=UTF-8",
+			constants.HeaderXRequestedWith: constants.HeaderXRequestedWithValue,
+			"ajax":                         "true",
+			constants.HeaderReferer:        "https://www.dhlottery.co.kr/mypage/mylotteryledger",
 		},
 	})
 	if err != nil {
 		logger.Error("Winning check failed (non-fatal)", logger.Fields{
-			"event": "winning_check_failed", "error": err.Error(),
+			logger.FieldEvent: "winning_check_failed", logger.FieldError: err.Error(),
 		})
 		return nil
 	}
@@ -113,12 +113,12 @@ func checkWinning(client *httpclient.Client, now time.Time, collector *notify.Co
 	// session. Only 200 returns parseable JSON.
 	if resp.Status != 200 {
 		isRedirect := resp.Status >= 300 && resp.Status < 400
-		fields := logger.Fields{"status": resp.Status}
+		fields := logger.Fields{logger.FieldStatus: resp.Status}
 		if isRedirect {
-			fields["event"] = "winning_fetch_redirect"
+			fields[logger.FieldEvent] = "winning_fetch_redirect"
 			fields["location"] = resp.Header.Get("Location")
 		} else {
-			fields["event"] = "winning_fetch_failed"
+			fields[logger.FieldEvent] = "winning_fetch_failed"
 		}
 		logger.Error("Winning fetch failed", fields)
 		return nil
@@ -127,7 +127,7 @@ func checkWinning(client *httpclient.Client, now time.Time, collector *notify.Co
 	var data ledgerResponse
 	if err := resp.JSON(&data); err != nil {
 		logger.Error("Winning check failed (non-fatal)", logger.Fields{
-			"event": "winning_check_failed", "error": err.Error(),
+			logger.FieldEvent: "winning_check_failed", logger.FieldError: err.Error(),
 		})
 		return nil
 	}

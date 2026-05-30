@@ -21,7 +21,7 @@ var Required = []string{
 func Get(key string) (string, error) {
 	v := os.Getenv(key)
 	if v == "" {
-		return "", fmt.Errorf("Missing required environment variable: %s", key)
+		return "", fmt.Errorf("missing required environment variable: %s", key)
 	}
 	return v, nil
 }
@@ -35,7 +35,7 @@ func Validate() error {
 		}
 	}
 	if len(missing) > 0 {
-		return fmt.Errorf("Missing required environment variables: %s", strings.Join(missing, ", "))
+		return fmt.Errorf("missing required environment variables: %s", strings.Join(missing, ", "))
 	}
 	return nil
 }

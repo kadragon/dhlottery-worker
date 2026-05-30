@@ -3,6 +3,7 @@ package dhlottery
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
@@ -18,24 +19,26 @@ import (
 )
 
 const (
-	buyBaseURL  = "https://ol.dhlottery.co.kr/olotto/game"
-	gamePageURL = buyBaseURL + "/game645.do"
+	buyBaseURL    = "https://ol.dhlottery.co.kr/olotto/game"
+	gamePageURL   = buyBaseURL + "/game645.do"
+	titleBuyFail  = "로또 구매 실패"
+	detailErrCode = "오류코드"
 )
 
 func buyAjaxHeaders(contentType string) map[string]string {
 	return map[string]string{
-		"Content-Type":     contentType,
-		"User-Agent":       constants.UserAgent,
-		"Origin":           "https://ol.dhlottery.co.kr",
-		"Referer":          gamePageURL,
-		"X-Requested-With": "XMLHttpRequest",
+		constants.HeaderContentType:    contentType,
+		constants.HeaderUserAgent:      constants.UserAgent,
+		"Origin":                       "https://ol.dhlottery.co.kr",
+		constants.HeaderReferer:        gamePageURL,
+		constants.HeaderXRequestedWith: constants.HeaderXRequestedWithValue,
 	}
 }
 
 func preparePurchase(client *httpclient.Client) (PurchaseReadyResponse, error) {
 	var ready PurchaseReadyResponse
 	resp, err := client.Fetch(buyBaseURL+"/egovUserReadySocket.json", httpclient.RequestOptions{
-		Method:  "POST",
+		Method:  http.MethodPost,
 		Headers: buyAjaxHeaders("application/json; charset=UTF-8"),
 	})
 	if err != nil {
@@ -76,12 +79,12 @@ func executePurchase(client *httpclient.Client, ready PurchaseReadyResponse, rou
 	params.Set("WAMT_PAY_TLMT_END_DT", formatDateWithSlashes(payLimitDate))
 
 	logger.Debug("Purchase parameters", logger.Fields{
-		"module": "buy", "round": roundNumber, "direct": ready.ReadyIP,
+		logger.FieldModule: "buy", "round": roundNumber, "direct": ready.ReadyIP,
 		"nBuyAmount": constants.TotalPurchaseCost, "gameCnt": constants.GamesPerPurchase,
 	})
 
 	resp, err := client.Fetch(buyBaseURL+"/execBuy.do", httpclient.RequestOptions{
-		Method:  "POST",
+		Method:  http.MethodPost,
 		Headers: buyAjaxHeaders("application/x-www-form-urlencoded; charset=UTF-8"),
 		Body:    params.Encode(),
 	})
@@ -144,9 +147,9 @@ func purchaseLottery(client *httpclient.Client, collector *notify.Collector) Pur
 
 	notify.Notify(notify.Payload{
 		Type:    notify.Error,
-		Title:   "로또 구매 실패",
+		Title:   titleBuyFail,
 		Message: result.Result.ResultMsg,
-		Details: []notify.KV{{Key: "오류코드", Value: result.Result.ResultCode}},
+		Details: []notify.KV{{Key: detailErrCode, Value: result.Result.ResultCode}},
 	}, collector)
 
 	return PurchaseOutcome{
@@ -159,7 +162,7 @@ func purchaseLottery(client *httpclient.Client, collector *notify.Collector) Pur
 func purchaseFailure(message string, collector *notify.Collector) PurchaseOutcome {
 	notify.Notify(notify.Payload{
 		Type:    notify.Error,
-		Title:   "로또 구매 실패",
+		Title:   titleBuyFail,
 		Message: "구매 중 오류가 발생했습니다: " + message,
 	}, collector)
 	return PurchaseOutcome{Success: false, Error: message}

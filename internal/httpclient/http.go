@@ -4,6 +4,7 @@
 package httpclient
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -128,7 +129,7 @@ func (c *Client) Fetch(rawURL string, opts RequestOptions) (*Response, error) {
 		body = strings.NewReader(opts.Body)
 	}
 
-	req, err := http.NewRequest(method, rawURL, body)
+	req, err := http.NewRequestWithContext(context.Background(), method, rawURL, body)
 	if err != nil {
 		return nil, err
 	}
@@ -143,7 +144,7 @@ func (c *Client) Fetch(rawURL string, opts RequestOptions) (*Response, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck
 
 	for _, setCookie := range resp.Header.Values("Set-Cookie") {
 		name, value := parseCookie(setCookie)

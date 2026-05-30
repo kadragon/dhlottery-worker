@@ -19,6 +19,14 @@ import (
 // entry. Nil is allowed.
 type Fields map[string]any
 
+// Common structured log field keys.
+const (
+	FieldModule = "module"
+	FieldEvent  = "event"
+	FieldStatus = "status"
+	FieldError  = "error"
+)
+
 var (
 	mu           sync.Mutex
 	debugEnabled           = os.Getenv("DEBUG") == "true"
@@ -57,7 +65,7 @@ func write(w io.Writer, level, message string, fields Fields) {
 	}
 	mu.Lock()
 	defer mu.Unlock()
-	fmt.Fprintln(w, string(b))
+	_, _ = fmt.Fprintln(w, string(b))
 }
 
 // Debug logs at debug level (suppressed unless DEBUG=true).

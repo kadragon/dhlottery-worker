@@ -2,6 +2,7 @@ package notify
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"regexp"
@@ -107,7 +108,7 @@ func sendOnce(text string) (*http.Response, error) {
 	if err != nil {
 		return nil, err
 	}
-	req, err := http.NewRequest(http.MethodPost, "https://api.telegram.org/bot"+botToken+"/sendMessage", bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, "https://api.telegram.org/bot"+botToken+"/sendMessage", bytes.NewReader(body))
 	if err != nil {
 		return nil, err
 	}
@@ -126,19 +127,19 @@ func sendTelegramMessage(text, failureEvent string) bool {
 		if err != nil {
 			if attempt < len(retryDelays) {
 				logger.Warn("Telegram send failed, retrying", logger.Fields{
-					"event": "telegram_retry_attempt", "attempt": attempt + 1, "error": err.Error(),
+					logger.FieldEvent: "telegram_retry_attempt", "attempt": attempt + 1, "error": err.Error(),
 				})
 				sleepFn(retryDelays[attempt])
 				continue
 			}
 			logger.Error("Failed to send Telegram notification", logger.Fields{
-				"event": failureEvent, "error": err.Error(),
+				logger.FieldEvent: failureEvent, "error": err.Error(),
 			})
 			return false
 		}
 
 		status := resp.StatusCode
-		resp.Body.Close()
+		_ = resp.Body.Close()
 
 		if status >= 200 && status < 300 {
 			return true
@@ -147,13 +148,13 @@ func sendTelegramMessage(text, failureEvent string) bool {
 		if retryStatuses[status] {
 			if attempt < len(retryDelays) {
 				logger.Warn("Telegram API error, retrying", logger.Fields{
-					"event": "telegram_retry_attempt", "attempt": attempt + 1, "status": status,
+					logger.FieldEvent: "telegram_retry_attempt", "attempt": attempt + 1, "status": status,
 				})
 				sleepFn(retryDelays[attempt])
 				continue
 			}
 			logger.Error("Telegram notification failed after retries", logger.Fields{
-				"event": "telegram_final_failure", "failureEvent": failureEvent,
+				logger.FieldEvent: "telegram_final_failure", "failureEvent": failureEvent,
 				"attempts": maxAttempts, "status": status,
 			})
 			return false
@@ -161,7 +162,7 @@ func sendTelegramMessage(text, failureEvent string) bool {
 
 		// Permanent client error.
 		logger.Error("Telegram API error", logger.Fields{
-			"event": "telegram_api_error", "status": status,
+			logger.FieldEvent: "telegram_api_error", "status": status,
 		})
 		return false
 	}

@@ -1,6 +1,7 @@
 package dhlottery
 
 import (
+	"net/http"
 	"strconv"
 
 	"github.com/kadragon/dhlottery-worker/internal/constants"
@@ -18,18 +19,18 @@ var chargeInitURL = chargeInitURLBase + strconv.Itoa(constants.ChargeAmount)
 // initializeChargePage accesses the charge page without executing a payment.
 func initializeChargePage(client *httpclient.Client) bool {
 	resp, err := client.Fetch(chargeInitURL, httpclient.RequestOptions{
-		Method:  "GET",
-		Headers: map[string]string{"User-Agent": constants.UserAgent},
+		Method:  http.MethodGet,
+		Headers: map[string]string{constants.HeaderUserAgent: constants.UserAgent},
 	})
 	if err != nil {
 		logger.Error("Error initializing charge page", logger.Fields{
-			"event": "charge_init_error", "error": err.Error(),
+			logger.FieldEvent: "charge_init_error", logger.FieldError: err.Error(),
 		})
 		return false
 	}
 	if resp.Status != 200 {
 		logger.Error("Failed to initialize charge page", logger.Fields{
-			"event": "charge_init_failed", "status": resp.Status,
+			logger.FieldEvent: "charge_init_failed", logger.FieldStatus: resp.Status,
 		})
 		return false
 	}
@@ -50,7 +51,7 @@ func checkDeposit(client *httpclient.Client, requiredAmount int, collector *noti
 	}
 
 	logger.Debug("Insufficient balance detected", logger.Fields{
-		"event": "insufficient_balance", "balance": info.Balance, "required": requiredAmount,
+		logger.FieldEvent: "insufficient_balance", "balance": info.Balance, "required": requiredAmount,
 	})
 
 	if !initializeChargePage(client) {
