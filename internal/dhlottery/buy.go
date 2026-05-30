@@ -58,7 +58,7 @@ func executePurchase(client *httpclient.Client, ready PurchaseReadyResponse, rou
 
 	games := make([]gameSelection, 0, constants.GamesPerPurchase)
 	for i := 0; i < constants.GamesPerPurchase; i++ {
-		games = append(games, gameSelection{GenType: "0", ArrGameChoiceNum: nil, Alpabet: string(rune('A' + i))})
+		games = append(games, gameSelection{GenType: "0", ArrGameChoiceNum: nil, Alpabet: "ABCDEFGHIJKLMNOPQRSTUVWXYZ"[i : i+1]})
 	}
 	gamesJSON, err := json.Marshal(games)
 	if err != nil {
