@@ -1,0 +1,28 @@
+name: Real Test (money-free)
+
+# Manual money-free real test: login + account info + winning check only.
+# Never purchases lotto, reserves pension, or sends Telegram.
+on:
+  workflow_dispatch: # Manual trigger only
+
+jobs:
+  run-realtest:
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+
+      - name: Run money-free real test
+        env:
+          USER_ID: ${{ secrets.USER_ID }}
+          PASSWORD: ${{ secrets.PASSWORD }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: go run ./cmd/realtest

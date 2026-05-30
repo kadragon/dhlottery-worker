@@ -45,12 +45,14 @@ type PurchaseOutcome struct {
 	Code         string
 }
 
-// WinningResult is a parsed winning row. MatchCount is nil when absent.
+// WinningResult is a winning row from the ledger API. Rank is 0 when the API
+// omits wnRnk. Product is the lottery name (e.g. 로또6/45, 연금복권720+).
 type WinningResult struct {
 	RoundNumber int
 	Rank        int
 	PrizeAmount int
-	MatchCount  *int
+	Product     string
+	WinResult   string
 }
 
 // EL (pension 720+) API response types.

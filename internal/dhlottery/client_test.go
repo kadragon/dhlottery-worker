@@ -59,10 +59,10 @@ func TestClientBuy(t *testing.T) {
 func TestClientCheckWinning(t *testing.T) {
 	c := facadeClient(testutil.Sequence(testutil.StubResponse{
 		Status: 200,
-		Body:   toEUCKR(t, winningFixtureUTF8(t)),
+		Body:   ledgerFixture(t),
 	}))
 	results := c.CheckWinning(parseTime(t, "2025-12-15T10:00:00+09:00"))
-	if len(results) != 1 {
+	if len(results) != 3 {
 		t.Errorf("CheckWinning = %+v", results)
 	}
 }

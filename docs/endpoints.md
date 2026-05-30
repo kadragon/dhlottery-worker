@@ -53,7 +53,13 @@ Both require `Origin`, `Referer`, `X-Requested-With` headers.
 
 | Endpoint | Method | Purpose |
 |----------|--------|---------|
-| `/myPage.do?method=lottoBuyList` | GET | Parse winning results from HTML. 200 only; 3xx returns empty result after logging. |
+| `/mypage/selectMyLotteryledger.do` | GET | Purchase/winning ledger (JSON). Covers lotto (`LO40`) and pension (`LP72`). 200 only; 3xx returns empty result after logging. |
+
+Query params: `srchStrDt`/`srchEndDt` (YYYYMMDD, previous-week range), `pageNum=1`, `recordCountPerPage=50`, plus empty `sort`/`ltGdsCd`/`winResult`/`lramSmam`. Headers mirror the RSA-key fetch (`Accept: application/json…`, `X-Requested-With`, `ajax: true`, `Referer: /mypage/mylotteryledger`).
+
+Response: `data.list[]` rows. A win is detected on `ltWnAmt > 0` (`null` = undrawn, `0` = lost). Fields used: `ltEpsd` (round), `ltGdsNm` (product), `ltWnAmt` (prize), `wnRnk` (rank, may be null), `ltWnResult` (label).
+
+**2026-01 change:** the legacy `/myPage.do?method=lottoBuyList` HTML page was retired and now 302-redirects to `/errorPage`; winning detection had been silently returning empty since then. Migrated to this JSON ledger API (mirrors the balance/round HTML→JSON migration).
 
 ## Pension 720+ Reservation (`internal/dhlottery/pension_reserve.go`)
 

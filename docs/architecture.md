@@ -86,7 +86,7 @@ adversarial TS-vs-Go diff review:
 
 - **Minimum balance**: 5,000 KRW (5 games × 1,000 KRW). If insufficient: charge init + warning; purchase skipped.
 - **Purchase**: 5 auto-pick games, 5,000 KRW total. Atomic — partial purchase not allowed.
-- **Winning check**: Previous week (Mon–Sun, KST). 1st-prize results only trigger Telegram alert.
+- **Winning check**: Previous week (Mon–Sun, KST). Any win (lotto + pension), detected on `ltWnAmt > 0`, triggers a Telegram alert.
 - **Pension reserve**: Next week's round, auto-reserved (el.dhlottery.co.kr).
 
 ## Key Decisions
@@ -99,4 +99,5 @@ adversarial TS-vs-Go diff review:
 - **Balance fetch (2026-01)**: `/mypage/home` HTML → `/mypage/selectUserMndp.do` JSON API (`crntEntrsAmt` field).
 - **Purchase request (2026-01)**: `execBuy.do` now requires `saleMdaDcd=10`, `ROUND_DRAW_DATE`, `WAMT_PAY_TLMT_END_DT`, and `Origin`/`Referer`/`X-Requested-With` headers.
 - **Winning check redirect**: On 3xx, return empty result without parsing (200-only).
+- **Winning ledger migration (2026-01)**: `/myPage.do?method=lottoBuyList` HTML page retired (302→`/errorPage`); winning detection had silently returned empty since `ed82c21`. Migrated to `/mypage/selectMyLotteryledger.do` JSON API (lotto + pension). Win detected on `ltWnAmt > 0` (null=undrawn, 0=lost), not on `wnRnk` — winning-row `wnRnk` encoding is not observable from lost/undrawn data.
 - **el.dhlottery.co.kr cookie**: Uses `JSESSIONID`; falls back to `DHJSESSIONID` if absent.
