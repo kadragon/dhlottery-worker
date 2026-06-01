@@ -2,7 +2,7 @@
 
 Go port snapshot. Numbers from `go test ./... -cover` + `golangci-lint run ./...`.
 
-## Coverage (2026-06-01)
+## Coverage
 
 - **Total**: 86.7% of statements (gate ≥85%, CI-enforced)
 - **Tool**: `go test ./... -coverprofile=coverage.out && go tool cover -func=coverage.out`
@@ -15,10 +15,10 @@ Go port snapshot. Numbers from `go test ./... -cover` + `golangci-lint run ./...
 | `internal/format` | 100.0% | |
 | `internal/workflow` | 100.0% | |
 | `internal/notify` | 93.1% | |
-| `internal/testutil` | 94.7% | |
+| `internal/testutil` | 94.7% | test-support library |
 | `internal/logger` | 97.1% | |
 | `internal/httpclient` | 86.0% | |
-| `internal/dhlottery` | 84.7% | Largest package; `pension_reserve.go` 407 lines |
+| `internal/dhlottery` | 84.7% | Largest package |
 | `cmd/worker` | 83.3% | |
 | `cmd/realtest` | 40.0% | Live-endpoint harness — hard to unit-test by design |
 | `internal/constants` | n/a | Constants only; no test file |
@@ -34,5 +34,5 @@ predeclared, noctx, exhaustive, unparam, goconst.
 
 1. `cmd/realtest` low coverage — live-endpoint harness; not expected to be fully unit-testable.
 2. `internal/constants` has no test file — constants only, low risk.
-3. `internal/dhlottery/pension_reserve.go` is the largest source file (407 lines); candidate for
-   decomposition if complexity grows.
+3. `internal/dhlottery/pension_reserve.go` is the largest source file; candidate for decomposition
+   if complexity grows.
