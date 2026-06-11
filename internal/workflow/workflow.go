@@ -21,12 +21,16 @@ type Client interface {
 	ReservePensionNextWeek() dhlottery.PensionReserveOutcome
 	Buy() dhlottery.PurchaseOutcome
 	CheckWinning(now time.Time) []dhlottery.WinningResult
-	AggregateLedger(startDate string, now time.Time) dhlottery.LedgerSummary
+	AggregateLedger(startDate string, now time.Time) (dhlottery.LedgerSummary, bool)
 	Collector() *notify.Collector
 }
 
 // SendCombined is the delivery seam (overridable in tests).
 var SendCombined = notify.SendCombinedNotification
+
+// lookupFailed is shown for cumulative settlement fields when the ledger
+// aggregation lookup failed, instead of a misleading zero.
+const lookupFailed = "조회 실패"
 
 func workflowError(err error) notify.Payload {
 	return notify.Payload{
@@ -50,17 +54,25 @@ func RunWorkflow(now time.Time, client Client) bool {
 			canPurchase = false
 		}
 
+		// Count only amounts actually spent this run: a skipped (duplicate)
+		// pension reserve and a failed purchase still carry a non-zero
+		// TotalAmount in their outcome, so gate on Success.
 		var weeklyPurchase int
 		if canPurchase {
 			pension := client.ReservePensionNextWeek()
 			purchase := client.Buy()
-			weeklyPurchase = pension.TotalAmount + purchase.TotalAmount
+			if pension.Success {
+				weeklyPurchase += pension.TotalAmount
+			}
+			if purchase.Success {
+				weeklyPurchase += purchase.TotalAmount
+			}
 		}
 
 		wins := client.CheckWinning(now)
-		summary := client.AggregateLedger(resolveLedgerStartDate(), now)
+		summary, ok := client.AggregateLedger(resolveLedgerStartDate(), now)
 
-		collector.Add(buildSettlementPayload(weeklyPurchase, sumWins(wins), summary))
+		collector.Add(buildSettlementPayload(weeklyPurchase, sumWins(wins), summary, ok))
 	}
 
 	if !collector.IsEmpty() {
@@ -97,18 +109,25 @@ func signedCurrency(net int) string {
 }
 
 // buildSettlementPayload assembles the weekly 주간 결산 summary: this week's
-// purchase/winning plus lifetime cumulative totals and the signed net.
-func buildSettlementPayload(weeklyPurchase, weeklyWinning int, s dhlottery.LedgerSummary) notify.Payload {
-	net := s.CumulativeWinning - s.CumulativePurchase
+// purchase/winning plus lifetime cumulative totals and the signed net. When the
+// ledger lookup failed (summaryOK=false), the cumulative fields show "조회 실패"
+// instead of a misleading zero summary.
+func buildSettlementPayload(weeklyPurchase, weeklyWinning int, s dhlottery.LedgerSummary, summaryOK bool) notify.Payload {
+	cumPurchase, cumWinning, net := lookupFailed, lookupFailed, lookupFailed
+	if summaryOK {
+		cumPurchase = format.Currency(s.CumulativePurchase)
+		cumWinning = format.Currency(s.CumulativeWinning)
+		net = signedCurrency(s.CumulativeWinning - s.CumulativePurchase)
+	}
 	return notify.Payload{
 		Type:  notify.Success,
 		Title: "주간 결산",
 		Details: []notify.KV{
 			{Key: "이번 주 구매", Value: format.Currency(weeklyPurchase)},
 			{Key: "이번 주 당첨", Value: format.Currency(weeklyWinning)},
-			{Key: "누적 구매", Value: format.Currency(s.CumulativePurchase)},
-			{Key: "누적 당첨", Value: format.Currency(s.CumulativeWinning)},
-			{Key: "결산", Value: signedCurrency(net)},
+			{Key: "누적 구매", Value: cumPurchase},
+			{Key: "누적 당첨", Value: cumWinning},
+			{Key: "결산", Value: net},
 		},
 	}
 }

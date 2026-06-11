@@ -50,7 +50,8 @@ func (c *Client) CheckWinning(now time.Time) []WinningResult {
 }
 
 // AggregateLedger recomputes lifetime cumulative purchase and winning totals
-// from the full ledger over [startDate, now].
-func (c *Client) AggregateLedger(startDate string, now time.Time) LedgerSummary {
+// from the full ledger over [startDate, now]. ok is false when the ledger
+// lookup failed (network/parse/redirect/non-200).
+func (c *Client) AggregateLedger(startDate string, now time.Time) (LedgerSummary, bool) {
 	return aggregateLedger(c.http, startDate, now)
 }

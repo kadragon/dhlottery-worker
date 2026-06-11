@@ -72,9 +72,9 @@ func TestClientAggregateLedger(t *testing.T) {
 		Status: 200,
 		Body:   ledgerFixture(t),
 	}))
-	s := c.AggregateLedger("20200101", parseTime(t, "2026-06-08T10:00:00+09:00"))
-	if s.CumulativePurchase != 14000 || s.CumulativeWinning != 2001005000 {
-		t.Errorf("AggregateLedger = %+v", s)
+	s, ok := c.AggregateLedger("20200101", parseTime(t, "2026-06-08T10:00:00+09:00"))
+	if !ok || s.CumulativePurchase != 14000 || s.CumulativeWinning != 2001005000 {
+		t.Errorf("AggregateLedger = %+v, ok=%v", s, ok)
 	}
 }
 

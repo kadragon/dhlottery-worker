@@ -154,7 +154,10 @@ func TestCheckWinningRedirect(t *testing.T) {
 
 func TestAggregateLedgerFixture(t *testing.T) {
 	client, stub := checkClient(testutil.StubResponse{Status: 200, Body: ledgerFixture(t)})
-	s := aggregateLedger(client, "20200101", parseTime(t, "2026-06-08T10:00:00+09:00"))
+	s, ok := aggregateLedger(client, "20200101", parseTime(t, "2026-06-08T10:00:00+09:00"))
+	if !ok {
+		t.Fatal("expected ok=true on a successful fetch")
+	}
 
 	// 6 rows: prchsQty 5+5+1+1+1+1 = 14 units × 1000 = 14,000.
 	if s.CumulativePurchase != 14000 {
@@ -184,7 +187,10 @@ func TestAggregateLedgerPaging(t *testing.T) {
 	)}
 	client := httpclient.NewWithDoer(stub)
 
-	s := aggregateLedger(client, "20200101", parseTime(t, "2026-06-08T10:00:00+09:00"))
+	s, ok := aggregateLedger(client, "20200101", parseTime(t, "2026-06-08T10:00:00+09:00"))
+	if !ok {
+		t.Fatal("expected ok=true")
+	}
 
 	if len(stub.Requests) != 2 {
 		t.Fatalf("expected 2 requests, got %d", len(stub.Requests))
@@ -202,7 +208,10 @@ func TestAggregateLedgerPaging(t *testing.T) {
 
 func TestAggregateLedgerEmpty(t *testing.T) {
 	client, stub := checkClient(testutil.StubResponse{Status: 200, Body: `{"data":{"total":0,"list":[]}}`})
-	s := aggregateLedger(client, "20200101", parseTime(t, "2026-06-08T10:00:00+09:00"))
+	s, ok := aggregateLedger(client, "20200101", parseTime(t, "2026-06-08T10:00:00+09:00"))
+	if !ok {
+		t.Fatal("expected ok=true on an empty-but-successful fetch")
+	}
 	if s.CumulativePurchase != 0 || s.CumulativeWinning != 0 {
 		t.Errorf("summary = %+v, want zero", s)
 	}
@@ -213,8 +222,8 @@ func TestAggregateLedgerEmpty(t *testing.T) {
 
 func TestAggregateLedgerFetchFailure(t *testing.T) {
 	client, _ := checkClient(testutil.StubResponse{Status: 500, Body: "error"})
-	if s := aggregateLedger(client, "20200101", parseTime(t, "2026-06-08T10:00:00+09:00")); s != (LedgerSummary{}) {
-		t.Errorf("expected zero summary on fetch failure, got %+v", s)
+	if s, ok := aggregateLedger(client, "20200101", parseTime(t, "2026-06-08T10:00:00+09:00")); ok || s != (LedgerSummary{}) {
+		t.Errorf("expected (zero, false) on fetch failure, got (%+v, %v)", s, ok)
 	}
 }
 
@@ -223,14 +232,33 @@ func TestAggregateLedgerRedirect(t *testing.T) {
 		Status: 302,
 		Header: http.Header{"Location": {"https://www.dhlottery.co.kr/errorPage"}},
 	})
-	if s := aggregateLedger(client, "20200101", parseTime(t, "2026-06-08T10:00:00+09:00")); s != (LedgerSummary{}) {
-		t.Errorf("expected zero summary on redirect, got %+v", s)
+	if s, ok := aggregateLedger(client, "20200101", parseTime(t, "2026-06-08T10:00:00+09:00")); ok || s != (LedgerSummary{}) {
+		t.Errorf("expected (zero, false) on redirect, got (%+v, %v)", s, ok)
 	}
 }
 
 func TestAggregateLedgerParseFailure(t *testing.T) {
 	client, _ := checkClient(testutil.StubResponse{Status: 200, Body: "<html>not json</html>"})
-	if s := aggregateLedger(client, "20200101", parseTime(t, "2026-06-08T10:00:00+09:00")); s != (LedgerSummary{}) {
-		t.Errorf("expected zero summary on parse failure, got %+v", s)
+	if s, ok := aggregateLedger(client, "20200101", parseTime(t, "2026-06-08T10:00:00+09:00")); ok || s != (LedgerSummary{}) {
+		t.Errorf("expected (zero, false) on parse failure, got (%+v, %v)", s, ok)
+	}
+}
+
+// A failure on a later page discards the whole aggregation (all-or-nothing):
+// page 1 succeeds, page 2 returns 500, so the result is (zero, false).
+func TestAggregateLedgerMidPageFailure(t *testing.T) {
+	page1 := `{"data":{"total":3,"list":[{"ltGdsCd":"LO40","prchsQty":5,"ltWnAmt":5000},{"ltGdsCd":"LO40","prchsQty":1,"ltWnAmt":null}]}}`
+	stub := &testutil.StubDoer{Handler: testutil.Sequence(
+		testutil.StubResponse{Status: 200, Body: page1},
+		testutil.StubResponse{Status: 500, Body: "error"},
+	)}
+	client := httpclient.NewWithDoer(stub)
+
+	s, ok := aggregateLedger(client, "20200101", parseTime(t, "2026-06-08T10:00:00+09:00"))
+	if ok || s != (LedgerSummary{}) {
+		t.Errorf("expected (zero, false) when a later page fails, got (%+v, %v)", s, ok)
+	}
+	if len(stub.Requests) != 2 {
+		t.Errorf("expected 2 requests before bailing, got %d", len(stub.Requests))
 	}
 }

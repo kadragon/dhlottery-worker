@@ -137,9 +137,10 @@ func checkWinning(client *httpclient.Client, now time.Time) []WinningResult {
 // aggregateLedger recomputes lifetime totals from the full ledger over
 // [startDate, now]. Cumulative purchase = Σ(prchsQty × CostPerGame);
 // cumulative winning = Σ(ltWnAmt where > 0). Pages through all rows using
-// data.total. Non-fatal by design: any fetch/parse/redirect/non-200 error
-// returns a zero LedgerSummary.
-func aggregateLedger(client *httpclient.Client, startDate string, now time.Time) LedgerSummary {
+// data.total. Non-fatal by design: on any fetch/parse/redirect/non-200 error it
+// returns ok=false (all-or-nothing) so the caller can report the lookup failure
+// instead of presenting a zero summary as if it were real.
+func aggregateLedger(client *httpclient.Client, startDate string, now time.Time) (LedgerSummary, bool) {
 	const perPage = 100
 	const maxPages = 200 // backstop for a server that ignores pageNum / returns a bogus total
 
@@ -149,7 +150,7 @@ func aggregateLedger(client *httpclient.Client, startDate string, now time.Time)
 	for page := 1; page <= maxPages; page++ {
 		data, ok := fetchLedgerPage(client, compactYmd(startDate), endDate, page, perPage)
 		if !ok {
-			return LedgerSummary{}
+			return LedgerSummary{}, false
 		}
 		if page == 1 {
 			total = data.Data.Total
@@ -166,7 +167,7 @@ func aggregateLedger(client *httpclient.Client, startDate string, now time.Time)
 		}
 	}
 
-	return LedgerSummary{CumulativePurchase: purchase, CumulativeWinning: winning}
+	return LedgerSummary{CumulativePurchase: purchase, CumulativeWinning: winning}, true
 }
 
 // fetchLedgerPage fetches one page of the ledger. Returns ok=false (after

@@ -21,13 +21,14 @@ type fakeClient struct {
 	reserveOut   dhlottery.PensionReserveOutcome
 	wins         []dhlottery.WinningResult
 	summary      dhlottery.LedgerSummary
+	summaryOK    bool
 	aggStartDate string
 
 	login, checkDeposit, reserve, buy, checkWinning, aggregate int
 }
 
 func newFake() *fakeClient {
-	return &fakeClient{depositOK: true, collector: &notify.Collector{}}
+	return &fakeClient{depositOK: true, summaryOK: true, collector: &notify.Collector{}}
 }
 
 func (f *fakeClient) Login() error {
@@ -51,10 +52,10 @@ func (f *fakeClient) CheckWinning(time.Time) []dhlottery.WinningResult {
 	f.checkWinning++
 	return f.wins
 }
-func (f *fakeClient) AggregateLedger(startDate string, _ time.Time) dhlottery.LedgerSummary {
+func (f *fakeClient) AggregateLedger(startDate string, _ time.Time) (dhlottery.LedgerSummary, bool) {
 	f.aggregate++
 	f.aggStartDate = startDate
-	return f.summary
+	return f.summary, f.summaryOK
 }
 func (f *fakeClient) Collector() *notify.Collector { return f.collector }
 
@@ -92,6 +93,9 @@ func TestRunWorkflowComplete(t *testing.T) {
 	if f.aggregate != 1 {
 		t.Errorf("AggregateLedger calls = %d, want 1", f.aggregate)
 	}
+	if f.aggStartDate != constants.DefaultLedgerStartDate {
+		t.Errorf("AggregateLedger startDate = %q, want %q", f.aggStartDate, constants.DefaultLedgerStartDate)
+	}
 	// Settlement is always added now, so a combined send always fires.
 	if cap.calls != 1 {
 		t.Errorf("SendCombined calls = %d, want 1", cap.calls)
@@ -105,8 +109,8 @@ func TestRunWorkflowComplete(t *testing.T) {
 func TestRunWorkflowSettlementAmounts(t *testing.T) {
 	cap := installSend(t, true)
 	f := newFake()
-	f.buyOutcome = dhlottery.PurchaseOutcome{TotalAmount: 5000}
-	f.reserveOut = dhlottery.PensionReserveOutcome{TotalAmount: 5000}
+	f.buyOutcome = dhlottery.PurchaseOutcome{Success: true, TotalAmount: 5000}
+	f.reserveOut = dhlottery.PensionReserveOutcome{Success: true, TotalAmount: 5000}
 	f.wins = []dhlottery.WinningResult{{PrizeAmount: 3000}, {PrizeAmount: 2000}}
 	f.summary = dhlottery.LedgerSummary{CumulativePurchase: 1250000, CumulativeWinning: 2003005000}
 
@@ -130,6 +134,47 @@ func TestRunWorkflowSettlementAmounts(t *testing.T) {
 	}
 	if len(want) != 0 {
 		t.Errorf("missing settlement details: %v", want)
+	}
+}
+
+func settlementDetail(p notify.Payload, key string) string {
+	for _, kv := range p.Details {
+		if kv.Key == key {
+			return kv.Value
+		}
+	}
+	return ""
+}
+
+// A skipped (duplicate) pension reserve still reports TotalAmount=5000, but no
+// money was spent this run, so it must not be counted in 이번 주 구매.
+func TestRunWorkflowSkippedPensionNotCounted(t *testing.T) {
+	cap := installSend(t, true)
+	f := newFake()
+	f.reserveOut = dhlottery.PensionReserveOutcome{Skipped: true, TotalAmount: 5000}
+	f.buyOutcome = dhlottery.PurchaseOutcome{Success: true, TotalAmount: 5000}
+
+	RunWorkflow(time.Now(), f)
+
+	last := cap.payloads[len(cap.payloads)-1]
+	if got := settlementDetail(last, "이번 주 구매"); got != "5,000원" {
+		t.Errorf("이번 주 구매 = %q, want 5,000원 (skipped reserve excluded)", got)
+	}
+}
+
+func TestRunWorkflowSettlementLookupFailed(t *testing.T) {
+	cap := installSend(t, true)
+	f := newFake()
+	f.summaryOK = false
+	f.summary = dhlottery.LedgerSummary{CumulativePurchase: 999, CumulativeWinning: 999}
+
+	RunWorkflow(time.Now(), f)
+
+	last := cap.payloads[len(cap.payloads)-1]
+	for _, key := range []string{"누적 구매", "누적 당첨", "결산"} {
+		if got := settlementDetail(last, key); got != "조회 실패" {
+			t.Errorf("%s = %q, want 조회 실패", key, got)
+		}
 	}
 }
 

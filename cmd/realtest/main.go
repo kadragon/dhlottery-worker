@@ -22,7 +22,7 @@ type smokeClient interface {
 	Login() error
 	GetAccountInfo() (dhlottery.AccountInfo, error)
 	CheckWinning(time.Time) []dhlottery.WinningResult
-	AggregateLedger(startDate string, now time.Time) dhlottery.LedgerSummary
+	AggregateLedger(startDate string, now time.Time) (dhlottery.LedgerSummary, bool)
 	Collector() *notify.Collector
 }
 
@@ -80,10 +80,14 @@ func defaultRunChecks() int {
 	if v, err := env.Get("LEDGER_START_DATE"); err == nil {
 		startDate = v
 	}
-	s := c.AggregateLedger(startDate, nowFn())
-	net := s.CumulativeWinning - s.CumulativePurchase
-	fmt.Printf("  start=%s  누적 구매=%s  누적 당첨=%s  결산=%s\n",
-		startDate, format.Currency(s.CumulativePurchase), format.Currency(s.CumulativeWinning), format.Currency(net))
+	s, ok := c.AggregateLedger(startDate, nowFn())
+	if !ok {
+		fmt.Printf("  ❌ ledger aggregate lookup failed (start=%s)\n", startDate)
+	} else {
+		net := s.CumulativeWinning - s.CumulativePurchase
+		fmt.Printf("  start=%s  누적 구매=%s  누적 당첨=%s  결산=%s\n",
+			startDate, format.Currency(s.CumulativePurchase), format.Currency(s.CumulativeWinning), format.Currency(net))
+	}
 
 	fmt.Println("\n== collected payloads (NOT sent) ==")
 	payloads := c.Collector().Payloads()
