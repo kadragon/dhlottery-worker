@@ -134,23 +134,63 @@ func checkWinning(client *httpclient.Client, now time.Time) []WinningResult {
 	return extractWins(data.Data.List)
 }
 
+// ledgerWindowDays is the per-query date span. The ledger API silently returns
+// an empty list (200, total=0) when srchStrDt..srchEndDt exceeds its limit
+// (empirically between 90 and 180 days; 90 confirmed working). aggregateLedger
+// therefore walks the range in non-overlapping windows of this size.
+const ledgerWindowDays = 90
+
 // aggregateLedger recomputes lifetime totals from the full ledger over
-// [startDate, now]. Cumulative purchase = Σ(prchsQty × CostPerGame);
-// cumulative winning = Σ(ltWnAmt where > 0). Pages through all rows using
+// [startDate, now]. Cumulative purchase = Σ(prchsQty × CostPerGame); cumulative
+// winning = Σ(ltWnAmt where > 0). The span is walked in ledgerWindowDays
+// windows (the API caps a single query's date range), each window paged via
 // data.total. Non-fatal by design: on any fetch/parse/redirect/non-200 error it
 // returns ok=false (all-or-nothing) so the caller can report the lookup failure
-// instead of presenting a zero summary as if it were real.
+// instead of presenting a partial or zero summary as if it were complete.
 func aggregateLedger(client *httpclient.Client, startDate string, now time.Time) (LedgerSummary, bool) {
+	start := compactYmd(startDate)
+	end := compactYmd(datekst.FormatKstYmd(now))
+	if start > end {
+		return LedgerSummary{}, true
+	}
+
+	var purchase, winning int
+	const maxWindows = 400 // backstop (~98 years) against a pathological loop
+
+	winEnd := end
+	for w := 0; w < maxWindows; w++ {
+		winStart := compactYmd(datekst.AddDaysToYmd(winEnd, -(ledgerWindowDays - 1)))
+		if winStart < start {
+			winStart = start
+		}
+
+		p, win, ok := aggregateWindow(client, winStart, winEnd)
+		if !ok {
+			return LedgerSummary{}, false
+		}
+		purchase += p
+		winning += win
+
+		if winStart <= start {
+			break // reached the configured start date
+		}
+		winEnd = compactYmd(datekst.AddDaysToYmd(winStart, -1)) // next window ends the day before
+	}
+
+	return LedgerSummary{CumulativePurchase: purchase, CumulativeWinning: winning}, true
+}
+
+// aggregateWindow sums purchase and winning over a single [strDt, endDt] window,
+// paging through all rows via data.total. Returns ok=false on any fetch error.
+func aggregateWindow(client *httpclient.Client, strDt, endDt string) (purchase, winning int, ok bool) {
 	const perPage = 100
 	const maxPages = 200 // backstop for a server that ignores pageNum / returns a bogus total
 
-	endDate := compactYmd(datekst.FormatKstYmd(now))
-
-	var purchase, winning, fetched, total int
+	var fetched, total int
 	for page := 1; page <= maxPages; page++ {
-		data, ok := fetchLedgerPage(client, compactYmd(startDate), endDate, page, perPage)
-		if !ok {
-			return LedgerSummary{}, false
+		data, fetchOK := fetchLedgerPage(client, strDt, endDt, page, perPage)
+		if !fetchOK {
+			return 0, 0, false
 		}
 		if page == 1 {
 			total = data.Data.Total
@@ -166,47 +206,7 @@ func aggregateLedger(client *httpclient.Client, startDate string, now time.Time)
 			break
 		}
 	}
-
-	return LedgerSummary{CumulativePurchase: purchase, CumulativeWinning: winning}, true
-}
-
-// LedgerProbe is a TEMPORARY diagnostic result: page-1 total/row counts for a
-// single date range. Used by realtest to find the server's max query window.
-// TODO: remove once range chunking is implemented.
-type LedgerProbe struct {
-	StrDt, EndDt string
-	Total, Rows  int
-	OK           bool
-}
-
-// probeLedgerRange fetches page 1 of [strDt, endDt] (YYYYMMDD) and reports how
-// many rows the server returns. TEMPORARY diagnostic.
-func probeLedgerRange(client *httpclient.Client, strDt, endDt string) LedgerProbe {
-	data, ok := fetchLedgerPage(client, strDt, endDt, 1, 100)
-	return LedgerProbe{StrDt: strDt, EndDt: endDt, Total: data.Data.Total, Rows: len(data.Data.List), OK: ok}
-}
-
-// LedgerRowSample is a TEMPORARY raw-row view for the LP72-cost diagnostic.
-type LedgerRowSample struct {
-	LtGdsCd  string
-	LtGdsNm  string
-	LtEpsd   int
-	PrchsQty int
-	LtWnAmt  *int
-}
-
-// dumpLedgerRange returns page-1 raw rows of [strDt, endDt] (YYYYMMDD).
-// TEMPORARY diagnostic to resolve LP72 prchsQty/cost semantics.
-func dumpLedgerRange(client *httpclient.Client, strDt, endDt string) ([]LedgerRowSample, bool) {
-	data, ok := fetchLedgerPage(client, strDt, endDt, 1, 100)
-	if !ok {
-		return nil, false
-	}
-	out := make([]LedgerRowSample, 0, len(data.Data.List))
-	for _, r := range data.Data.List {
-		out = append(out, LedgerRowSample{r.LtGdsCd, r.LtGdsNm, r.LtEpsd, r.PrchsQty, r.LtWnAmt})
-	}
-	return out, true
+	return purchase, winning, true
 }
 
 // fetchLedgerPage fetches one page of the ledger. Returns ok=false (after

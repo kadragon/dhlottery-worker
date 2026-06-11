@@ -9,11 +9,9 @@ package main
 import (
 	"fmt"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/kadragon/dhlottery-worker/internal/constants"
-	"github.com/kadragon/dhlottery-worker/internal/datekst"
 	"github.com/kadragon/dhlottery-worker/internal/dhlottery"
 	"github.com/kadragon/dhlottery-worker/internal/env"
 	"github.com/kadragon/dhlottery-worker/internal/format"
@@ -25,8 +23,6 @@ type smokeClient interface {
 	GetAccountInfo() (dhlottery.AccountInfo, error)
 	CheckWinning(time.Time) []dhlottery.WinningResult
 	AggregateLedger(startDate string, now time.Time) (dhlottery.LedgerSummary, bool)
-	ProbeLedgerRange(strDt, endDt string) dhlottery.LedgerProbe
-	DumpLedgerRange(strDt, endDt string) ([]dhlottery.LedgerRowSample, bool)
 	Collector() *notify.Collector
 }
 
@@ -91,29 +87,6 @@ func defaultRunChecks() int {
 		net := s.CumulativeWinning - s.CumulativePurchase
 		fmt.Printf("  start=%s  누적 구매=%s  누적 당첨=%s  결산=%s\n",
 			startDate, format.Currency(s.CumulativePurchase), format.Currency(s.CumulativeWinning), format.Currency(net))
-	}
-
-	fmt.Println("\n== 5) Ledger 90d ladder (TEMP: span-cap vs retention-floor) ==")
-	compact := func(ymd string) string { return strings.ReplaceAll(ymd, "-", "") }
-	today := datekst.FormatKstYmd(nowFn())
-	for k := 0; k < 28; k++ {
-		endYmd := datekst.AddDaysToYmd(today, -k*90)
-		startYmd := datekst.AddDaysToYmd(endYmd, -89)
-		p := c.ProbeLedgerRange(compact(startYmd), compact(endYmd))
-		fmt.Printf("  k=%2d  [%s~%s]  total=%d rows=%d ok=%v\n", k, compact(startYmd), compact(endYmd), p.Total, p.Rows, p.OK)
-	}
-
-	fmt.Println("\n== 6) Raw rows, recent 30d (TEMP: LP72 prchsQty/cost) ==")
-	end30 := compact(today)
-	str30 := compact(datekst.AddDaysToYmd(today, -29))
-	rows, ok30 := c.DumpLedgerRange(str30, end30)
-	fmt.Printf("  [%s~%s] ok=%v rows=%d\n", str30, end30, ok30, len(rows))
-	for _, r := range rows {
-		win := "nil"
-		if r.LtWnAmt != nil {
-			win = fmt.Sprintf("%d", *r.LtWnAmt)
-		}
-		fmt.Printf("    %s %-12s ep=%d prchsQty=%d ltWnAmt=%s\n", r.LtGdsCd, r.LtGdsNm, r.LtEpsd, r.PrchsQty, win)
 	}
 
 	fmt.Println("\n== collected payloads (NOT sent) ==")

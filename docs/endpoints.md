@@ -59,7 +59,7 @@ Query params: `srchStrDt`/`srchEndDt` (YYYYMMDD, previous-week range), `pageNum=
 
 Response: `data.list[]` rows. A win is detected on `ltWnAmt > 0` (`null` = undrawn, `0` = lost). Fields used: `ltEpsd` (round), `ltGdsNm` (product), `ltWnAmt` (prize), `wnRnk` (rank, may be null), `ltWnResult` (label).
 
-**Lifetime settlement (same endpoint, `aggregateLedger`):** the weekly 주간 결산 block recomputes cumulative purchase (Σ `prchsQty` × 1000) and cumulative winning (Σ `ltWnAmt`>0) by querying `[LEDGER_START_DATE, today]` (default `20200101`, optional env) and paging via `data.total` (`recordCountPerPage=100`). No state is stored — re-runs recompute identically. Non-fatal: any error yields a zero summary.
+**Lifetime settlement (same endpoint, `aggregateLedger`):** the weekly 주간 결산 block recomputes cumulative purchase (Σ `prchsQty` × 1000, covering both LO40 `prchsQty=5` and LP72 `prchsQty=1`×5-rows-per-reserve) and cumulative winning (Σ `ltWnAmt`>0). The API **silently caps a single query's date span** — `srchStrDt..srchEndDt` over ~180 days returns an empty list (200, `total=0`); 90 days works. So the `[LEDGER_START_DATE, today]` range (default `20200101`, optional env) is walked in **contiguous non-overlapping 90-day windows** (newest first, each paged via `data.total`). No state is stored — re-runs recompute identically. Non-fatal & all-or-nothing: any window error returns `ok=false` and the settlement shows 누적/결산 as `조회 실패` rather than a partial total.
 
 **2026-01 change:** the legacy `/myPage.do?method=lottoBuyList` HTML page was retired and now 302-redirects to `/errorPage`; winning detection had been silently returning empty since then. Migrated to this JSON ledger API (mirrors the balance/round HTML→JSON migration).
 
