@@ -150,8 +150,18 @@ const ledgerWindowDays = 90
 func aggregateLedger(client *httpclient.Client, startDate string, now time.Time) (LedgerSummary, bool) {
 	start := compactYmd(startDate)
 	end := compactYmd(datekst.FormatKstYmd(now))
+
+	// A malformed LEDGER_START_DATE (e.g. "foo", unpadded "2026-6-1") must not
+	// slip through the lexical guard below and yield a zero summary tagged as
+	// real; reject anything that is not a valid YYYYMMDD date.
+	if _, err := time.Parse("20060102", start); err != nil {
+		logger.Error("Ledger aggregate failed (non-fatal)", logger.Fields{
+			logger.FieldEvent: "ledger_invalid_start", logger.FieldError: err.Error(),
+		})
+		return LedgerSummary{}, false
+	}
 	if start > end {
-		return LedgerSummary{}, true
+		return LedgerSummary{}, true // start in the future: genuinely nothing to sum
 	}
 
 	var purchase, winning int
@@ -172,12 +182,18 @@ func aggregateLedger(client *httpclient.Client, startDate string, now time.Time)
 		winning += win
 
 		if winStart <= start {
-			break // reached the configured start date
+			// Reached the configured start date: the only legitimate completion.
+			return LedgerSummary{CumulativePurchase: purchase, CumulativeWinning: winning}, true
 		}
 		winEnd = compactYmd(datekst.AddDaysToYmd(winStart, -1)) // next window ends the day before
 	}
 
-	return LedgerSummary{CumulativePurchase: purchase, CumulativeWinning: winning}, true
+	// Backstop exhausted without reaching startDate: the accumulated total is
+	// partial, so report failure rather than presenting it as a complete sum.
+	logger.Error("Ledger aggregate incomplete (non-fatal)", logger.Fields{
+		logger.FieldEvent: "ledger_backstop_exhausted", logger.FieldStatus: maxWindows,
+	})
+	return LedgerSummary{}, false
 }
 
 // aggregateWindow sums purchase and winning over a single [strDt, endDt] window,

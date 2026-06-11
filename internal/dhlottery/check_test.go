@@ -327,3 +327,75 @@ func TestAggregateLedgerMidPageFailure(t *testing.T) {
 		t.Errorf("expected 2 requests before bailing, got %d", len(stub.Requests))
 	}
 }
+
+// All-or-nothing across windows: window 1 succeeds, window 2's fetch fails, so
+// the whole walk returns (zero, false) — the partial window-1 sum is discarded.
+func TestAggregateLedgerMidWindowFailure(t *testing.T) {
+	win1 := `{"data":{"total":1,"list":[{"ltGdsCd":"LO40","prchsQty":5,"ltWnAmt":5000}]}}`
+	stub := &testutil.StubDoer{Handler: testutil.Sequence(
+		testutil.StubResponse{Status: 200, Body: win1},    // window 1, page 1
+		testutil.StubResponse{Status: 500, Body: "error"}, // window 2, page 1 → fail
+	)}
+	client := httpclient.NewWithDoer(stub)
+
+	s, ok := aggregateLedger(client, "20251201", aggNow(t)) // >90d span → ≥2 windows
+	if ok || s != (LedgerSummary{}) {
+		t.Errorf("expected (zero, false) when a later window fails, got (%+v, %v)", s, ok)
+	}
+	if len(stub.Requests) != 2 {
+		t.Errorf("expected 2 requests (window 1 ok, window 2 fails), got %d", len(stub.Requests))
+	}
+}
+
+// Pins ledgerWindowDays: a span of exactly that many days fits one window; one
+// more day forces a second. A regression here (e.g. window size widened past the
+// API's silent cap) is the bug this PR fixes.
+func TestAggregateLedgerWindowSizeBoundary(t *testing.T) {
+	body := `{"data":{"total":1,"list":[{"ltGdsCd":"LO40","prchsQty":1,"ltWnAmt":0}]}}`
+	now := aggNow(t) // 2026-06-08
+	end := "2026-06-08"
+	cstr := func(ymd string) string { return strings.ReplaceAll(ymd, "-", "") }
+
+	for _, tc := range []struct {
+		name     string
+		start    string
+		wantReqs int
+	}{
+		{"exactly one window", cstr(datekst.AddDaysToYmd(end, -(ledgerWindowDays - 1))), 1},
+		{"just over one window", cstr(datekst.AddDaysToYmd(end, -ledgerWindowDays)), 2},
+	} {
+		stub := &testutil.StubDoer{Handler: testutil.Sequence(testutil.StubResponse{Status: 200, Body: body})}
+		client := httpclient.NewWithDoer(stub)
+		if _, ok := aggregateLedger(client, tc.start, now); !ok {
+			t.Fatalf("%s: ok=false", tc.name)
+		}
+		if len(stub.Requests) != tc.wantReqs {
+			t.Errorf("%s (start=%s): requests = %d, want %d", tc.name, tc.start, len(stub.Requests), tc.wantReqs)
+		}
+	}
+}
+
+// A malformed start date must report failure, not a zero summary tagged as real.
+func TestAggregateLedgerInvalidStart(t *testing.T) {
+	client, stub := checkClient(testutil.StubResponse{Status: 200, Body: ledgerFixture(t)})
+	for _, bad := range []string{"foo", "2026-6-1", "", "20261332"} {
+		if s, ok := aggregateLedger(client, bad, aggNow(t)); ok || s != (LedgerSummary{}) {
+			t.Errorf("start %q: expected (zero, false), got (%+v, %v)", bad, s, ok)
+		}
+	}
+	if len(stub.Requests) != 0 {
+		t.Errorf("expected no requests for invalid start, got %d", len(stub.Requests))
+	}
+}
+
+// A start older than the maxWindows backstop reports failure rather than a
+// silently-partial total.
+func TestAggregateLedgerBackstopExhausted(t *testing.T) {
+	body := `{"data":{"total":1,"list":[{"ltGdsCd":"LO40","prchsQty":1,"ltWnAmt":0}]}}`
+	stub := &testutil.StubDoer{Handler: testutil.Sequence(testutil.StubResponse{Status: 200, Body: body})}
+	client := httpclient.NewWithDoer(stub)
+
+	if s, ok := aggregateLedger(client, "19000101", aggNow(t)); ok || s != (LedgerSummary{}) {
+		t.Errorf("expected (zero, false) on backstop exhaustion, got (%+v, %v)", s, ok)
+	}
+}
