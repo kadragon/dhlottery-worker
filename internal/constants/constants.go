@@ -28,6 +28,10 @@ const (
 	// PurchaseSuccessCode is the resultCode returned by execBuy.do on success.
 	PurchaseSuccessCode = "100"
 
+	// DefaultLedgerStartDate (YYYYMMDD) is the lifetime ledger query start used
+	// when the LEDGER_START_DATE env var is unset.
+	DefaultLedgerStartDate = "20200101"
+
 	// UserAgent is the browser-like User-Agent sent with every request.
 	UserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.77 Safari/537.36"
 

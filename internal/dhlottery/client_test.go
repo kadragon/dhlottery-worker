@@ -67,6 +67,17 @@ func TestClientCheckWinning(t *testing.T) {
 	}
 }
 
+func TestClientAggregateLedger(t *testing.T) {
+	c := facadeClient(testutil.Sequence(testutil.StubResponse{
+		Status: 200,
+		Body:   ledgerFixture(t),
+	}))
+	s, ok := c.AggregateLedger("20200101", parseTime(t, "2026-06-08T10:00:00+09:00"))
+	if !ok || s.CumulativePurchase != 14000 || s.CumulativeWinning != 2001005000 {
+		t.Errorf("AggregateLedger = %+v, ok=%v", s, ok)
+	}
+}
+
 func TestClientReservePension(t *testing.T) {
 	stub := &testutil.StubDoer{Handler: func(_ int, r testutil.RecordedRequest) (testutil.StubResponse, error) {
 		switch {

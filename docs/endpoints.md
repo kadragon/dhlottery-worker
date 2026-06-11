@@ -59,6 +59,8 @@ Query params: `srchStrDt`/`srchEndDt` (YYYYMMDD, previous-week range), `pageNum=
 
 Response: `data.list[]` rows. A win is detected on `ltWnAmt > 0` (`null` = undrawn, `0` = lost). Fields used: `ltEpsd` (round), `ltGdsNm` (product), `ltWnAmt` (prize), `wnRnk` (rank, may be null), `ltWnResult` (label).
 
+**Lifetime settlement (same endpoint, `aggregateLedger`):** the weekly 주간 결산 block recomputes cumulative purchase (Σ `prchsQty` × 1000) and cumulative winning (Σ `ltWnAmt`>0) by querying `[LEDGER_START_DATE, today]` (default `20200101`, optional env) and paging via `data.total` (`recordCountPerPage=100`). No state is stored — re-runs recompute identically. Non-fatal: any error yields a zero summary.
+
 **2026-01 change:** the legacy `/myPage.do?method=lottoBuyList` HTML page was retired and now 302-redirects to `/errorPage`; winning detection had been silently returning empty since then. Migrated to this JSON ledger API (mirrors the balance/round HTML→JSON migration).
 
 ## Pension 720+ Reservation (`internal/dhlottery/pension_reserve.go`)
