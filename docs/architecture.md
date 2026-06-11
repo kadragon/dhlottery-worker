@@ -2,11 +2,11 @@
 
 ## Overview
 
-DHLottery automation: session init → login → check deposit → if sufficient: (pension reserve → lotto purchase) → check winning → Telegram notification.
+DHLottery automation: session init → login → check deposit → if sufficient: (pension reserve → lotto purchase) → check winning → lifetime settlement → Telegram notification.
 
-Stateless. In-memory cookies only. Platform: GitHub Actions scheduled (every Monday 01:00 UTC = KST 10:00).
+Stateless. In-memory cookies only (누적 구매/당첨 결산도 매주 원장 API를 재계산하므로 외부 상태 없음). Platform: GitHub Actions scheduled (every Monday 01:00 UTC = KST 10:00).
 
-Core workflow: `init session → login → check deposit → (charge init + warn) or (pension reserve → purchase) → check winning → notify`
+Core workflow: `init session → login → check deposit → (charge init + warn) or (pension reserve → purchase) → check winning → aggregate ledger (주간 결산) → notify`
 
 Non-critical operations (charge init, pension reserve, winning check, Telegram failures) do not abort the workflow.
 

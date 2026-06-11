@@ -55,6 +55,14 @@ type WinningResult struct {
 	WinResult   string
 }
 
+// LedgerSummary is the lifetime aggregate recomputed from the full ledger:
+// cumulative purchase (Σ prchsQty × CostPerGame) and cumulative winning
+// (Σ ltWnAmt where ltWnAmt > 0).
+type LedgerSummary struct {
+	CumulativePurchase int
+	CumulativeWinning  int
+}
+
 // EL (pension 720+) API response types.
 
 type elEncryptedResponse struct {

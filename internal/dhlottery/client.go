@@ -46,5 +46,11 @@ func (c *Client) Buy() PurchaseOutcome { return purchaseLottery(c.http, c.collec
 
 // CheckWinning checks the previous week's winning results.
 func (c *Client) CheckWinning(now time.Time) []WinningResult {
-	return checkWinning(c.http, now, c.collector)
+	return checkWinning(c.http, now)
+}
+
+// AggregateLedger recomputes lifetime cumulative purchase and winning totals
+// from the full ledger over [startDate, now].
+func (c *Client) AggregateLedger(startDate string, now time.Time) LedgerSummary {
+	return aggregateLedger(c.http, startDate, now)
 }

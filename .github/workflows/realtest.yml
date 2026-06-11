@@ -25,4 +25,6 @@ jobs:
           PASSWORD: ${{ secrets.PASSWORD }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          # Optional: lifetime settlement start date (YYYYMMDD). Defaults to 20200101.
+          LEDGER_START_DATE: ${{ vars.LEDGER_START_DATE }}
         run: go run ./cmd/realtest

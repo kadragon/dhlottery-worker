@@ -1,7 +1,6 @@
 package dhlottery
 
 import (
-	"fmt"
 	"net/url"
 	"strconv"
 	"strings"
@@ -9,10 +8,8 @@ import (
 
 	"github.com/kadragon/dhlottery-worker/internal/constants"
 	"github.com/kadragon/dhlottery-worker/internal/datekst"
-	"github.com/kadragon/dhlottery-worker/internal/format"
 	"github.com/kadragon/dhlottery-worker/internal/httpclient"
 	"github.com/kadragon/dhlottery-worker/internal/logger"
-	"github.com/kadragon/dhlottery-worker/internal/notify"
 )
 
 // 2026-01: the legacy lottoBuyList HTML page (myPage.do?method=lottoBuyList)
@@ -39,6 +36,7 @@ type ledgerRow struct {
 	LtWnAmt    *int   `json:"ltWnAmt"`
 	WnRnk      *int   `json:"wnRnk"`
 	EpsdRflDt  string `json:"epsdRflDt"`
+	PrchsQty   int    `json:"prchsQty"`
 }
 
 // extractWins keeps rows with a positive win amount. A nil LtWnAmt (undrawn) or
@@ -68,10 +66,11 @@ func extractWins(rows []ledgerRow) []WinningResult {
 
 func compactYmd(date string) string { return strings.ReplaceAll(date, "-", "") }
 
-// checkWinning fetches the previous week's ledger and notifies on every win
-// (lotto and pension). Non-fatal by design: network/parse errors and 3xx
-// redirects return an empty slice.
-func checkWinning(client *httpclient.Client, now time.Time, collector *notify.Collector) []WinningResult {
+// checkWinning fetches the previous week's ledger and returns its wins (lotto
+// and pension). Non-fatal by design: network/parse errors and 3xx redirects
+// return an empty slice. Notification is handled by the caller via the weekly
+// settlement summary, so this function does not push payloads.
+func checkWinning(client *httpclient.Client, now time.Time) []WinningResult {
 	r := datekst.CalculatePreviousWeekRange(now)
 
 	u, err := url.Parse(winningLedgerURL)
@@ -132,31 +131,94 @@ func checkWinning(client *httpclient.Client, now time.Time, collector *notify.Co
 		return nil
 	}
 
-	wins := extractWins(data.Data.List)
-	for _, win := range wins {
-		details := []notify.KV{
-			{Key: "product", Value: win.Product},
-			{Key: "roundNumber", Value: strconv.Itoa(win.RoundNumber)},
-		}
-		if win.Rank > 0 {
-			details = append(details, notify.KV{Key: "rank", Value: strconv.Itoa(win.Rank)})
-		}
-		if win.WinResult != "" {
-			details = append(details, notify.KV{Key: "winResult", Value: win.WinResult})
-		}
-		details = append(details,
-			notify.KV{Key: "prizeAmount", Value: strconv.Itoa(win.PrizeAmount)},
-			notify.KV{Key: "prizeAmountKrw", Value: format.KoreanNumber(win.PrizeAmount) + "원"},
-			notify.KV{Key: "period", Value: r.StartDate + " ~ " + r.EndDate},
-		)
+	return extractWins(data.Data.List)
+}
 
-		notify.Notify(notify.Payload{
-			Type:    notify.Success,
-			Title:   "복권 당첨!",
-			Message: fmt.Sprintf("%s %d회차 당첨을 확인했습니다.", win.Product, win.RoundNumber),
-			Details: details,
-		}, collector)
+// aggregateLedger recomputes lifetime totals from the full ledger over
+// [startDate, now]. Cumulative purchase = Σ(prchsQty × CostPerGame);
+// cumulative winning = Σ(ltWnAmt where > 0). Pages through all rows using
+// data.total. Non-fatal by design: any fetch/parse/redirect/non-200 error
+// returns a zero LedgerSummary.
+func aggregateLedger(client *httpclient.Client, startDate string, now time.Time) LedgerSummary {
+	const perPage = 100
+	const maxPages = 200 // backstop for a server that ignores pageNum / returns a bogus total
+
+	endDate := compactYmd(datekst.FormatKstYmd(now))
+
+	var purchase, winning, fetched, total int
+	for page := 1; page <= maxPages; page++ {
+		data, ok := fetchLedgerPage(client, compactYmd(startDate), endDate, page, perPage)
+		if !ok {
+			return LedgerSummary{}
+		}
+		if page == 1 {
+			total = data.Data.Total
+		}
+		for _, row := range data.Data.List {
+			purchase += row.PrchsQty * constants.CostPerGame
+			if row.LtWnAmt != nil && *row.LtWnAmt > 0 {
+				winning += *row.LtWnAmt
+			}
+		}
+		fetched += len(data.Data.List)
+		if len(data.Data.List) == 0 || fetched >= total {
+			break
+		}
 	}
 
-	return wins
+	return LedgerSummary{CumulativePurchase: purchase, CumulativeWinning: winning}
+}
+
+// fetchLedgerPage fetches one page of the ledger. Returns ok=false (after
+// logging) on any network/parse error, redirect, or non-200 status.
+func fetchLedgerPage(client *httpclient.Client, strDt, endDt string, page, perPage int) (ledgerResponse, bool) {
+	var data ledgerResponse
+
+	u, err := url.Parse(winningLedgerURL)
+	if err != nil {
+		logger.Error("Ledger aggregate failed (non-fatal)", logger.Fields{
+			logger.FieldEvent: "ledger_aggregate_failed", logger.FieldError: err.Error(),
+		})
+		return data, false
+	}
+	q := u.Query()
+	q.Set("srchStrDt", strDt)
+	q.Set("srchEndDt", endDt)
+	q.Set("sort", "")
+	q.Set("ltGdsCd", "")
+	q.Set("winResult", "")
+	q.Set("lramSmam", "")
+	q.Set("pageNum", strconv.Itoa(page))
+	q.Set("recordCountPerPage", strconv.Itoa(perPage))
+	u.RawQuery = q.Encode()
+
+	resp, err := client.Fetch(u.String(), httpclient.RequestOptions{
+		Headers: map[string]string{
+			constants.HeaderUserAgent:      constants.UserAgent,
+			"Accept":                       "application/json, text/javascript, */*; q=0.01",
+			constants.HeaderContentType:    "application/json;charset=UTF-8",
+			constants.HeaderXRequestedWith: constants.HeaderXRequestedWithValue,
+			"ajax":                         "true",
+			constants.HeaderReferer:        "https://www.dhlottery.co.kr/mypage/mylotteryledger",
+		},
+	})
+	if err != nil {
+		logger.Error("Ledger aggregate failed (non-fatal)", logger.Fields{
+			logger.FieldEvent: "ledger_aggregate_failed", logger.FieldError: err.Error(),
+		})
+		return data, false
+	}
+	if resp.Status != 200 {
+		logger.Error("Ledger aggregate fetch failed", logger.Fields{
+			logger.FieldEvent: "ledger_aggregate_fetch_failed", logger.FieldStatus: resp.Status,
+		})
+		return data, false
+	}
+	if err := resp.JSON(&data); err != nil {
+		logger.Error("Ledger aggregate failed (non-fatal)", logger.Fields{
+			logger.FieldEvent: "ledger_aggregate_failed", logger.FieldError: err.Error(),
+		})
+		return data, false
+	}
+	return data, true
 }

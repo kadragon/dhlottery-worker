@@ -84,4 +84,8 @@ func (f *fakeSmokeClient) CheckWinning(time.Time) []dhlottery.WinningResult {
 	return nil
 }
 
+func (f *fakeSmokeClient) AggregateLedger(string, time.Time) dhlottery.LedgerSummary {
+	return dhlottery.LedgerSummary{}
+}
+
 func (f *fakeSmokeClient) Collector() *notify.Collector { return &f.collector }

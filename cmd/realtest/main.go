@@ -11,8 +11,10 @@ import (
 	"os"
 	"time"
 
+	"github.com/kadragon/dhlottery-worker/internal/constants"
 	"github.com/kadragon/dhlottery-worker/internal/dhlottery"
 	"github.com/kadragon/dhlottery-worker/internal/env"
+	"github.com/kadragon/dhlottery-worker/internal/format"
 	"github.com/kadragon/dhlottery-worker/internal/notify"
 )
 
@@ -20,6 +22,7 @@ type smokeClient interface {
 	Login() error
 	GetAccountInfo() (dhlottery.AccountInfo, error)
 	CheckWinning(time.Time) []dhlottery.WinningResult
+	AggregateLedger(startDate string, now time.Time) dhlottery.LedgerSummary
 	Collector() *notify.Collector
 }
 
@@ -71,6 +74,16 @@ func defaultRunChecks() int {
 	for _, w := range wins {
 		fmt.Printf("  🎉 %s round=%d rank=%d prize=%d\n", w.Product, w.RoundNumber, w.Rank, w.PrizeAmount)
 	}
+
+	fmt.Println("\n== 4) AggregateLedger (lifetime cumulative — verify vs real account) ==")
+	startDate := constants.DefaultLedgerStartDate
+	if v, err := env.Get("LEDGER_START_DATE"); err == nil {
+		startDate = v
+	}
+	s := c.AggregateLedger(startDate, nowFn())
+	net := s.CumulativeWinning - s.CumulativePurchase
+	fmt.Printf("  start=%s  누적 구매=%s  누적 당첨=%s  결산=%s\n",
+		startDate, format.Currency(s.CumulativePurchase), format.Currency(s.CumulativeWinning), format.Currency(net))
 
 	fmt.Println("\n== collected payloads (NOT sent) ==")
 	payloads := c.Collector().Payloads()
