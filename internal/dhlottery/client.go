@@ -49,6 +49,12 @@ func (c *Client) CheckWinning(now time.Time) []WinningResult {
 	return checkWinning(c.http, now)
 }
 
+// ProbeLedgerRange is a TEMPORARY diagnostic: reports how many ledger rows the
+// server returns for [strDt, endDt] (YYYYMMDD). TODO: remove after chunking.
+func (c *Client) ProbeLedgerRange(strDt, endDt string) LedgerProbe {
+	return probeLedgerRange(c.http, strDt, endDt)
+}
+
 // AggregateLedger recomputes lifetime cumulative purchase and winning totals
 // from the full ledger over [startDate, now]. ok is false when the ledger
 // lookup failed (network/parse/redirect/non-200).

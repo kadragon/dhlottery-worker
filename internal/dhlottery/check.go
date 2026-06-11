@@ -170,6 +170,22 @@ func aggregateLedger(client *httpclient.Client, startDate string, now time.Time)
 	return LedgerSummary{CumulativePurchase: purchase, CumulativeWinning: winning}, true
 }
 
+// LedgerProbe is a TEMPORARY diagnostic result: page-1 total/row counts for a
+// single date range. Used by realtest to find the server's max query window.
+// TODO: remove once range chunking is implemented.
+type LedgerProbe struct {
+	StrDt, EndDt string
+	Total, Rows  int
+	OK           bool
+}
+
+// probeLedgerRange fetches page 1 of [strDt, endDt] (YYYYMMDD) and reports how
+// many rows the server returns. TEMPORARY diagnostic.
+func probeLedgerRange(client *httpclient.Client, strDt, endDt string) LedgerProbe {
+	data, ok := fetchLedgerPage(client, strDt, endDt, 1, 100)
+	return LedgerProbe{StrDt: strDt, EndDt: endDt, Total: data.Data.Total, Rows: len(data.Data.List), OK: ok}
+}
+
 // fetchLedgerPage fetches one page of the ledger. Returns ok=false (after
 // logging) on any network/parse error, redirect, or non-200 status.
 func fetchLedgerPage(client *httpclient.Client, strDt, endDt string, page, perPage int) (ledgerResponse, bool) {

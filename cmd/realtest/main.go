@@ -9,9 +9,11 @@ package main
 import (
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/kadragon/dhlottery-worker/internal/constants"
+	"github.com/kadragon/dhlottery-worker/internal/datekst"
 	"github.com/kadragon/dhlottery-worker/internal/dhlottery"
 	"github.com/kadragon/dhlottery-worker/internal/env"
 	"github.com/kadragon/dhlottery-worker/internal/format"
@@ -23,6 +25,7 @@ type smokeClient interface {
 	GetAccountInfo() (dhlottery.AccountInfo, error)
 	CheckWinning(time.Time) []dhlottery.WinningResult
 	AggregateLedger(startDate string, now time.Time) (dhlottery.LedgerSummary, bool)
+	ProbeLedgerRange(strDt, endDt string) dhlottery.LedgerProbe
 	Collector() *notify.Collector
 }
 
@@ -88,6 +91,16 @@ func defaultRunChecks() int {
 		fmt.Printf("  start=%s  누적 구매=%s  누적 당첨=%s  결산=%s\n",
 			startDate, format.Currency(s.CumulativePurchase), format.Currency(s.CumulativeWinning), format.Currency(net))
 	}
+
+	fmt.Println("\n== 5) ProbeLedgerRange (TEMP: find server max query window) ==")
+	end := strings.ReplaceAll(datekst.FormatKstYmd(nowFn()), "-", "")
+	for _, days := range []int{30, 90, 180, 365, 730, 1825} {
+		str := strings.ReplaceAll(datekst.AddDaysToYmd(datekst.FormatKstYmd(nowFn()), -days), "-", "")
+		p := c.ProbeLedgerRange(str, end)
+		fmt.Printf("  window=%4dd  [%s~%s]  total=%d rows=%d ok=%v\n", days, str, end, p.Total, p.Rows, p.OK)
+	}
+	full := c.ProbeLedgerRange("20200101", end)
+	fmt.Printf("  window=full   [20200101~%s]  total=%d rows=%d ok=%v\n", end, full.Total, full.Rows, full.OK)
 
 	fmt.Println("\n== collected payloads (NOT sent) ==")
 	payloads := c.Collector().Payloads()

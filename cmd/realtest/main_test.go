@@ -88,4 +88,8 @@ func (f *fakeSmokeClient) AggregateLedger(string, time.Time) (dhlottery.LedgerSu
 	return dhlottery.LedgerSummary{}, true
 }
 
+func (f *fakeSmokeClient) ProbeLedgerRange(string, string) dhlottery.LedgerProbe {
+	return dhlottery.LedgerProbe{}
+}
+
 func (f *fakeSmokeClient) Collector() *notify.Collector { return &f.collector }
