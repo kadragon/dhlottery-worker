@@ -26,6 +26,7 @@ type smokeClient interface {
 	CheckWinning(time.Time) []dhlottery.WinningResult
 	AggregateLedger(startDate string, now time.Time) (dhlottery.LedgerSummary, bool)
 	ProbeLedgerRange(strDt, endDt string) dhlottery.LedgerProbe
+	DumpLedgerRange(strDt, endDt string) ([]dhlottery.LedgerRowSample, bool)
 	Collector() *notify.Collector
 }
 
@@ -92,15 +93,28 @@ func defaultRunChecks() int {
 			startDate, format.Currency(s.CumulativePurchase), format.Currency(s.CumulativeWinning), format.Currency(net))
 	}
 
-	fmt.Println("\n== 5) ProbeLedgerRange (TEMP: find server max query window) ==")
-	end := strings.ReplaceAll(datekst.FormatKstYmd(nowFn()), "-", "")
-	for _, days := range []int{30, 90, 180, 365, 730, 1825} {
-		str := strings.ReplaceAll(datekst.AddDaysToYmd(datekst.FormatKstYmd(nowFn()), -days), "-", "")
-		p := c.ProbeLedgerRange(str, end)
-		fmt.Printf("  window=%4dd  [%s~%s]  total=%d rows=%d ok=%v\n", days, str, end, p.Total, p.Rows, p.OK)
+	fmt.Println("\n== 5) Ledger 90d ladder (TEMP: span-cap vs retention-floor) ==")
+	compact := func(ymd string) string { return strings.ReplaceAll(ymd, "-", "") }
+	today := datekst.FormatKstYmd(nowFn())
+	for k := 0; k < 28; k++ {
+		endYmd := datekst.AddDaysToYmd(today, -k*90)
+		startYmd := datekst.AddDaysToYmd(endYmd, -89)
+		p := c.ProbeLedgerRange(compact(startYmd), compact(endYmd))
+		fmt.Printf("  k=%2d  [%s~%s]  total=%d rows=%d ok=%v\n", k, compact(startYmd), compact(endYmd), p.Total, p.Rows, p.OK)
 	}
-	full := c.ProbeLedgerRange("20200101", end)
-	fmt.Printf("  window=full   [20200101~%s]  total=%d rows=%d ok=%v\n", end, full.Total, full.Rows, full.OK)
+
+	fmt.Println("\n== 6) Raw rows, recent 30d (TEMP: LP72 prchsQty/cost) ==")
+	end30 := compact(today)
+	str30 := compact(datekst.AddDaysToYmd(today, -29))
+	rows, ok30 := c.DumpLedgerRange(str30, end30)
+	fmt.Printf("  [%s~%s] ok=%v rows=%d\n", str30, end30, ok30, len(rows))
+	for _, r := range rows {
+		win := "nil"
+		if r.LtWnAmt != nil {
+			win = fmt.Sprintf("%d", *r.LtWnAmt)
+		}
+		fmt.Printf("    %s %-12s ep=%d prchsQty=%d ltWnAmt=%s\n", r.LtGdsCd, r.LtGdsNm, r.LtEpsd, r.PrchsQty, win)
+	}
 
 	fmt.Println("\n== collected payloads (NOT sent) ==")
 	payloads := c.Collector().Payloads()

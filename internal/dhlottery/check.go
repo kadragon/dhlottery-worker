@@ -186,6 +186,29 @@ func probeLedgerRange(client *httpclient.Client, strDt, endDt string) LedgerProb
 	return LedgerProbe{StrDt: strDt, EndDt: endDt, Total: data.Data.Total, Rows: len(data.Data.List), OK: ok}
 }
 
+// LedgerRowSample is a TEMPORARY raw-row view for the LP72-cost diagnostic.
+type LedgerRowSample struct {
+	LtGdsCd  string
+	LtGdsNm  string
+	LtEpsd   int
+	PrchsQty int
+	LtWnAmt  *int
+}
+
+// dumpLedgerRange returns page-1 raw rows of [strDt, endDt] (YYYYMMDD).
+// TEMPORARY diagnostic to resolve LP72 prchsQty/cost semantics.
+func dumpLedgerRange(client *httpclient.Client, strDt, endDt string) ([]LedgerRowSample, bool) {
+	data, ok := fetchLedgerPage(client, strDt, endDt, 1, 100)
+	if !ok {
+		return nil, false
+	}
+	out := make([]LedgerRowSample, 0, len(data.Data.List))
+	for _, r := range data.Data.List {
+		out = append(out, LedgerRowSample{r.LtGdsCd, r.LtGdsNm, r.LtEpsd, r.PrchsQty, r.LtWnAmt})
+	}
+	return out, true
+}
+
 // fetchLedgerPage fetches one page of the ledger. Returns ok=false (after
 // logging) on any network/parse error, redirect, or non-200 status.
 func fetchLedgerPage(client *httpclient.Client, strDt, endDt string, page, perPage int) (ledgerResponse, bool) {

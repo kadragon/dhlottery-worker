@@ -92,4 +92,8 @@ func (f *fakeSmokeClient) ProbeLedgerRange(string, string) dhlottery.LedgerProbe
 	return dhlottery.LedgerProbe{}
 }
 
+func (f *fakeSmokeClient) DumpLedgerRange(string, string) ([]dhlottery.LedgerRowSample, bool) {
+	return nil, true
+}
+
 func (f *fakeSmokeClient) Collector() *notify.Collector { return &f.collector }
