@@ -3,12 +3,14 @@ package dhlottery
 import (
 	"encoding/json"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/kadragon/dhlottery-worker/internal/datekst"
 	"github.com/kadragon/dhlottery-worker/internal/httpclient"
 	"github.com/kadragon/dhlottery-worker/internal/testutil"
 )
@@ -152,9 +154,15 @@ func TestCheckWinningRedirect(t *testing.T) {
 	}
 }
 
+// aggNow is a fixed "now"; aggRecentStart sits inside one ledgerWindowDays
+// window of it, so single-window tests make exactly one request.
+const aggRecentStart = "20260401"
+
+func aggNow(t *testing.T) time.Time { return parseTime(t, "2026-06-08T10:00:00+09:00") }
+
 func TestAggregateLedgerFixture(t *testing.T) {
 	client, stub := checkClient(testutil.StubResponse{Status: 200, Body: ledgerFixture(t)})
-	s, ok := aggregateLedger(client, "20200101", parseTime(t, "2026-06-08T10:00:00+09:00"))
+	s, ok := aggregateLedger(client, aggRecentStart, aggNow(t))
 	if !ok {
 		t.Fatal("expected ok=true on a successful fetch")
 	}
@@ -168,10 +176,10 @@ func TestAggregateLedgerFixture(t *testing.T) {
 		t.Errorf("CumulativeWinning = %d, want 2001005000", s.CumulativeWinning)
 	}
 	if len(stub.Requests) != 1 {
-		t.Fatalf("expected 1 request (total fits one page), got %d", len(stub.Requests))
+		t.Fatalf("expected 1 request (single window, one page), got %d", len(stub.Requests))
 	}
 	u := stub.Requests[0].URL
-	for _, want := range []string{"srchStrDt=20200101", "srchEndDt=20260608", "pageNum=1", "recordCountPerPage=100"} {
+	for _, want := range []string{"srchStrDt=" + aggRecentStart, "srchEndDt=20260608", "pageNum=1", "recordCountPerPage=100"} {
 		if !strings.Contains(u, want) {
 			t.Errorf("URL missing %q: %s", want, u)
 		}
@@ -187,13 +195,13 @@ func TestAggregateLedgerPaging(t *testing.T) {
 	)}
 	client := httpclient.NewWithDoer(stub)
 
-	s, ok := aggregateLedger(client, "20200101", parseTime(t, "2026-06-08T10:00:00+09:00"))
+	s, ok := aggregateLedger(client, aggRecentStart, aggNow(t))
 	if !ok {
 		t.Fatal("expected ok=true")
 	}
 
 	if len(stub.Requests) != 2 {
-		t.Fatalf("expected 2 requests, got %d", len(stub.Requests))
+		t.Fatalf("expected 2 requests (one window, two pages), got %d", len(stub.Requests))
 	}
 	if !strings.Contains(stub.Requests[0].URL, "pageNum=1") || !strings.Contains(stub.Requests[1].URL, "pageNum=2") {
 		t.Errorf("page sequence = %q, %q", stub.Requests[0].URL, stub.Requests[1].URL)
@@ -206,9 +214,55 @@ func TestAggregateLedgerPaging(t *testing.T) {
 	}
 }
 
+// A span longer than ledgerWindowDays is walked in contiguous, non-overlapping
+// windows (newest first), ending today and bottoming out at startDate. Each
+// window here returns one 1000-purchase row, so the total equals the window
+// count.
+func TestAggregateLedgerChunksContiguous(t *testing.T) {
+	body := `{"data":{"total":1,"list":[{"ltGdsCd":"LO40","prchsQty":1,"ltWnAmt":0}]}}`
+	stub := &testutil.StubDoer{Handler: testutil.Sequence(testutil.StubResponse{Status: 200, Body: body})}
+	client := httpclient.NewWithDoer(stub)
+
+	const start = "20251201" // > ledgerWindowDays before now → multiple windows
+	s, ok := aggregateLedger(client, start, aggNow(t))
+	if !ok {
+		t.Fatal("expected ok=true")
+	}
+
+	n := len(stub.Requests)
+	if n < 2 {
+		t.Fatalf("expected ≥2 windows for a >90d span, got %d", n)
+	}
+	if s.CumulativePurchase != n*1000 {
+		t.Errorf("CumulativePurchase = %d, want %d (one row per window)", s.CumulativePurchase, n*1000)
+	}
+
+	windows := make([][2]string, n)
+	for i, req := range stub.Requests {
+		u, err := url.Parse(req.URL)
+		if err != nil {
+			t.Fatal(err)
+		}
+		q := u.Query()
+		windows[i] = [2]string{q.Get("srchStrDt"), q.Get("srchEndDt")}
+	}
+	if windows[0][1] != "20260608" {
+		t.Errorf("first window end = %s, want 20260608 (today)", windows[0][1])
+	}
+	for i := 1; i < n; i++ {
+		wantEnd := strings.ReplaceAll(datekst.AddDaysToYmd(windows[i-1][0], -1), "-", "")
+		if windows[i][1] != wantEnd {
+			t.Errorf("window %d end = %s, want %s (contiguous, no overlap)", i, windows[i][1], wantEnd)
+		}
+	}
+	if last := windows[n-1][0]; last != start {
+		t.Errorf("last window start = %s, want %s (clamped to startDate)", last, start)
+	}
+}
+
 func TestAggregateLedgerEmpty(t *testing.T) {
 	client, stub := checkClient(testutil.StubResponse{Status: 200, Body: `{"data":{"total":0,"list":[]}}`})
-	s, ok := aggregateLedger(client, "20200101", parseTime(t, "2026-06-08T10:00:00+09:00"))
+	s, ok := aggregateLedger(client, aggRecentStart, aggNow(t))
 	if !ok {
 		t.Fatal("expected ok=true on an empty-but-successful fetch")
 	}
@@ -220,9 +274,20 @@ func TestAggregateLedgerEmpty(t *testing.T) {
 	}
 }
 
+func TestAggregateLedgerStartAfterNow(t *testing.T) {
+	client, stub := checkClient(testutil.StubResponse{Status: 200, Body: ledgerFixture(t)})
+	s, ok := aggregateLedger(client, "20991231", aggNow(t))
+	if !ok || s != (LedgerSummary{}) {
+		t.Errorf("expected (zero, true) when start > now, got (%+v, %v)", s, ok)
+	}
+	if len(stub.Requests) != 0 {
+		t.Errorf("expected no requests when start > now, got %d", len(stub.Requests))
+	}
+}
+
 func TestAggregateLedgerFetchFailure(t *testing.T) {
 	client, _ := checkClient(testutil.StubResponse{Status: 500, Body: "error"})
-	if s, ok := aggregateLedger(client, "20200101", parseTime(t, "2026-06-08T10:00:00+09:00")); ok || s != (LedgerSummary{}) {
+	if s, ok := aggregateLedger(client, aggRecentStart, aggNow(t)); ok || s != (LedgerSummary{}) {
 		t.Errorf("expected (zero, false) on fetch failure, got (%+v, %v)", s, ok)
 	}
 }
@@ -232,14 +297,14 @@ func TestAggregateLedgerRedirect(t *testing.T) {
 		Status: 302,
 		Header: http.Header{"Location": {"https://www.dhlottery.co.kr/errorPage"}},
 	})
-	if s, ok := aggregateLedger(client, "20200101", parseTime(t, "2026-06-08T10:00:00+09:00")); ok || s != (LedgerSummary{}) {
+	if s, ok := aggregateLedger(client, aggRecentStart, aggNow(t)); ok || s != (LedgerSummary{}) {
 		t.Errorf("expected (zero, false) on redirect, got (%+v, %v)", s, ok)
 	}
 }
 
 func TestAggregateLedgerParseFailure(t *testing.T) {
 	client, _ := checkClient(testutil.StubResponse{Status: 200, Body: "<html>not json</html>"})
-	if s, ok := aggregateLedger(client, "20200101", parseTime(t, "2026-06-08T10:00:00+09:00")); ok || s != (LedgerSummary{}) {
+	if s, ok := aggregateLedger(client, aggRecentStart, aggNow(t)); ok || s != (LedgerSummary{}) {
 		t.Errorf("expected (zero, false) on parse failure, got (%+v, %v)", s, ok)
 	}
 }
@@ -254,11 +319,83 @@ func TestAggregateLedgerMidPageFailure(t *testing.T) {
 	)}
 	client := httpclient.NewWithDoer(stub)
 
-	s, ok := aggregateLedger(client, "20200101", parseTime(t, "2026-06-08T10:00:00+09:00"))
+	s, ok := aggregateLedger(client, aggRecentStart, aggNow(t))
 	if ok || s != (LedgerSummary{}) {
 		t.Errorf("expected (zero, false) when a later page fails, got (%+v, %v)", s, ok)
 	}
 	if len(stub.Requests) != 2 {
 		t.Errorf("expected 2 requests before bailing, got %d", len(stub.Requests))
+	}
+}
+
+// All-or-nothing across windows: window 1 succeeds, window 2's fetch fails, so
+// the whole walk returns (zero, false) — the partial window-1 sum is discarded.
+func TestAggregateLedgerMidWindowFailure(t *testing.T) {
+	win1 := `{"data":{"total":1,"list":[{"ltGdsCd":"LO40","prchsQty":5,"ltWnAmt":5000}]}}`
+	stub := &testutil.StubDoer{Handler: testutil.Sequence(
+		testutil.StubResponse{Status: 200, Body: win1},    // window 1, page 1
+		testutil.StubResponse{Status: 500, Body: "error"}, // window 2, page 1 → fail
+	)}
+	client := httpclient.NewWithDoer(stub)
+
+	s, ok := aggregateLedger(client, "20251201", aggNow(t)) // >90d span → ≥2 windows
+	if ok || s != (LedgerSummary{}) {
+		t.Errorf("expected (zero, false) when a later window fails, got (%+v, %v)", s, ok)
+	}
+	if len(stub.Requests) != 2 {
+		t.Errorf("expected 2 requests (window 1 ok, window 2 fails), got %d", len(stub.Requests))
+	}
+}
+
+// Pins ledgerWindowDays: a span of exactly that many days fits one window; one
+// more day forces a second. A regression here (e.g. window size widened past the
+// API's silent cap) is the bug this PR fixes.
+func TestAggregateLedgerWindowSizeBoundary(t *testing.T) {
+	body := `{"data":{"total":1,"list":[{"ltGdsCd":"LO40","prchsQty":1,"ltWnAmt":0}]}}`
+	now := aggNow(t) // 2026-06-08
+	end := "2026-06-08"
+	cstr := func(ymd string) string { return strings.ReplaceAll(ymd, "-", "") }
+
+	for _, tc := range []struct {
+		name     string
+		start    string
+		wantReqs int
+	}{
+		{"exactly one window", cstr(datekst.AddDaysToYmd(end, -(ledgerWindowDays - 1))), 1},
+		{"just over one window", cstr(datekst.AddDaysToYmd(end, -ledgerWindowDays)), 2},
+	} {
+		stub := &testutil.StubDoer{Handler: testutil.Sequence(testutil.StubResponse{Status: 200, Body: body})}
+		client := httpclient.NewWithDoer(stub)
+		if _, ok := aggregateLedger(client, tc.start, now); !ok {
+			t.Fatalf("%s: ok=false", tc.name)
+		}
+		if len(stub.Requests) != tc.wantReqs {
+			t.Errorf("%s (start=%s): requests = %d, want %d", tc.name, tc.start, len(stub.Requests), tc.wantReqs)
+		}
+	}
+}
+
+// A malformed start date must report failure, not a zero summary tagged as real.
+func TestAggregateLedgerInvalidStart(t *testing.T) {
+	client, stub := checkClient(testutil.StubResponse{Status: 200, Body: ledgerFixture(t)})
+	for _, bad := range []string{"foo", "2026-6-1", "", "20261332"} {
+		if s, ok := aggregateLedger(client, bad, aggNow(t)); ok || s != (LedgerSummary{}) {
+			t.Errorf("start %q: expected (zero, false), got (%+v, %v)", bad, s, ok)
+		}
+	}
+	if len(stub.Requests) != 0 {
+		t.Errorf("expected no requests for invalid start, got %d", len(stub.Requests))
+	}
+}
+
+// A start older than the maxWindows backstop reports failure rather than a
+// silently-partial total.
+func TestAggregateLedgerBackstopExhausted(t *testing.T) {
+	body := `{"data":{"total":1,"list":[{"ltGdsCd":"LO40","prchsQty":1,"ltWnAmt":0}]}}`
+	stub := &testutil.StubDoer{Handler: testutil.Sequence(testutil.StubResponse{Status: 200, Body: body})}
+	client := httpclient.NewWithDoer(stub)
+
+	if s, ok := aggregateLedger(client, "19000101", aggNow(t)); ok || s != (LedgerSummary{}) {
+		t.Errorf("expected (zero, false) on backstop exhaustion, got (%+v, %v)", s, ok)
 	}
 }

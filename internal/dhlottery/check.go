@@ -134,23 +134,79 @@ func checkWinning(client *httpclient.Client, now time.Time) []WinningResult {
 	return extractWins(data.Data.List)
 }
 
+// ledgerWindowDays is the per-query date span. The ledger API silently returns
+// an empty list (200, total=0) when srchStrDt..srchEndDt exceeds its limit
+// (empirically between 90 and 180 days; 90 confirmed working). aggregateLedger
+// therefore walks the range in non-overlapping windows of this size.
+const ledgerWindowDays = 90
+
 // aggregateLedger recomputes lifetime totals from the full ledger over
-// [startDate, now]. Cumulative purchase = Σ(prchsQty × CostPerGame);
-// cumulative winning = Σ(ltWnAmt where > 0). Pages through all rows using
+// [startDate, now]. Cumulative purchase = Σ(prchsQty × CostPerGame); cumulative
+// winning = Σ(ltWnAmt where > 0). The span is walked in ledgerWindowDays
+// windows (the API caps a single query's date range), each window paged via
 // data.total. Non-fatal by design: on any fetch/parse/redirect/non-200 error it
 // returns ok=false (all-or-nothing) so the caller can report the lookup failure
-// instead of presenting a zero summary as if it were real.
+// instead of presenting a partial or zero summary as if it were complete.
 func aggregateLedger(client *httpclient.Client, startDate string, now time.Time) (LedgerSummary, bool) {
+	start := compactYmd(startDate)
+	end := compactYmd(datekst.FormatKstYmd(now))
+
+	// A malformed LEDGER_START_DATE (e.g. "foo", unpadded "2026-6-1") must not
+	// slip through the lexical guard below and yield a zero summary tagged as
+	// real; reject anything that is not a valid YYYYMMDD date.
+	if _, err := time.Parse("20060102", start); err != nil {
+		logger.Error("Ledger aggregate failed (non-fatal)", logger.Fields{
+			logger.FieldEvent: "ledger_invalid_start", logger.FieldError: err.Error(),
+		})
+		return LedgerSummary{}, false
+	}
+	if start > end {
+		return LedgerSummary{}, true // start in the future: genuinely nothing to sum
+	}
+
+	var purchase, winning int
+	const maxWindows = 400 // backstop (~98 years) against a pathological loop
+
+	winEnd := end
+	for w := 0; w < maxWindows; w++ {
+		winStart := compactYmd(datekst.AddDaysToYmd(winEnd, -(ledgerWindowDays - 1)))
+		if winStart < start {
+			winStart = start
+		}
+
+		p, win, ok := aggregateWindow(client, winStart, winEnd)
+		if !ok {
+			return LedgerSummary{}, false
+		}
+		purchase += p
+		winning += win
+
+		if winStart <= start {
+			// Reached the configured start date: the only legitimate completion.
+			return LedgerSummary{CumulativePurchase: purchase, CumulativeWinning: winning}, true
+		}
+		winEnd = compactYmd(datekst.AddDaysToYmd(winStart, -1)) // next window ends the day before
+	}
+
+	// Backstop exhausted without reaching startDate: the accumulated total is
+	// partial, so report failure rather than presenting it as a complete sum.
+	logger.Error("Ledger aggregate incomplete (non-fatal)", logger.Fields{
+		logger.FieldEvent: "ledger_backstop_exhausted", logger.FieldStatus: maxWindows,
+	})
+	return LedgerSummary{}, false
+}
+
+// aggregateWindow sums purchase and winning over a single [strDt, endDt] window,
+// paging through all rows via data.total. Returns ok=false on any fetch error.
+func aggregateWindow(client *httpclient.Client, strDt, endDt string) (purchase, winning int, ok bool) {
 	const perPage = 100
 	const maxPages = 200 // backstop for a server that ignores pageNum / returns a bogus total
 
-	endDate := compactYmd(datekst.FormatKstYmd(now))
-
-	var purchase, winning, fetched, total int
+	var fetched, total int
 	for page := 1; page <= maxPages; page++ {
-		data, ok := fetchLedgerPage(client, compactYmd(startDate), endDate, page, perPage)
-		if !ok {
-			return LedgerSummary{}, false
+		data, fetchOK := fetchLedgerPage(client, strDt, endDt, page, perPage)
+		if !fetchOK {
+			return 0, 0, false
 		}
 		if page == 1 {
 			total = data.Data.Total
@@ -166,8 +222,7 @@ func aggregateLedger(client *httpclient.Client, startDate string, now time.Time)
 			break
 		}
 	}
-
-	return LedgerSummary{CumulativePurchase: purchase, CumulativeWinning: winning}, true
+	return purchase, winning, true
 }
 
 // fetchLedgerPage fetches one page of the ledger. Returns ok=false (after
