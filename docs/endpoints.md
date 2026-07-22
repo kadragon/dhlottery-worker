@@ -20,8 +20,12 @@ Non-www (`dhlottery.co.kr`) redirects to `www` with 301. Always use `www` as bas
 | `/login` | GET | Session init — acquires `DHJSESSIONID` cookie (2026-01: renamed from `JSESSIONID`) |
 | `/login/selectRsaModulus.do` | GET | Fetch RSA public key (`rsaModulus`, `publicExponent`) |
 | `/login/securityLoginCheck.do` | POST | Submit RSA-encrypted credentials; success = 302 to `loginSuccess.do` or `userId` cookie |
+| `/mbrsrvc/nxtChngProc.do` | POST | Defer ("다음에 변경") a due password change; `{data:{resultCnt}}`, `resultCnt>0` = deferred |
+| `/login/loginSuccess.do?returnUrl=/main` | GET | Finalize session after a deferral (sets `userId` cookie) |
 
 **2026-01 change:** Plaintext POST login → RSA PKCS#1 v1.5 encryption (Go `crypto/rsa`, compatible with DHLottery jsbn.js). Cookie renamed JSESSIONID → DHJSESSIONID. Session/RSA init follows up to 5 redirects (301/302).
+
+**2026-07 change:** When the account password is >90 days old, a *valid* login 302-redirects to `/mbrsrvc/ExpryPswdNoti` (password-expiry notice) instead of `loginSuccess.do`, so the old success check fell through to `AUTH_UNEXPECTED_RESPONSE`. `login` now detects `ExpryPswdNoti`, POSTs `nxtChngProc.do` to defer, then GETs `loginSuccess.do` to finalize (userId cookie). If the site refuses the deferral (`resultCnt<=0`, e.g. KISA forced change) → `AUTH_PASSWORD_CHANGE_REQUIRED` telling the user to change the password manually. The deferral persists for a window, so subsequent logins take the normal `loginSuccess.do` path until the notice reappears.
 
 ## Account Info (`internal/dhlottery/account.go`)
 

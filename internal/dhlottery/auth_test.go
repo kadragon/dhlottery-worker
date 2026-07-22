@@ -112,6 +112,76 @@ func TestLoginUnexpectedResponse(t *testing.T) {
 	}
 }
 
+func pswdExpiryRedirectResp() testutil.StubResponse {
+	return testutil.StubResponse{Status: 302, Header: http.Header{"Location": {"https://www.dhlottery.co.kr/mbrsrvc/ExpryPswdNoti"}}}
+}
+
+// TestLoginPasswordExpiryDeferSuccess reproduces the 2026-07 breakage: a valid
+// login is interrupted by the >90-day password-expiry notice (302 ->
+// /mbrsrvc/ExpryPswdNoti). The client must defer the change (POST
+// nxtChngProc.do) and finalize the session (GET loginSuccess.do), which sets the
+// userId cookie.
+func TestLoginPasswordExpiryDeferSuccess(t *testing.T) {
+	client, stub := authClient(t, testutil.Sequence(
+		sessionResp(), rsaResp(),
+		pswdExpiryRedirectResp(), // login POST -> 302 ExpryPswdNoti
+		testutil.StubResponse{Status: 200, Body: "<html>expiry notice</html>"}, // GET interstitial
+		testutil.JSON(`{"data":{"resultCnt":1}}`),                              // nxtChngProc.do -> defer OK
+		testutil.StubResponse{ // loginSuccess.do finalizes session, sets userId cookie
+			Status: 200,
+			Header: http.Header{"Set-Cookie": {"userId=testuser; Path=/"}},
+			Body:   "ok",
+		},
+	))
+	if err := login(client); err != nil {
+		t.Fatalf("password-expiry login should succeed via defer: %v", err)
+	}
+	if len(stub.Requests) != 6 {
+		t.Fatalf("expected 6 requests, got %d", len(stub.Requests))
+	}
+	if stub.Requests[4].URL != nxtChngURL || stub.Requests[4].Method != http.MethodPost {
+		t.Errorf("req[4] = %s %s, want POST %s", stub.Requests[4].Method, stub.Requests[4].URL, nxtChngURL)
+	}
+	if !strings.Contains(stub.Requests[5].URL, "loginSuccess.do") {
+		t.Errorf("req[5] = %s, want loginSuccess.do", stub.Requests[5].URL)
+	}
+}
+
+// TestLoginPasswordExpiryDeferRejected covers the site refusing the deferral
+// (resultCnt <= 0) — e.g. a KISA-mandated forced change — which must surface an
+// actionable AUTH_PASSWORD_CHANGE_REQUIRED error carrying the server message.
+func TestLoginPasswordExpiryDeferRejected(t *testing.T) {
+	client, _ := authClient(t, testutil.Sequence(
+		sessionResp(), rsaResp(),
+		pswdExpiryRedirectResp(),
+		testutil.StubResponse{Status: 200, Body: "<html>expiry notice</html>"},
+		testutil.JSON(`{"data":{"resultCnt":0,"resultMsg":"비밀번호를 변경해야 합니다."}}`),
+	))
+	err := login(client)
+	if err == nil || dherr.Code(err) != "AUTH_PASSWORD_CHANGE_REQUIRED" {
+		t.Fatalf("expected AUTH_PASSWORD_CHANGE_REQUIRED, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "비밀번호를 변경해야 합니다.") {
+		t.Errorf("error should carry the server resultMsg: %v", err)
+	}
+}
+
+// TestLoginPasswordExpiryNoUserIdCookie guards the finalization: if
+// loginSuccess.do does not establish the userId cookie, login must fail rather
+// than silently returning a half-authenticated session.
+func TestLoginPasswordExpiryNoUserIdCookie(t *testing.T) {
+	client, _ := authClient(t, testutil.Sequence(
+		sessionResp(), rsaResp(),
+		pswdExpiryRedirectResp(),
+		testutil.StubResponse{Status: 200, Body: "<html>expiry notice</html>"},
+		testutil.JSON(`{"data":{"resultCnt":1}}`),
+		testutil.StubResponse{Status: 200, Body: "no cookie here"},
+	))
+	if err := login(client); err == nil || dherr.Code(err) != "AUTH_SESSION_FINALIZE_ERROR" {
+		t.Errorf("expected AUTH_SESSION_FINALIZE_ERROR, got %v", err)
+	}
+}
+
 func TestLoginNon200OnLogin(t *testing.T) {
 	client, _ := authClient(t, testutil.Sequence(sessionResp(), rsaResp(),
 		testutil.StubResponse{Status: 500, Body: "Server Error"}))

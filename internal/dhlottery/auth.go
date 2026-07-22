@@ -28,6 +28,15 @@ const (
 	loginURL      = "https://www.dhlottery.co.kr/login/securityLoginCheck.do"
 	maxRedirects  = 5
 	authModule    = "auth"
+
+	// Password-expiry handling (2026-07): when the account password is older
+	// than 90 days, a valid login 302-redirects to ExpryPswdNoti instead of
+	// loginSuccess.do. The site's "다음에 변경" (defer) button POSTs
+	// nxtChngProc.do to record the deferral, then navigates to loginSuccess.do
+	// to finalize the authenticated session (which sets the userId cookie).
+	pswdExpiryMarker = "ExpryPswdNoti"
+	nxtChngURL       = "https://www.dhlottery.co.kr/mbrsrvc/nxtChngProc.do"
+	loginSuccessURL  = "https://www.dhlottery.co.kr/login/loginSuccess.do?returnUrl=/main"
 )
 
 var (
@@ -125,12 +134,12 @@ func fetchRsaKey(client *httpclient.Client) (modulus, exponent string, err error
 	resp, err := fetchWithRedirects(client, rsaModulusURL, httpclient.RequestOptions{
 		Method: http.MethodGet,
 		Headers: map[string]string{
-			"Accept":                       "application/json, text/javascript, */*; q=0.01",
-			constants.HeaderContentType:    "application/json;charset=UTF-8",
+			constants.HeaderAccept:         constants.AcceptJSON,
+			constants.HeaderContentType:    constants.ContentTypeJSON,
 			constants.HeaderUserAgent:      constants.UserAgent,
 			constants.HeaderXRequestedWith: constants.HeaderXRequestedWithValue,
 			constants.HeaderReferer:        loginPageURL,
-			"ajax":                         "true",
+			constants.HeaderAjax:           constants.HeaderAjaxValue,
 		},
 	}, "RSA key fetch", "AUTH_RSA_KEY_ERROR")
 	if err != nil {
@@ -208,10 +217,16 @@ func login(client *httpclient.Client) error {
 
 	logger.Debug("Login response received", logger.Fields{logger.FieldModule: authModule, logger.FieldStatus: resp.Status})
 
-	// Manual redirects: a 302 to loginSuccess.do is success.
+	// Manual redirects: a 302 to loginSuccess.do is success; a 302 to the
+	// password-expiry notice means the credentials are valid but the site is
+	// nagging to change a >90-day-old password — defer it and finish the login.
 	if resp.Status >= 300 && resp.Status < 400 {
-		if strings.Contains(resp.Header.Get("Location"), redirectWord) {
+		location := resp.Header.Get("Location")
+		if strings.Contains(location, redirectWord) {
 			return nil
+		}
+		if strings.Contains(location, pswdExpiryMarker) {
+			return completePasswordExpiryLogin(client, location)
 		}
 	}
 
@@ -237,5 +252,83 @@ func login(client *httpclient.Client) error {
 	if strings.Contains(body, "isLoggedIn = false") {
 		return dherr.NewAuth("아이디 또는 비밀번호가 일치하지 않습니다.", "AUTH_INVALID_CREDENTIALS")
 	}
-	return dherr.NewAuth("Unexpected login response", "AUTH_UNEXPECTED_RESPONSE")
+	// Include the status and redirect target so an unrecognized post-login state
+	// (e.g. a new interstitial like ExpryPswdNoti was in 2026-07) is diagnosable
+	// from the notification alone instead of an opaque "Unexpected" message.
+	return dherr.NewAuth(
+		fmt.Sprintf("Unexpected login response (status %d, location %q)", resp.Status, resp.Header.Get("Location")),
+		"AUTH_UNEXPECTED_RESPONSE")
+}
+
+// completePasswordExpiryLogin finishes a login that the site interrupted with a
+// password-expiry notice (302 -> /mbrsrvc/ExpryPswdNoti). It mirrors the site's
+// "다음에 변경" (defer) button: load the interstitial, POST nxtChngProc.do to
+// record the deferral, then GET loginSuccess.do to establish the authenticated
+// session. Success is confirmed by the userId cookie.
+func completePasswordExpiryLogin(client *httpclient.Client, expiryURL string) error {
+	logger.Info("Password expiry notice; deferring change to finish login", logger.Fields{logger.FieldModule: authModule})
+
+	// Load the interstitial the browser renders before deferring.
+	if _, err := fetchWithRedirects(client, expiryURL, httpclient.RequestOptions{
+		Method: http.MethodGet,
+		Headers: map[string]string{
+			constants.HeaderUserAgent: constants.UserAgent,
+			constants.HeaderReferer:   loginPageURL,
+		},
+	}, "Password expiry notice", "AUTH_PASSWORD_EXPIRY_ERROR"); err != nil {
+		return dherr.WrapAuth(err, "Password expiry notice")
+	}
+
+	// Record the deferral ("change later"). Route through fetchWithRedirects so
+	// a non-200 answer (session-expiry 3xx, 5xx error page) yields a
+	// status-aware error instead of an opaque JSON-decode failure, matching the
+	// sibling calls in this file.
+	resp, err := fetchWithRedirects(client, nxtChngURL, httpclient.RequestOptions{
+		Method: http.MethodPost,
+		Headers: map[string]string{
+			constants.HeaderAccept:         constants.AcceptJSON,
+			constants.HeaderContentType:    constants.ContentTypeJSON,
+			constants.HeaderUserAgent:      constants.UserAgent,
+			constants.HeaderXRequestedWith: constants.HeaderXRequestedWithValue,
+			constants.HeaderReferer:        expiryURL,
+			constants.HeaderAjax:           constants.HeaderAjaxValue,
+		},
+		Body: "{}",
+	}, "Password change deferral", "AUTH_PASSWORD_EXPIRY_ERROR")
+	if err != nil {
+		return dherr.WrapAuth(err, "Password change deferral")
+	}
+
+	var data struct {
+		Data struct {
+			ResultCnt int    `json:"resultCnt"`
+			ResultMsg string `json:"resultMsg"`
+		} `json:"data"`
+	}
+	if err := resp.JSON(&data); err != nil {
+		return dherr.WrapAuth(err, "Password change deferral")
+	}
+	if data.Data.ResultCnt <= 0 {
+		msg := data.Data.ResultMsg
+		if msg == "" {
+			msg = "비밀번호 변경 유예가 거부되었습니다. 동행복권 비밀번호를 직접 변경해주세요."
+		}
+		return dherr.NewAuth(msg, "AUTH_PASSWORD_CHANGE_REQUIRED")
+	}
+
+	// Finalize the session; loginSuccess.do sets the userId cookie.
+	if _, err := fetchWithRedirects(client, loginSuccessURL, httpclient.RequestOptions{
+		Method: http.MethodGet,
+		Headers: map[string]string{
+			constants.HeaderUserAgent: constants.UserAgent,
+			constants.HeaderReferer:   expiryURL,
+		},
+	}, "Login finalization", "AUTH_SESSION_FINALIZE_ERROR"); err != nil {
+		return dherr.WrapAuth(err, "Login finalization")
+	}
+
+	if client.Cookie("userId") == "" {
+		return dherr.NewAuth("Login finalization did not establish an authenticated session", "AUTH_SESSION_FINALIZE_ERROR")
+	}
+	return nil
 }
