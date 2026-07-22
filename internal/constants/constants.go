@@ -41,4 +41,9 @@ const (
 	HeaderContentType         = "Content-Type"
 	HeaderXRequestedWith      = "X-Requested-With"
 	HeaderXRequestedWithValue = "XMLHttpRequest"
+	HeaderAccept              = "Accept"
+	HeaderAjax                = "ajax"
+	HeaderAjaxValue           = "true"
+	AcceptJSON                = "application/json, text/javascript, */*; q=0.01"
+	ContentTypeJSON           = "application/json;charset=UTF-8"
 )
