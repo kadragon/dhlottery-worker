@@ -134,12 +134,12 @@ func fetchRsaKey(client *httpclient.Client) (modulus, exponent string, err error
 	resp, err := fetchWithRedirects(client, rsaModulusURL, httpclient.RequestOptions{
 		Method: http.MethodGet,
 		Headers: map[string]string{
-			"Accept":                       "application/json, text/javascript, */*; q=0.01",
-			constants.HeaderContentType:    "application/json;charset=UTF-8",
+			constants.HeaderAccept:         constants.AcceptJSON,
+			constants.HeaderContentType:    constants.ContentTypeJSON,
 			constants.HeaderUserAgent:      constants.UserAgent,
 			constants.HeaderXRequestedWith: constants.HeaderXRequestedWithValue,
 			constants.HeaderReferer:        loginPageURL,
-			"ajax":                         "true",
+			constants.HeaderAjax:           constants.HeaderAjaxValue,
 		},
 	}, "RSA key fetch", "AUTH_RSA_KEY_ERROR")
 	if err != nil {
@@ -279,8 +279,11 @@ func completePasswordExpiryLogin(client *httpclient.Client, expiryURL string) er
 		return dherr.WrapAuth(err, "Password expiry notice")
 	}
 
-	// Record the deferral ("change later").
-	resp, err := client.Fetch(nxtChngURL, httpclient.RequestOptions{
+	// Record the deferral ("change later"). Route through fetchWithRedirects so
+	// a non-200 answer (session-expiry 3xx, 5xx error page) yields a
+	// status-aware error instead of an opaque JSON-decode failure, matching the
+	// sibling calls in this file.
+	resp, err := fetchWithRedirects(client, nxtChngURL, httpclient.RequestOptions{
 		Method: http.MethodPost,
 		Headers: map[string]string{
 			constants.HeaderAccept:         constants.AcceptJSON,
@@ -291,7 +294,7 @@ func completePasswordExpiryLogin(client *httpclient.Client, expiryURL string) er
 			constants.HeaderAjax:           constants.HeaderAjaxValue,
 		},
 		Body: "{}",
-	})
+	}, "Password change deferral", "AUTH_PASSWORD_EXPIRY_ERROR")
 	if err != nil {
 		return dherr.WrapAuth(err, "Password change deferral")
 	}
