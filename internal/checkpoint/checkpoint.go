@@ -11,11 +11,14 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"time"
 
 	"github.com/kadragon/dhlottery-worker/internal/env"
+	"github.com/kadragon/dhlottery-worker/internal/httpclient"
 	"github.com/kadragon/dhlottery-worker/internal/logger"
 )
 
@@ -35,12 +38,8 @@ const fileName = "ledger-checkpoint.json"
 // (https://docs.github.com/en/rest/gists/gists).
 const gistsURL = "https://api.github.com/gists/"
 
-type httpDoer interface {
-	Do(req *http.Request) (*http.Response, error)
-}
-
 // doer is the injectable seam (overridden in tests).
-var doer httpDoer = &http.Client{Timeout: 30 * time.Second}
+var doer httpclient.Doer = &http.Client{Timeout: 30 * time.Second}
 
 type gistFile struct {
 	Content string `json:"content"`
@@ -69,10 +68,22 @@ func request(method, token, id string, body io.Reader) (*http.Response, error) {
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Accept", "application/vnd.github+json")
 	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
+	req.Header.Set("User-Agent", "dhlottery-worker") // GitHub asks for an identifying UA
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	return doer.Do(req)
+	resp, err := doer.Do(req)
+	return resp, redact(err)
+}
+
+// redact strips the request URL (which embeds the secret gist ID) from a
+// transport error before it can reach the logs.
+func redact(err error) error {
+	var uerr *url.Error
+	if errors.As(err, &uerr) {
+		return fmt.Errorf("%s gist: %w", uerr.Op, uerr.Err)
+	}
+	return err
 }
 
 func loadFailed(err error) {

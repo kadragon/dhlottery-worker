@@ -1,10 +1,16 @@
 package checkpoint
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
+	"net/http"
+	"net/url"
+	"os"
+	"strings"
 	"testing"
 
+	"github.com/kadragon/dhlottery-worker/internal/logger"
 	"github.com/kadragon/dhlottery-worker/internal/testutil"
 )
 
@@ -51,6 +57,9 @@ func TestLoadValid(t *testing.T) {
 	if got := req.Header.Get("Authorization"); got != "Bearer tok" {
 		t.Errorf("Authorization = %q", got)
 	}
+	if got := req.Header.Get("User-Agent"); got != "dhlottery-worker" {
+		t.Errorf("User-Agent = %q", got)
+	}
 }
 
 func TestLoadUnconfigured(t *testing.T) {
@@ -84,6 +93,45 @@ func TestLoadFailuresReturnNil(t *testing.T) {
 			}
 		})
 	}
+}
+
+// A transport error must not leak the secret gist ID (embedded in the URL)
+// into logs.
+func TestLoadNetworkErrorRedactsGistID(t *testing.T) {
+	configure(t)
+	var logged bytes.Buffer
+	logger.SetWriters(&logged, &logged)
+	t.Cleanup(func() { logger.SetWriters(os.Stdout, os.Stderr) })
+	install(t, func(int, testutil.RecordedRequest) (testutil.StubResponse, error) {
+		return testutil.StubResponse{}, errors.New("dial tcp: timeout")
+	})
+	// A real *http.Client wraps transport failures in *url.Error carrying the URL.
+	orig := doer
+	doer = urlErrDoer{inner: orig}
+
+	if cp := Load(); cp != nil {
+		t.Fatalf("Load = %+v, want nil", cp)
+	}
+	if strings.Contains(logged.String(), "abc123") {
+		t.Errorf("log leaks gist ID: %s", logged.String())
+	}
+	if !strings.Contains(logged.String(), "dial tcp: timeout") {
+		t.Errorf("log lost the cause: %s", logged.String())
+	}
+}
+
+type urlErrDoer struct {
+	inner interface {
+		Do(*http.Request) (*http.Response, error)
+	}
+}
+
+func (d urlErrDoer) Do(req *http.Request) (*http.Response, error) {
+	resp, err := d.inner.Do(req)
+	if err != nil {
+		return nil, &url.Error{Op: req.Method, URL: req.URL.String(), Err: err}
+	}
+	return resp, nil
 }
 
 func TestSave(t *testing.T) {

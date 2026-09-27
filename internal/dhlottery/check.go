@@ -202,8 +202,11 @@ func aggregateLedgerIncremental(client *httpclient.Client, startDate string, now
 
 	from := start
 	var purchase, winning int
+	var base *checkpoint.Checkpoint
 	if validCheckpoint(prev, start, settled) {
-		from = compactYmd(datekst.AddDaysToYmd(prev.Through, 1))
+		base = prev
+		// Compact first: datekst's dashed-date parser assumes well-placed dashes.
+		from = compactYmd(datekst.AddDaysToYmd(compactYmd(prev.Through), 1))
 		purchase, winning = prev.Purchase, prev.Winning
 	} else if prev != nil {
 		logger.Warn("Ledger checkpoint invalid; falling back to full scan", logger.Fields{
@@ -211,22 +214,27 @@ func aggregateLedgerIncremental(client *httpclient.Client, startDate string, now
 		})
 	}
 
-	var next *checkpoint.Checkpoint
-	if settled >= start {
-		if from <= settled {
-			p, w, ok := sumRange(client, from, settled)
-			if !ok {
-				return LedgerSummary{}, nil, false
+	next := base
+	if settled >= start && from <= settled {
+		p, w, ok := sumRange(client, from, settled)
+		if !ok {
+			return LedgerSummary{}, nil, false
+		}
+		purchase += p
+		winning += w
+		// An empty settled delta (no purchases, or a silently empty response)
+		// does not advance the checkpoint: the span is re-queried next run, so
+		// a bad read is never frozen in.
+		if p > 0 {
+			next = &checkpoint.Checkpoint{
+				Start:    dashYmd(start),
+				Through:  dashYmd(settled),
+				Purchase: purchase,
+				Winning:  winning,
 			}
-			purchase += p
-			winning += w
 		}
-		next = &checkpoint.Checkpoint{
-			Start:    dashYmd(start),
-			Through:  dashYmd(settled),
-			Purchase: purchase,
-			Winning:  winning,
-		}
+	}
+	if settled >= from {
 		from = compactYmd(datekst.AddDaysToYmd(settled, 1))
 	}
 

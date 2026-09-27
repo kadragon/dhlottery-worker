@@ -108,6 +108,45 @@ func TestAggregateLedgerIncrementalFallsBackToFullScan(t *testing.T) {
 	}
 }
 
+// A checkpoint whose Through carries a misplaced dash still denotes a valid
+// date once compacted; it must resume from the day after, not panic.
+func TestAggregateLedgerIncrementalOddlyDashedThrough(t *testing.T) {
+	stub := &testutil.StubDoer{Handler: testutil.Sequence(incRow("0"), incRow("null"))}
+	client := httpclient.NewWithDoer(stub)
+	prev := &checkpoint.Checkpoint{Start: "2020-01-01", Through: "2026042-7", Purchase: 1000}
+
+	if _, _, ok := aggregateLedgerIncremental(client, "20200101", aggNow(t), prev); !ok {
+		t.Fatal("expected ok=true")
+	}
+	if got := windowsOf(t, stub); len(got) == 0 || got[0][0] != "20260428" {
+		t.Errorf("windows = %v, want resume from 20260428", got)
+	}
+}
+
+// An empty settled delta (no purchases, or a silently empty ledger response)
+// must not advance the checkpoint, so the span is re-queried next run.
+func TestAggregateLedgerIncrementalEmptyDeltaKeepsThrough(t *testing.T) {
+	empty := testutil.JSON(`{"data":{"total":0,"list":[]}}`)
+	stub := &testutil.StubDoer{Handler: testutil.Sequence(empty, incRow("null"))}
+	client := httpclient.NewWithDoer(stub)
+	prev := &checkpoint.Checkpoint{Start: "2020-01-01", Through: "2026-04-27", Purchase: 1000}
+
+	s, next, ok := aggregateLedgerIncremental(client, "20200101", aggNow(t), prev)
+	if !ok || s.CumulativePurchase != 6000 {
+		t.Fatalf("summary = %+v ok=%v", s, ok)
+	}
+	if next == nil || *next != *prev {
+		t.Errorf("next = %+v, want unchanged %+v", next, prev)
+	}
+}
+
+func TestAggregateLedgerIncrementalEmptyFullScanNoCheckpoint(t *testing.T) {
+	client, _ := checkClient(testutil.JSON(`{"data":{"total":0,"list":[]}}`))
+	if _, next, ok := aggregateLedgerIncremental(client, "20260401", aggNow(t), nil); !ok || next != nil {
+		t.Errorf("ok=%v next=%+v, want ok=true, no checkpoint", ok, next)
+	}
+}
+
 func TestAggregateLedgerIncrementalStartAfterCutoff(t *testing.T) {
 	stub := &testutil.StubDoer{Handler: testutil.Sequence(incRow("null"))}
 	client := httpclient.NewWithDoer(stub)
