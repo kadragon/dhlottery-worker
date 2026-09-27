@@ -29,6 +29,9 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           # Optional: lifetime settlement start date (YYYYMMDD). Defaults to 20200101.
           LEDGER_START_DATE: ${{ vars.LEDGER_START_DATE }}
+          # Optional: secret-gist ledger checkpoint (see docs/runbook.md). Unset → full ledger scan.
+          GIST_TOKEN: ${{ secrets.GIST_TOKEN }}
+          GIST_ID: ${{ secrets.GIST_ID }}
         run: go run ./cmd/worker
 
       - name: Notify on failure

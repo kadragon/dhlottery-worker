@@ -78,6 +78,17 @@ func TestClientAggregateLedger(t *testing.T) {
 	}
 }
 
+func TestClientAggregateLedgerIncremental(t *testing.T) {
+	c := facadeClient(testutil.Sequence(testutil.StubResponse{
+		Status: 200,
+		Body:   ledgerFixture(t),
+	}))
+	s, next, ok := c.AggregateLedgerIncremental("20260601", parseTime(t, "2026-06-08T10:00:00+09:00"), nil)
+	if !ok || next != nil || s.CumulativePurchase != 14000 {
+		t.Errorf("AggregateLedgerIncremental = %+v, next=%+v, ok=%v", s, next, ok)
+	}
+}
+
 func TestClientReservePension(t *testing.T) {
 	stub := &testutil.StubDoer{Handler: func(_ int, r testutil.RecordedRequest) (testutil.StubResponse, error) {
 		switch {

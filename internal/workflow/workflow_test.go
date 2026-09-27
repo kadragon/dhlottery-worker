@@ -2,10 +2,12 @@ package workflow
 
 import (
 	"errors"
+	"os"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/kadragon/dhlottery-worker/internal/checkpoint"
 	"github.com/kadragon/dhlottery-worker/internal/constants"
 	"github.com/kadragon/dhlottery-worker/internal/dhlottery"
 	"github.com/kadragon/dhlottery-worker/internal/notify"
@@ -23,8 +25,18 @@ type fakeClient struct {
 	summary      dhlottery.LedgerSummary
 	summaryOK    bool
 	aggStartDate string
+	aggPrev      *checkpoint.Checkpoint
+	aggNext      *checkpoint.Checkpoint
 
 	login, checkDeposit, reserve, buy, checkWinning, aggregate int
+}
+
+// TestMain disables real gist access so no test depends on GIST_* in the
+// developer's environment.
+func TestMain(m *testing.M) {
+	loadCheckpoint = func() *checkpoint.Checkpoint { return nil }
+	saveCheckpoint = func(checkpoint.Checkpoint) bool { return true }
+	os.Exit(m.Run())
 }
 
 func newFake() *fakeClient {
@@ -52,10 +64,11 @@ func (f *fakeClient) CheckWinning(time.Time) []dhlottery.WinningResult {
 	f.checkWinning++
 	return f.wins
 }
-func (f *fakeClient) AggregateLedger(startDate string, _ time.Time) (dhlottery.LedgerSummary, bool) {
+func (f *fakeClient) AggregateLedgerIncremental(startDate string, _ time.Time, prev *checkpoint.Checkpoint) (dhlottery.LedgerSummary, *checkpoint.Checkpoint, bool) {
 	f.aggregate++
 	f.aggStartDate = startDate
-	return f.summary, f.summaryOK
+	f.aggPrev = prev
+	return f.summary, f.aggNext, f.summaryOK
 }
 func (f *fakeClient) Collector() *notify.Collector { return f.collector }
 
@@ -91,10 +104,10 @@ func TestRunWorkflowComplete(t *testing.T) {
 		t.Errorf("checkDeposit required = %d, want %d", f.depositArg, constants.WeeklyCombinedRequiredBalance)
 	}
 	if f.aggregate != 1 {
-		t.Errorf("AggregateLedger calls = %d, want 1", f.aggregate)
+		t.Errorf("AggregateLedgerIncremental calls = %d, want 1", f.aggregate)
 	}
 	if f.aggStartDate != constants.DefaultLedgerStartDate {
-		t.Errorf("AggregateLedger startDate = %q, want %q", f.aggStartDate, constants.DefaultLedgerStartDate)
+		t.Errorf("AggregateLedgerIncremental startDate = %q, want %q", f.aggStartDate, constants.DefaultLedgerStartDate)
 	}
 	// Settlement is always added now, so a combined send always fires.
 	if cap.calls != 1 {
@@ -267,5 +280,82 @@ func TestRunWorkflowSendFails(t *testing.T) {
 
 	if RunWorkflow(time.Now(), f) {
 		t.Error("expected false when SendCombined fails")
+	}
+}
+
+type checkpointCapture struct {
+	saved []checkpoint.Checkpoint
+}
+
+func installCheckpoint(t *testing.T, prev *checkpoint.Checkpoint, saveOK bool) *checkpointCapture {
+	t.Helper()
+	cap := &checkpointCapture{}
+	origLoad, origSave := loadCheckpoint, saveCheckpoint
+	loadCheckpoint = func() *checkpoint.Checkpoint { return prev }
+	saveCheckpoint = func(cp checkpoint.Checkpoint) bool {
+		cap.saved = append(cap.saved, cp)
+		return saveOK
+	}
+	t.Cleanup(func() { loadCheckpoint, saveCheckpoint = origLoad, origSave })
+	return cap
+}
+
+func TestRunWorkflowCheckpointSavedOnSuccess(t *testing.T) {
+	installSend(t, true)
+	prev := &checkpoint.Checkpoint{Start: "2020-01-01", Through: "2026-04-27", Purchase: 1000}
+	next := &checkpoint.Checkpoint{Start: "2020-01-01", Through: "2026-05-04", Purchase: 2000}
+	cap := installCheckpoint(t, prev, true)
+	f := newFake()
+	f.aggNext = next
+
+	RunWorkflow(time.Now(), f)
+
+	if f.aggPrev != prev {
+		t.Errorf("AggregateLedgerIncremental prev = %+v, want loaded checkpoint", f.aggPrev)
+	}
+	if len(cap.saved) != 1 || cap.saved[0] != *next {
+		t.Errorf("saved = %+v, want [%+v]", cap.saved, *next)
+	}
+}
+
+func TestRunWorkflowCheckpointNotSaved(t *testing.T) {
+	prev := &checkpoint.Checkpoint{Start: "2020-01-01", Through: "2026-05-04", Purchase: 2000}
+	cases := map[string]func(f *fakeClient){
+		"aggregation failed": func(f *fakeClient) {
+			f.summaryOK = false
+			f.aggNext = &checkpoint.Checkpoint{Through: "2026-05-11"}
+		},
+		"nothing settled": func(f *fakeClient) { f.aggNext = nil },
+		"unchanged":       func(f *fakeClient) { cp := *prev; f.aggNext = &cp },
+	}
+	for name, setup := range cases {
+		t.Run(name, func(t *testing.T) {
+			installSend(t, true)
+			cap := installCheckpoint(t, prev, true)
+			f := newFake()
+			setup(f)
+
+			RunWorkflow(time.Now(), f)
+
+			if len(cap.saved) != 0 {
+				t.Errorf("saved = %+v, want none", cap.saved)
+			}
+		})
+	}
+}
+
+func TestRunWorkflowCheckpointSaveFailureNonBlocking(t *testing.T) {
+	send := installSend(t, true)
+	installCheckpoint(t, nil, false)
+	f := newFake()
+	f.aggNext = &checkpoint.Checkpoint{Start: "2020-01-01", Through: "2026-05-04"}
+	f.summary = dhlottery.LedgerSummary{CumulativePurchase: 1000}
+
+	if !RunWorkflow(time.Now(), f) {
+		t.Error("expected true despite checkpoint save failure")
+	}
+	last := send.payloads[len(send.payloads)-1]
+	if got := settlementDetail(last, "누적 구매"); got != "1,000원" {
+		t.Errorf("누적 구매 = %q, want 1,000원", got)
 	}
 }
