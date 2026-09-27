@@ -12,7 +12,8 @@ DHLottery-worker: GitHub Actions scheduled job (every Monday 01:00 UTC) that log
 | `docs/workflows.md` | When starting any implementation cycle |
 | `docs/eval-criteria.md` | When evaluating completed features |
 | `docs/runbook.md` | For build, test, deploy commands and troubleshooting |
-| `tasks.md` / `backlog.md` | Sprint contract & deferred work tracking |
+| `docs/quality.md` | Per-package coverage/lint snapshot — before coverage-affecting changes |
+| `backlog.md` | Deferred work queue. `tasks.md` exists only during an active sprint (Sprint Contract) and is deleted at close |
 
 ## Test Runner
 
@@ -24,6 +25,11 @@ DHLottery-worker: GitHub Actions scheduled job (every Monday 01:00 UTC) that log
 1. **All env reads via `internal/env`** — Domain modules never call `os.Getenv` directly; `internal/env` (`Get`/`Validate`) is the sole boundary.
 2. **Non-throwing orchestrator** — Non-critical operations (charge init, pension reserve, winning check, Telegram) must never abort `workflow.RunWorkflow()`. `ReservePensionNextWeek`/`Buy`/`CheckWinning` return outcomes, not errors; only `Login`/`CheckDeposit` return errors, which are collected and reported.
 3. **Notifications via `notify.Collector` only** — Domain modules push to the collector via `notify.Notify(payload, collector)`; direct calls to `notify.SendCombinedNotification()` from domain code are forbidden. One send at the end of the workflow.
+4. **Agent Integrity** — A value not actually read (endpoint, header, form field, env name) is written `[unknown — read {source}]`, never guessed. DHLottery endpoints are verified via `realtest.yml`/`docs/endpoints.md`, not assumed.
+
+## Delegation
+
+Default inline. No project agent roles exist; use built-in `Explore`/`general-purpose` subagents for ad-hoc fan-out (see Token Economy #4). Roles are added via `dev:harness-curate` only when transcripts show a recurring delegation.
 
 ## Token Economy
 
