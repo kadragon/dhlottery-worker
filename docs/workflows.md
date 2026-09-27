@@ -10,7 +10,7 @@ The primary cycle for behavioral changes.
 
 **Step 1: Read docs** — Before editing, read `docs/architecture.md` (source structure) and `docs/conventions.md` (patterns). Read `docs/endpoints.md` before changing any HTTP call.
 
-**Step 2: Sprint Contract** — Define "done" before writing code. Write concrete acceptance criteria (testable conditions, not impressions). Add to `tasks.md` or the backlog item.
+**Step 2: Sprint Contract** — Define "done" before writing code. Write concrete acceptance criteria (testable conditions, not impressions). Add to `tasks.md` (exists only during an active sprint; delete at close) or the backlog item.
 
 **Step 3: Implement** — Red → Green → Refactor (TDD). New behavior must have tests. Total statement coverage must stay ≥ 85%.
 
@@ -43,9 +43,9 @@ Write or update `docs/`. Ground every claim in current code. Never modify produc
 Run between features or when entropy is visible.
 
 1. Run `gofmt -l ./cmd ./internal`, `go vet ./...`, and `go test ./... -coverprofile=coverage.out`.
-2. Review open items in `tasks.md` — close completed ones, escalate stale ones.
+2. Review open items in `backlog.md` — close completed ones, escalate stale ones.
 3. Check `docs/` for staleness against current code.
-4. Tag new findings as `[doc]`, `[constraint]`, `[debt]`, or `[harness]` in `tasks.md`.
+4. Tag new findings as `[doc]`, `[constraint]`, `[debt]`, or `[harness]` in `backlog.md`.
 5. Fix trivials inline; leave complex items for a dedicated cycle.
 
 ## Context Anxiety

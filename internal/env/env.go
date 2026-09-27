@@ -39,3 +39,8 @@ func Validate() error {
 	}
 	return nil
 }
+
+// Debug reports whether the optional DEBUG variable is set to "true".
+func Debug() bool {
+	return os.Getenv("DEBUG") == "true"
+}

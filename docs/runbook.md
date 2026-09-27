@@ -2,7 +2,8 @@
 
 ## Prerequisites
 
-- Go 1.26+
+- Go 1.26+ (`go.mod` is the single source of truth; workflows read it via `go-version-file: go.mod`)
+- Enable the tracked pre-commit hook once per clone: `git config core.hooksPath .githooks` (runs gofmt / vet / test when Go files are staged)
 
 ## Commands
 

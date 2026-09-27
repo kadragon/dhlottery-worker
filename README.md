@@ -14,7 +14,6 @@ DHLottery(동행복권) 자동 구매와 알림을 위한 GitHub Actions 기반 
 ## 구성
 
 - `AGENTS.md`: 운영 규칙과 개발 원칙
-- `plan.md`: 리팩터링/개선 계획과 현황
 - `cmd/worker/`: 실행 진입점
 - `internal/`: 도메인/유틸 패키지
 - `.github/workflows/lottery.yml`: GitHub Actions 워크플로
@@ -158,7 +157,7 @@ GitHub Actions로 자동 실행됩니다.
 
 ### 기능 추가 절차
 
-1. `plan.md`에 작업 목적/범위 정리
+1. `backlog.md`에 항목을 추가하고 완료 조건(Sprint Contract) 정리
 2. 테스트 작성 후 구현 (RED → GREEN → REFACTOR)
 3. 변경 사항을 `AGENTS.md` 규칙에 맞게 정리
 

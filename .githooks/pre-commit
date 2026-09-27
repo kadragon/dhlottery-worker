@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# Pre-commit gate: mirrors CI's gofmt / vet / test steps (coverage + golangci-lint stay CI-only).
+# Enable once per clone: git config core.hooksPath .githooks
+set -euo pipefail
+
+# Skip when no Go-relevant files are staged (docs-only commits stay fast).
+if ! git diff --cached --name-only --diff-filter=ACMR | grep -qE '\.go$|^go\.(mod|sum)$'; then
+  exit 0
+fi
+
+unformatted=$(gofmt -l ./cmd ./internal)
+if [[ -n "$unformatted" ]]; then
+  echo "pre-commit: not gofmt-clean:" >&2
+  echo "$unformatted" >&2
+  echo "FIX: gofmt -w ./cmd ./internal && git add -u" >&2
+  exit 1
+fi
+
+go vet ./... || { echo "pre-commit: go vet failed" >&2; exit 1; }
+go test ./... -count=1 >/dev/null || { echo "pre-commit: go test failed — run: go test ./... -count=1" >&2; exit 1; }
