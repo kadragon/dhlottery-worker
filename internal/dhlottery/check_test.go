@@ -160,6 +160,16 @@ const aggRecentStart = "20260401"
 
 func aggNow(t *testing.T) time.Time { return parseTime(t, "2026-06-08T10:00:00+09:00") }
 
+// noLedgerSleep stubs the ledger retry backoff and returns the recorded delays.
+func noLedgerSleep(t *testing.T) *[]time.Duration {
+	t.Helper()
+	var slept []time.Duration
+	orig := ledgerSleep
+	ledgerSleep = func(d time.Duration) { slept = append(slept, d) }
+	t.Cleanup(func() { ledgerSleep = orig })
+	return &slept
+}
+
 func TestAggregateLedgerFixture(t *testing.T) {
 	client, stub := checkClient(testutil.StubResponse{Status: 200, Body: ledgerFixture(t)})
 	s, ok := aggregateLedger(client, aggRecentStart, aggNow(t))
@@ -286,6 +296,7 @@ func TestAggregateLedgerStartAfterNow(t *testing.T) {
 }
 
 func TestAggregateLedgerFetchFailure(t *testing.T) {
+	noLedgerSleep(t)
 	client, _ := checkClient(testutil.StubResponse{Status: 500, Body: "error"})
 	if s, ok := aggregateLedger(client, aggRecentStart, aggNow(t)); ok || s != (LedgerSummary{}) {
 		t.Errorf("expected (zero, false) on fetch failure, got (%+v, %v)", s, ok)
@@ -293,6 +304,7 @@ func TestAggregateLedgerFetchFailure(t *testing.T) {
 }
 
 func TestAggregateLedgerRedirect(t *testing.T) {
+	noLedgerSleep(t)
 	client, _ := checkClient(testutil.StubResponse{
 		Status: 302,
 		Header: http.Header{"Location": {"https://www.dhlottery.co.kr/errorPage"}},
@@ -303,6 +315,7 @@ func TestAggregateLedgerRedirect(t *testing.T) {
 }
 
 func TestAggregateLedgerParseFailure(t *testing.T) {
+	noLedgerSleep(t)
 	client, _ := checkClient(testutil.StubResponse{Status: 200, Body: "<html>not json</html>"})
 	if s, ok := aggregateLedger(client, aggRecentStart, aggNow(t)); ok || s != (LedgerSummary{}) {
 		t.Errorf("expected (zero, false) on parse failure, got (%+v, %v)", s, ok)
@@ -310,8 +323,10 @@ func TestAggregateLedgerParseFailure(t *testing.T) {
 }
 
 // A failure on a later page discards the whole aggregation (all-or-nothing):
-// page 1 succeeds, page 2 returns 500, so the result is (zero, false).
+// page 1 succeeds, page 2 returns 500 on both the attempt and its retry, so the
+// result is (zero, false).
 func TestAggregateLedgerMidPageFailure(t *testing.T) {
+	noLedgerSleep(t)
 	page1 := `{"data":{"total":3,"list":[{"ltGdsCd":"LO40","prchsQty":5,"ltWnAmt":5000},{"ltGdsCd":"LO40","prchsQty":1,"ltWnAmt":null}]}}`
 	stub := &testutil.StubDoer{Handler: testutil.Sequence(
 		testutil.StubResponse{Status: 200, Body: page1},
@@ -323,14 +338,16 @@ func TestAggregateLedgerMidPageFailure(t *testing.T) {
 	if ok || s != (LedgerSummary{}) {
 		t.Errorf("expected (zero, false) when a later page fails, got (%+v, %v)", s, ok)
 	}
-	if len(stub.Requests) != 2 {
-		t.Errorf("expected 2 requests before bailing, got %d", len(stub.Requests))
+	if len(stub.Requests) != 3 {
+		t.Errorf("expected 3 requests (page 1, page 2 + retry) before bailing, got %d", len(stub.Requests))
 	}
 }
 
-// All-or-nothing across windows: window 1 succeeds, window 2's fetch fails, so
-// the whole walk returns (zero, false) — the partial window-1 sum is discarded.
+// All-or-nothing across windows: window 1 succeeds, window 2's fetch fails
+// (attempt and retry), so the whole walk returns (zero, false) — the partial
+// window-1 sum is discarded.
 func TestAggregateLedgerMidWindowFailure(t *testing.T) {
+	noLedgerSleep(t)
 	win1 := `{"data":{"total":1,"list":[{"ltGdsCd":"LO40","prchsQty":5,"ltWnAmt":5000}]}}`
 	stub := &testutil.StubDoer{Handler: testutil.Sequence(
 		testutil.StubResponse{Status: 200, Body: win1},    // window 1, page 1
@@ -342,8 +359,8 @@ func TestAggregateLedgerMidWindowFailure(t *testing.T) {
 	if ok || s != (LedgerSummary{}) {
 		t.Errorf("expected (zero, false) when a later window fails, got (%+v, %v)", s, ok)
 	}
-	if len(stub.Requests) != 2 {
-		t.Errorf("expected 2 requests (window 1 ok, window 2 fails), got %d", len(stub.Requests))
+	if len(stub.Requests) != 3 {
+		t.Errorf("expected 3 requests (window 1 ok, window 2 fails + retry), got %d", len(stub.Requests))
 	}
 }
 
@@ -397,5 +414,60 @@ func TestAggregateLedgerBackstopExhausted(t *testing.T) {
 
 	if s, ok := aggregateLedger(client, "19000101", aggNow(t)); ok || s != (LedgerSummary{}) {
 		t.Errorf("expected (zero, false) on backstop exhaustion, got (%+v, %v)", s, ok)
+	}
+}
+
+// A single transient page failure is absorbed by one retry after a backoff;
+// the aggregation still completes with the full total.
+func TestAggregateLedgerTransientFailureRetried(t *testing.T) {
+	slept := noLedgerSleep(t)
+	body := `{"data":{"total":1,"list":[{"ltGdsCd":"LO40","prchsQty":5,"ltWnAmt":5000}]}}`
+	stub := &testutil.StubDoer{Handler: testutil.Sequence(
+		testutil.StubResponse{Status: 500, Body: "error"},
+		testutil.StubResponse{Status: 200, Body: body},
+	)}
+	client := httpclient.NewWithDoer(stub)
+
+	s, ok := aggregateLedger(client, aggRecentStart, aggNow(t))
+	if !ok {
+		t.Fatal("expected ok=true after a successful retry")
+	}
+	if s.CumulativePurchase != 5000 || s.CumulativeWinning != 5000 {
+		t.Errorf("summary = %+v, want purchase 5000 / winning 5000", s)
+	}
+	if len(stub.Requests) != 2 {
+		t.Errorf("expected 2 requests (fail + retry), got %d", len(stub.Requests))
+	}
+	if stub.Requests[0].URL != stub.Requests[1].URL {
+		t.Errorf("retry URL differs: %q vs %q", stub.Requests[0].URL, stub.Requests[1].URL)
+	}
+	if len(*slept) != 1 || (*slept)[0] != ledgerRetryDelay {
+		t.Errorf("slept = %v, want one %v backoff", *slept, ledgerRetryDelay)
+	}
+}
+
+// Two consecutive failures on the same page exhaust the single retry and fail
+// the whole aggregation (all-or-nothing preserved).
+func TestAggregateLedgerRetryExhausted(t *testing.T) {
+	noLedgerSleep(t)
+	client, stub := checkClient(testutil.StubResponse{Status: 500, Body: "error"})
+	if s, ok := aggregateLedger(client, aggRecentStart, aggNow(t)); ok || s != (LedgerSummary{}) {
+		t.Errorf("expected (zero, false) after retry exhausted, got (%+v, %v)", s, ok)
+	}
+	if len(stub.Requests) != 2 {
+		t.Errorf("expected exactly 2 requests (attempt + one retry), got %d", len(stub.Requests))
+	}
+}
+
+// A server that keeps returning rows past maxPages while data.total claims
+// more must not yield a silently-truncated total: the window reports failure.
+func TestAggregateLedgerPageBackstopTruncated(t *testing.T) {
+	body := `{"data":{"total":1000000,"list":[{"ltGdsCd":"LO40","prchsQty":1,"ltWnAmt":0}]}}`
+	client, stub := checkClient(testutil.StubResponse{Status: 200, Body: body})
+	if s, ok := aggregateLedger(client, aggRecentStart, aggNow(t)); ok || s != (LedgerSummary{}) {
+		t.Errorf("expected (zero, false) on page-backstop truncation, got (%+v, %v)", s, ok)
+	}
+	if len(stub.Requests) != ledgerMaxPages {
+		t.Errorf("expected %d requests (page backstop), got %d", ledgerMaxPages, len(stub.Requests))
 	}
 }
