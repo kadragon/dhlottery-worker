@@ -34,3 +34,14 @@ func TestValidate(t *testing.T) {
 		t.Errorf("Validate should report missing TELEGRAM_CHAT_ID: %v", err)
 	}
 }
+
+func TestDebug(t *testing.T) {
+	t.Setenv("DEBUG", "true")
+	if !Debug() {
+		t.Error("Debug() should be true when DEBUG=true")
+	}
+	t.Setenv("DEBUG", "1")
+	if Debug() {
+		t.Error("Debug() should be false unless DEBUG is exactly \"true\"")
+	}
+}

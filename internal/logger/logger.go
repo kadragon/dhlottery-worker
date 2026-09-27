@@ -13,6 +13,8 @@ import (
 	"os"
 	"sync"
 	"time"
+
+	"github.com/kadragon/dhlottery-worker/internal/env"
 )
 
 // Fields is an arbitrary set of structured key/value pairs attached to a log
@@ -29,7 +31,7 @@ const (
 
 var (
 	mu           sync.Mutex
-	debugEnabled           = os.Getenv("DEBUG") == "true"
+	debugEnabled           = env.Debug()
 	infoWriter   io.Writer = os.Stdout
 	errWriter    io.Writer = os.Stderr
 	// now is overridable in tests; production uses the wall clock.
