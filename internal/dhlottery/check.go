@@ -140,6 +140,16 @@ func checkWinning(client *httpclient.Client, now time.Time) []WinningResult {
 // therefore walks the range in non-overlapping windows of this size.
 const ledgerWindowDays = 90
 
+// ledgerMaxPages is the per-window paging backstop for a server that ignores
+// pageNum or returns a bogus data.total.
+const ledgerMaxPages = 200
+
+// ledgerRetryDelay is the backoff before the single retry of a failed ledger
+// page fetch. ledgerSleep is the seam tests stub.
+const ledgerRetryDelay = 500 * time.Millisecond
+
+var ledgerSleep = time.Sleep
+
 // aggregateLedger recomputes lifetime totals from the full ledger over
 // [startDate, now]. Cumulative purchase = Σ(prchsQty × CostPerGame); cumulative
 // winning = Σ(ltWnAmt where > 0). The span is walked in ledgerWindowDays
@@ -197,14 +207,16 @@ func aggregateLedger(client *httpclient.Client, startDate string, now time.Time)
 }
 
 // aggregateWindow sums purchase and winning over a single [strDt, endDt] window,
-// paging through all rows via data.total. Returns ok=false on any fetch error.
+// paging through all rows via data.total. Returns ok=false on any fetch error
+// (after one retry) or when the ledgerMaxPages backstop is exhausted before
+// data.total rows were read, so a backstop-truncated sum is never reported as
+// complete. An empty page still ends the window as complete.
 func aggregateWindow(client *httpclient.Client, strDt, endDt string) (purchase, winning int, ok bool) {
 	const perPage = 100
-	const maxPages = 200 // backstop for a server that ignores pageNum / returns a bogus total
 
 	var fetched, total int
-	for page := 1; page <= maxPages; page++ {
-		data, fetchOK := fetchLedgerPage(client, strDt, endDt, page, perPage)
+	for page := 1; page <= ledgerMaxPages; page++ {
+		data, fetchOK := fetchLedgerPageWithRetry(client, strDt, endDt, page, perPage)
 		if !fetchOK {
 			return 0, 0, false
 		}
@@ -219,10 +231,30 @@ func aggregateWindow(client *httpclient.Client, strDt, endDt string) (purchase, 
 		}
 		fetched += len(data.Data.List)
 		if len(data.Data.List) == 0 || fetched >= total {
-			break
+			return purchase, winning, true
 		}
 	}
-	return purchase, winning, true
+
+	logger.Error("Ledger aggregate incomplete (non-fatal)", logger.Fields{
+		logger.FieldEvent: "ledger_window_truncated",
+		"srchStrDt":       strDt,
+		"srchEndDt":       endDt,
+		"fetched":         fetched,
+		"total":           total,
+		"maxPages":        ledgerMaxPages,
+	})
+	return 0, 0, false
+}
+
+// fetchLedgerPageWithRetry retries a failed page fetch once after
+// ledgerRetryDelay, so a single transient error does not fail the whole
+// all-or-nothing aggregation.
+func fetchLedgerPageWithRetry(client *httpclient.Client, strDt, endDt string, page, perPage int) (ledgerResponse, bool) {
+	if data, ok := fetchLedgerPage(client, strDt, endDt, page, perPage); ok {
+		return data, true
+	}
+	ledgerSleep(ledgerRetryDelay)
+	return fetchLedgerPage(client, strDt, endDt, page, perPage)
 }
 
 // fetchLedgerPage fetches one page of the ledger. Returns ok=false (after

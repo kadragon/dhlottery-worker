@@ -40,8 +40,8 @@ func workflowError(err error) notify.Payload {
 	}
 }
 
-// RunWorkflow runs the full pipeline once and returns false only if the final
-// Telegram delivery fails after all retries; true otherwise.
+// RunWorkflow runs the full pipeline once and returns the result of the single
+// final Telegram delivery (false only if it fails after all retries).
 func RunWorkflow(now time.Time, client Client) bool {
 	collector := client.Collector()
 
@@ -75,10 +75,8 @@ func RunWorkflow(now time.Time, client Client) bool {
 		collector.Add(buildSettlementPayload(weeklyPurchase, sumWins(wins), summary, ok))
 	}
 
-	if !collector.IsEmpty() {
-		return SendCombined(collector.Payloads())
-	}
-	return true
+	// Always non-empty here: a login error or the settlement payload was added.
+	return SendCombined(collector.Payloads())
 }
 
 // resolveLedgerStartDate returns LEDGER_START_DATE (YYYYMMDD) when set, else
