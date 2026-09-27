@@ -209,7 +209,8 @@ func aggregateLedger(client *httpclient.Client, startDate string, now time.Time)
 // aggregateWindow sums purchase and winning over a single [strDt, endDt] window,
 // paging through all rows via data.total. Returns ok=false on any fetch error
 // (after one retry) or when the ledgerMaxPages backstop is exhausted before
-// data.total rows were read, so a truncated sum is never reported as complete.
+// data.total rows were read, so a backstop-truncated sum is never reported as
+// complete. An empty page still ends the window as complete.
 func aggregateWindow(client *httpclient.Client, strDt, endDt string) (purchase, winning int, ok bool) {
 	const perPage = 100
 
@@ -235,7 +236,12 @@ func aggregateWindow(client *httpclient.Client, strDt, endDt string) (purchase, 
 	}
 
 	logger.Error("Ledger aggregate incomplete (non-fatal)", logger.Fields{
-		logger.FieldEvent: "ledger_window_truncated", logger.FieldStatus: ledgerMaxPages,
+		logger.FieldEvent: "ledger_window_truncated",
+		"srchStrDt":       strDt,
+		"srchEndDt":       endDt,
+		"fetched":         fetched,
+		"total":           total,
+		"maxPages":        ledgerMaxPages,
 	})
 	return 0, 0, false
 }
