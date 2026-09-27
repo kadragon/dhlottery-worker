@@ -3,6 +3,7 @@ package dhlottery
 import (
 	"time"
 
+	"github.com/kadragon/dhlottery-worker/internal/checkpoint"
 	"github.com/kadragon/dhlottery-worker/internal/httpclient"
 	"github.com/kadragon/dhlottery-worker/internal/notify"
 )
@@ -54,4 +55,11 @@ func (c *Client) CheckWinning(now time.Time) []WinningResult {
 // lookup failed (network/parse/redirect/non-200).
 func (c *Client) AggregateLedger(startDate string, now time.Time) (LedgerSummary, bool) {
 	return aggregateLedger(c.http, startDate, now)
+}
+
+// AggregateLedgerIncremental returns the same totals as AggregateLedger,
+// resuming from prev (a stored checkpoint, may be nil) and returning the
+// checkpoint to persist (nil when nothing settled yet or ok is false).
+func (c *Client) AggregateLedgerIncremental(startDate string, now time.Time, prev *checkpoint.Checkpoint) (LedgerSummary, *checkpoint.Checkpoint, bool) {
+	return aggregateLedgerIncremental(c.http, startDate, now, prev)
 }

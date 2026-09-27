@@ -7,6 +7,7 @@ package workflow
 import (
 	"time"
 
+	"github.com/kadragon/dhlottery-worker/internal/checkpoint"
 	"github.com/kadragon/dhlottery-worker/internal/constants"
 	"github.com/kadragon/dhlottery-worker/internal/dhlottery"
 	"github.com/kadragon/dhlottery-worker/internal/env"
@@ -21,12 +22,18 @@ type Client interface {
 	ReservePensionNextWeek() dhlottery.PensionReserveOutcome
 	Buy() dhlottery.PurchaseOutcome
 	CheckWinning(now time.Time) []dhlottery.WinningResult
-	AggregateLedger(startDate string, now time.Time) (dhlottery.LedgerSummary, bool)
+	AggregateLedgerIncremental(startDate string, now time.Time, prev *checkpoint.Checkpoint) (dhlottery.LedgerSummary, *checkpoint.Checkpoint, bool)
 	Collector() *notify.Collector
 }
 
 // SendCombined is the delivery seam (overridable in tests).
 var SendCombined = notify.SendCombinedNotification
+
+// Ledger checkpoint persistence seams (overridable in tests).
+var (
+	loadCheckpoint = checkpoint.Load
+	saveCheckpoint = checkpoint.Save
+)
 
 // lookupFailed is shown for cumulative settlement fields when the ledger
 // aggregation lookup failed, instead of a misleading zero.
@@ -70,13 +77,26 @@ func RunWorkflow(now time.Time, client Client) bool {
 		}
 
 		wins := client.CheckWinning(now)
-		summary, ok := client.AggregateLedger(resolveLedgerStartDate(), now)
+		summary, ok := aggregateLedger(client, now)
 
 		collector.Add(buildSettlementPayload(weeklyPurchase, sumWins(wins), summary, ok))
 	}
 
 	// Always non-empty here: a login error or the settlement payload was added.
 	return SendCombined(collector.Payloads())
+}
+
+// aggregateLedger computes the lifetime totals, resuming from the stored
+// checkpoint when there is one. The advanced checkpoint is persisted only
+// when the aggregation succeeded and it changed; a save failure is logged by
+// saveCheckpoint and never affects the settlement (Golden Rule #2).
+func aggregateLedger(client Client, now time.Time) (dhlottery.LedgerSummary, bool) {
+	prev := loadCheckpoint()
+	summary, next, ok := client.AggregateLedgerIncremental(resolveLedgerStartDate(), now, prev)
+	if ok && next != nil && (prev == nil || *next != *prev) {
+		saveCheckpoint(*next)
+	}
+	return summary, ok
 }
 
 // resolveLedgerStartDate returns LEDGER_START_DATE (YYYYMMDD) when set, else

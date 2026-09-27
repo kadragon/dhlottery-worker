@@ -4,7 +4,7 @@
 
 DHLottery automation: session init → login → check deposit → if sufficient: (pension reserve → lotto purchase) → check winning → lifetime settlement → Telegram notification.
 
-Stateless. In-memory cookies only (누적 구매/당첨 결산도 매주 원장 API를 재계산하므로 외부 상태 없음). Platform: GitHub Actions scheduled (every Monday 01:00 UTC = KST 10:00).
+In-memory cookies only. The one piece of external state is an optional ledger checkpoint in a secret GitHub gist (`internal/checkpoint`): settled lifetime totals up to today−35d, so each run queries the ledger only since then. Missing/corrupt/unconfigured → full rescan from `LEDGER_START_DATE`; results are identical either way. Platform: GitHub Actions scheduled (every Monday 01:00 UTC = KST 10:00).
 
 Core workflow: `init session → login → check deposit → (charge init + warn) or (pension reserve → purchase) → check winning → aggregate ledger (주간 결산) → notify`
 
@@ -15,6 +15,7 @@ Non-critical operations (charge init, pension reserve, winning check, Telegram f
 ```
 cmd/worker/main.go              ← GitHub Actions entry point (run() int)
   └─ internal/workflow          ← Orchestrator (RunWorkflow)
+       ├─ internal/checkpoint   ← Ledger checkpoint Load/Save (GitHub gist)
        └─ dhlottery.Client      ← Facade (internal/dhlottery/client.go)
             ├─ auth.go              ← Login (RSA, cookie-based session)
             ├─ account.go           ← Balance/round info
@@ -22,7 +23,7 @@ cmd/worker/main.go              ← GitHub Actions entry point (run() int)
             ├─ buy.go               ← Lotto purchase (5 games, auto)
             ├─ pension_reserve.go   ← Pension 720+ reservation
             ├─ pension_crypto.go    ← Encryption for pension API
-            ├─ check.go             ← Winning results check
+            ├─ check.go             ← Winning check + ledger aggregation (full / incremental)
             └─ notify.Collector     ← Collects all notifications
                  └─ notify/telegram.go ← Single combined send
 ```
@@ -47,7 +48,8 @@ cmd/worker/main.go              ← GitHub Actions entry point (run() int)
 | `internal/dhlottery/buy.go` | Lotto purchase | `purchaseLottery()` |
 | `internal/dhlottery/pension_reserve.go` | Pension 720+ | `reservePensionNextWeek()` |
 | `internal/dhlottery/pension_crypto.go` | Encryption | `EncryptElQ`/`DecryptElQ` |
-| `internal/dhlottery/check.go` | Winning check | `checkWinning()` |
+| `internal/dhlottery/check.go` | Winning check, ledger aggregation | `checkWinning()`, `aggregateLedger()`, `aggregateLedgerIncremental()` |
+| `internal/checkpoint` | Ledger checkpoint in secret gist | `Checkpoint`, `Load`, `Save` |
 | `internal/httpclient` | HTTP client | `New`, `NewWithDoer`, `Client`, `Response` |
 | `internal/notify/telegram.go` | Telegram API | `SendCombinedNotification` |
 | `internal/notify/collector.go` | Collect payloads | `Collector` |

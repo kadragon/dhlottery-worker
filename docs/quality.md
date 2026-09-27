@@ -4,7 +4,7 @@ Go port snapshot. Numbers from `go test ./... -cover` + `golangci-lint run ./...
 
 ## Coverage
 
-- **Total**: 86.7% of statements (gate ≥85%, CI-enforced)
+- **Total**: 89.6% of statements (gate ≥85%, CI-enforced)
 - **Tool**: `go test ./... -coverprofile=coverage.out && go tool cover -func=coverage.out`
 
 | Package | Coverage | Notes |
@@ -14,12 +14,13 @@ Go port snapshot. Numbers from `go test ./... -cover` + `golangci-lint run ./...
 | `internal/env` | 100.0% | |
 | `internal/format` | 100.0% | |
 | `internal/workflow` | 100.0% | |
-| `internal/notify` | 93.1% | |
-| `internal/testutil` | 94.7% | test-support library |
-| `internal/logger` | 97.1% | |
-| `internal/httpclient` | 86.0% | |
-| `internal/dhlottery` | 84.7% | Largest package |
-| `cmd/worker` | 83.3% | |
+| `internal/checkpoint` | 95.1% | Gist ledger checkpoint |
+| `internal/notify` | 93.7% | |
+| `internal/testutil` | 96.6% | test-support library |
+| `internal/logger` | 97.2% | |
+| `internal/httpclient` | 86.4% | |
+| `internal/dhlottery` | 88.8% | Largest package |
+| `cmd/worker` | 88.9% | |
 | `cmd/realtest` | 40.0% | Live-endpoint harness — hard to unit-test by design |
 | `internal/constants` | n/a | Constants only; no test file |
 

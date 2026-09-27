@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kadragon/dhlottery-worker/internal/checkpoint"
 	"github.com/kadragon/dhlottery-worker/internal/constants"
 	"github.com/kadragon/dhlottery-worker/internal/datekst"
 	"github.com/kadragon/dhlottery-worker/internal/httpclient"
@@ -65,6 +66,9 @@ func extractWins(rows []ledgerRow) []WinningResult {
 }
 
 func compactYmd(date string) string { return strings.ReplaceAll(date, "-", "") }
+
+// dashYmd converts YYYYMMDD (or YYYY-MM-DD) to YYYY-MM-DD.
+func dashYmd(date string) string { return datekst.AddDaysToYmd(date, 0) }
 
 // checkWinning fetches the previous week's ledger and returns its wins (lotto
 // and pension). Non-fatal by design: network/parse errors and 3xx redirects
@@ -150,31 +154,123 @@ const ledgerRetryDelay = 500 * time.Millisecond
 
 var ledgerSleep = time.Sleep
 
+// ledgerSettleLagDays is how far behind today the checkpoint's settled cutoff
+// trails. The ledger filters by order date, so a row ordered near today can
+// still be undrawn (ltWnAmt=null; a pension reserve draws ~10 days after
+// ordering). Only rows at least this old are folded into the checkpoint, so a
+// later win is never lost to an incremental query that no longer covers it.
+const ledgerSettleLagDays = 35
+
 // aggregateLedger recomputes lifetime totals from the full ledger over
 // [startDate, now]. Cumulative purchase = Σ(prchsQty × CostPerGame); cumulative
-// winning = Σ(ltWnAmt where > 0). The span is walked in ledgerWindowDays
-// windows (the API caps a single query's date range), each window paged via
-// data.total. Non-fatal by design: on any fetch/parse/redirect/non-200 error it
-// returns ok=false (all-or-nothing) so the caller can report the lookup failure
-// instead of presenting a partial or zero summary as if it were complete.
+// winning = Σ(ltWnAmt where > 0). Non-fatal by design: on any
+// fetch/parse/redirect/non-200 error it returns ok=false (all-or-nothing) so
+// the caller can report the lookup failure instead of presenting a partial or
+// zero summary as if it were complete.
 func aggregateLedger(client *httpclient.Client, startDate string, now time.Time) (LedgerSummary, bool) {
-	start := compactYmd(startDate)
+	start, ok := validLedgerStart(startDate)
+	if !ok {
+		return LedgerSummary{}, false
+	}
 	end := compactYmd(datekst.FormatKstYmd(now))
+	if start > end {
+		return LedgerSummary{}, true // start in the future: genuinely nothing to sum
+	}
+	purchase, winning, ok := sumRange(client, start, end)
+	if !ok {
+		return LedgerSummary{}, false
+	}
+	return LedgerSummary{CumulativePurchase: purchase, CumulativeWinning: winning}, true
+}
 
-	// A malformed LEDGER_START_DATE (e.g. "foo", unpadded "2026-6-1") must not
-	// slip through the lexical guard below and yield a zero summary tagged as
-	// real; reject anything that is not a valid YYYYMMDD date.
+// aggregateLedgerIncremental computes the same lifetime totals as
+// aggregateLedger, but resumes from prev when it is a valid checkpoint for
+// startDate, querying only (prev.Through, now]. An absent or invalid prev
+// falls back to a full scan from startDate. It returns the checkpoint to
+// persist — totals over [startDate, today-ledgerSettleLagDays] — or nil when
+// nothing has settled yet or on failure (ok=false, all-or-nothing).
+func aggregateLedgerIncremental(client *httpclient.Client, startDate string, now time.Time, prev *checkpoint.Checkpoint) (LedgerSummary, *checkpoint.Checkpoint, bool) {
+	start, ok := validLedgerStart(startDate)
+	if !ok {
+		return LedgerSummary{}, nil, false
+	}
+	today := compactYmd(datekst.FormatKstYmd(now))
+	if start > today {
+		return LedgerSummary{}, nil, true // start in the future: genuinely nothing to sum
+	}
+	settled := compactYmd(datekst.AddDaysToYmd(today, -ledgerSettleLagDays))
+
+	from := start
+	var purchase, winning int
+	if validCheckpoint(prev, start, settled) {
+		from = compactYmd(datekst.AddDaysToYmd(prev.Through, 1))
+		purchase, winning = prev.Purchase, prev.Winning
+	} else if prev != nil {
+		logger.Warn("Ledger checkpoint invalid; falling back to full scan", logger.Fields{
+			logger.FieldEvent: "checkpoint_invalid", "start": prev.Start, "through": prev.Through,
+		})
+	}
+
+	var next *checkpoint.Checkpoint
+	if settled >= start {
+		if from <= settled {
+			p, w, ok := sumRange(client, from, settled)
+			if !ok {
+				return LedgerSummary{}, nil, false
+			}
+			purchase += p
+			winning += w
+		}
+		next = &checkpoint.Checkpoint{
+			Start:    dashYmd(start),
+			Through:  dashYmd(settled),
+			Purchase: purchase,
+			Winning:  winning,
+		}
+		from = compactYmd(datekst.AddDaysToYmd(settled, 1))
+	}
+
+	p, w, ok := sumRange(client, from, today)
+	if !ok {
+		return LedgerSummary{}, nil, false
+	}
+	return LedgerSummary{CumulativePurchase: purchase + p, CumulativeWinning: winning + w}, next, true
+}
+
+// validLedgerStart returns startDate as YYYYMMDD. A malformed
+// LEDGER_START_DATE (e.g. "foo", unpadded "2026-6-1") must not slip through
+// the lexical date comparisons and yield a zero summary tagged as real, so
+// anything that is not a valid YYYYMMDD date is rejected.
+func validLedgerStart(startDate string) (string, bool) {
+	start := compactYmd(startDate)
 	if _, err := time.Parse("20060102", start); err != nil {
 		logger.Error("Ledger aggregate failed (non-fatal)", logger.Fields{
 			logger.FieldEvent: "ledger_invalid_start", logger.FieldError: err.Error(),
 		})
-		return LedgerSummary{}, false
+		return "", false
 	}
-	if start > end {
-		return LedgerSummary{}, true // start in the future: genuinely nothing to sum
-	}
+	return start, true
+}
 
-	var purchase, winning int
+// validCheckpoint reports whether cp can seed an incremental run: same start
+// date, a well-formed Through within [start, settled], and non-negative totals.
+// A Through past the settled cutoff may have folded in undrawn rows.
+func validCheckpoint(cp *checkpoint.Checkpoint, start, settled string) bool {
+	if cp == nil || compactYmd(cp.Start) != start || cp.Purchase < 0 || cp.Winning < 0 {
+		return false
+	}
+	through := compactYmd(cp.Through)
+	if _, err := time.Parse("20060102", through); err != nil {
+		return false
+	}
+	return through >= start && through <= settled
+}
+
+// sumRange sums purchase and winning over [start, end] (YYYYMMDD, start ≤ end).
+// The span is walked in ledgerWindowDays windows, newest first (the API caps a
+// single query's date range), each window paged via data.total. Returns
+// ok=false if any window fails.
+func sumRange(client *httpclient.Client, start, end string) (purchase, winning int, ok bool) {
 	const maxWindows = 400 // backstop (~98 years) against a pathological loop
 
 	winEnd := end
@@ -186,24 +282,24 @@ func aggregateLedger(client *httpclient.Client, startDate string, now time.Time)
 
 		p, win, ok := aggregateWindow(client, winStart, winEnd)
 		if !ok {
-			return LedgerSummary{}, false
+			return 0, 0, false
 		}
 		purchase += p
 		winning += win
 
 		if winStart <= start {
-			// Reached the configured start date: the only legitimate completion.
-			return LedgerSummary{CumulativePurchase: purchase, CumulativeWinning: winning}, true
+			// Reached the start date: the only legitimate completion.
+			return purchase, winning, true
 		}
 		winEnd = compactYmd(datekst.AddDaysToYmd(winStart, -1)) // next window ends the day before
 	}
 
-	// Backstop exhausted without reaching startDate: the accumulated total is
+	// Backstop exhausted without reaching start: the accumulated total is
 	// partial, so report failure rather than presenting it as a complete sum.
 	logger.Error("Ledger aggregate incomplete (non-fatal)", logger.Fields{
 		logger.FieldEvent: "ledger_backstop_exhausted", logger.FieldStatus: maxWindows,
 	})
-	return LedgerSummary{}, false
+	return 0, 0, false
 }
 
 // aggregateWindow sums purchase and winning over a single [strDt, endDt] window,
