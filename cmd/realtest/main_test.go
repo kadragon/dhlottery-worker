@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kadragon/dhlottery-worker/internal/checkpoint"
 	"github.com/kadragon/dhlottery-worker/internal/dhlottery"
 	"github.com/kadragon/dhlottery-worker/internal/notify"
 )
@@ -67,6 +68,8 @@ func TestDefaultRunChecksFailsWhenAccountInfoFails(t *testing.T) {
 type fakeSmokeClient struct {
 	accountErr         error
 	checkWinningCalled bool
+	aggCalls           int
+	aggPrev            *checkpoint.Checkpoint
 	collector          notify.Collector
 }
 
@@ -84,8 +87,28 @@ func (f *fakeSmokeClient) CheckWinning(time.Time) []dhlottery.WinningResult {
 	return nil
 }
 
-func (f *fakeSmokeClient) AggregateLedger(string, time.Time) (dhlottery.LedgerSummary, bool) {
-	return dhlottery.LedgerSummary{}, true
+func (f *fakeSmokeClient) AggregateLedgerIncremental(_ string, _ time.Time, prev *checkpoint.Checkpoint) (dhlottery.LedgerSummary, *checkpoint.Checkpoint, bool) {
+	f.aggCalls++
+	f.aggPrev = prev
+	return dhlottery.LedgerSummary{}, &checkpoint.Checkpoint{Through: "2026-08-23"}, true
 }
 
 func (f *fakeSmokeClient) Collector() *notify.Collector { return &f.collector }
+
+// realtest must drive the production ledger path (settled/tail split) with no
+// checkpoint, so the full scan is still verified against the real account.
+func TestDefaultRunChecksUsesIncrementalLedgerWithoutCheckpoint(t *testing.T) {
+	restoreVars(t)
+	client := &fakeSmokeClient{}
+	newClient = func() smokeClient { return client }
+
+	if code := defaultRunChecks(); code != 0 {
+		t.Fatalf("defaultRunChecks() = %d, want 0", code)
+	}
+	if client.aggCalls != 1 {
+		t.Errorf("AggregateLedgerIncremental calls = %d, want 1", client.aggCalls)
+	}
+	if client.aggPrev != nil {
+		t.Errorf("prev = %+v, want nil (full scan)", client.aggPrev)
+	}
+}

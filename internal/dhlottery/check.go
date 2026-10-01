@@ -140,7 +140,7 @@ func checkWinning(client *httpclient.Client, now time.Time) []WinningResult {
 
 // ledgerWindowDays is the per-query date span. The ledger API silently returns
 // an empty list (200, total=0) when srchStrDt..srchEndDt exceeds its limit
-// (empirically between 90 and 180 days; 90 confirmed working). aggregateLedger
+// (empirically between 90 and 180 days; 90 confirmed working). sumRange
 // therefore walks the range in non-overlapping windows of this size.
 const ledgerWindowDays = 90
 
@@ -224,7 +224,8 @@ func aggregateLedgerIncremental(client *httpclient.Client, startDate string, now
 		winning += w
 		// An empty settled delta (no purchases, or a silently empty response)
 		// does not advance the checkpoint: the span is re-queried next run, so
-		// a bad read is never frozen in.
+		// a bad read is never frozen in. Changing how rows are summed here or in
+		// aggregateWindow invalidates stored totals: bump checkpoint.schemaVersion.
 		if p > 0 {
 			next = &checkpoint.Checkpoint{
 				Start:    dashYmd(start),

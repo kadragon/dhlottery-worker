@@ -11,6 +11,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/kadragon/dhlottery-worker/internal/checkpoint"
 	"github.com/kadragon/dhlottery-worker/internal/constants"
 	"github.com/kadragon/dhlottery-worker/internal/dhlottery"
 	"github.com/kadragon/dhlottery-worker/internal/env"
@@ -22,7 +23,7 @@ type smokeClient interface {
 	Login() error
 	GetAccountInfo() (dhlottery.AccountInfo, error)
 	CheckWinning(time.Time) []dhlottery.WinningResult
-	AggregateLedger(startDate string, now time.Time) (dhlottery.LedgerSummary, bool)
+	AggregateLedgerIncremental(startDate string, now time.Time, prev *checkpoint.Checkpoint) (dhlottery.LedgerSummary, *checkpoint.Checkpoint, bool)
 	Collector() *notify.Collector
 }
 
@@ -75,18 +76,22 @@ func defaultRunChecks() int {
 		fmt.Printf("  🎉 %s round=%d rank=%d prize=%d\n", w.Product, w.RoundNumber, w.Rank, w.PrizeAmount)
 	}
 
-	fmt.Println("\n== 4) AggregateLedger (lifetime cumulative — verify vs real account) ==")
+	fmt.Println("\n== 4) AggregateLedgerIncremental (production path, no checkpoint → full scan; lifetime cumulative — verify vs real account) ==")
 	startDate := constants.DefaultLedgerStartDate
 	if v, err := env.Get("LEDGER_START_DATE"); err == nil {
 		startDate = v
 	}
-	s, ok := c.AggregateLedger(startDate, nowFn())
+	// prev=nil: never read or write the gist checkpoint (realtest is read-only).
+	s, next, ok := c.AggregateLedgerIncremental(startDate, nowFn(), nil)
 	if !ok {
 		fmt.Printf("  ❌ ledger aggregate lookup failed (start=%s)\n", startDate)
 	} else {
 		net := s.CumulativeWinning - s.CumulativePurchase
 		fmt.Printf("  start=%s  누적 구매=%s  누적 당첨=%s  결산=%s\n",
 			startDate, format.Currency(s.CumulativePurchase), format.Currency(s.CumulativeWinning), format.Currency(net))
+		if next != nil {
+			fmt.Printf("  settled through=%s (checkpoint NOT saved)\n", next.Through)
+		}
 	}
 
 	fmt.Println("\n== collected payloads (NOT sent) ==")

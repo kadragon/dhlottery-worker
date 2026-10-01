@@ -9,17 +9,22 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/kadragon/dhlottery-worker/internal/logger"
 	"github.com/kadragon/dhlottery-worker/internal/testutil"
 )
 
+// sleeps records the backoffs requested by the code under test.
+var sleeps []time.Duration
+
 func install(t *testing.T, h func(int, testutil.RecordedRequest) (testutil.StubResponse, error)) *testutil.StubDoer {
 	t.Helper()
 	stub := &testutil.StubDoer{Handler: h}
-	orig := doer
-	doer = stub
-	t.Cleanup(func() { doer = orig })
+	orig, origSleep := doer, sleep
+	sleeps = nil
+	doer, sleep = stub, func(d time.Duration) { sleeps = append(sleeps, d) }
+	t.Cleanup(func() { doer, sleep = orig, origSleep })
 	return stub
 }
 
@@ -43,10 +48,10 @@ func gistBody(t *testing.T, content string) string {
 func TestLoadValid(t *testing.T) {
 	configure(t)
 	stub := install(t, testutil.Sequence(testutil.JSON(gistBody(t,
-		`{"start":"2020-01-01","through":"2026-08-23","purchase":1000,"winning":500}`))))
+		`{"version":1,"start":"2020-01-01","through":"2026-08-23","purchase":1000,"winning":500}`))))
 
 	cp := Load()
-	want := Checkpoint{Start: "2020-01-01", Through: "2026-08-23", Purchase: 1000, Winning: 500}
+	want := Checkpoint{Version: schemaVersion, Start: "2020-01-01", Through: "2026-08-23", Purchase: 1000, Winning: 500}
 	if cp == nil || *cp != want {
 		t.Fatalf("Load = %+v, want %+v", cp, want)
 	}
@@ -156,9 +161,11 @@ func TestSave(t *testing.T) {
 	if err := json.Unmarshal([]byte(req.Body), &body); err != nil {
 		t.Fatalf("body: %v", err)
 	}
+	want := cp
+	want.Version = schemaVersion // Save stamps the current schema version
 	var got Checkpoint
-	if err := json.Unmarshal([]byte(body.Files[fileName].Content), &got); err != nil || got != cp {
-		t.Errorf("saved content = %+v (err %v), want %+v", got, err, cp)
+	if err := json.Unmarshal([]byte(body.Files[fileName].Content), &got); err != nil || got != want {
+		t.Errorf("saved content = %+v (err %v), want %+v", got, err, want)
 	}
 }
 
@@ -189,5 +196,114 @@ func TestSaveUnconfigured(t *testing.T) {
 	}
 	if len(stub.Requests) != 0 {
 		t.Errorf("expected no request when unconfigured, got %d", len(stub.Requests))
+	}
+}
+
+// A checkpoint written under a different aggregation schema (or before
+// versioning existed) must not seed an incremental run.
+func TestLoadRejectsSchemaVersionMismatch(t *testing.T) {
+	cases := map[string]string{
+		"missing": `{"start":"2020-01-01","through":"2026-08-23","purchase":1000,"winning":500}`,
+		"other":   `{"version":99,"start":"2020-01-01","through":"2026-08-23","purchase":1000,"winning":500}`,
+	}
+	for name, content := range cases {
+		t.Run(name, func(t *testing.T) {
+			configure(t)
+			install(t, testutil.Sequence(testutil.JSON(gistBody(t, content))))
+			if cp := Load(); cp != nil {
+				t.Errorf("Load = %+v, want nil", cp)
+			}
+		})
+	}
+}
+
+var errTransient = errors.New("connection reset")
+
+// transientCases maps subtest names to a first-call failure: 0 means a
+// transport error, otherwise that HTTP status.
+var transientCases = map[string]int{"transport": 0, "408": 408, "429": 429, "500": 500, "502": 502, "503": 503, "504": 504}
+
+// transientThen fails the first call (transport error when status is 0,
+// otherwise that status) and answers ok afterwards.
+func transientThen(status int, ok testutil.StubResponse) func(int, testutil.RecordedRequest) (testutil.StubResponse, error) {
+	return func(call int, _ testutil.RecordedRequest) (testutil.StubResponse, error) {
+		if call > 0 {
+			return ok, nil
+		}
+		if status == 0 {
+			return testutil.StubResponse{}, errTransient
+		}
+		return testutil.StubResponse{Status: status, Body: "{}"}, nil
+	}
+}
+
+func TestLoadRetriesTransientFailureOnce(t *testing.T) {
+	valid := testutil.JSON(gistBody(t, `{"version":1,"start":"2020-01-01","through":"2026-08-23","purchase":1000,"winning":500}`))
+	for name, status := range transientCases {
+		t.Run(name, func(t *testing.T) {
+			configure(t)
+			stub := install(t, transientThen(status, valid))
+			if cp := Load(); cp == nil {
+				t.Fatal("Load = nil, want checkpoint after retry")
+			}
+			if len(stub.Requests) != 2 {
+				t.Errorf("requests = %d, want 2", len(stub.Requests))
+			}
+			if len(sleeps) != 1 || sleeps[0] != retryDelay {
+				t.Errorf("sleeps = %v, want [%v]", sleeps, retryDelay)
+			}
+		})
+	}
+}
+
+func TestSaveRetriesTransientFailureOnce(t *testing.T) {
+	for name, status := range transientCases {
+		t.Run(name, func(t *testing.T) {
+			configure(t)
+			stub := install(t, transientThen(status, testutil.JSON("{}")))
+			if !Save(Checkpoint{Start: "2020-01-01", Through: "2026-08-23"}) {
+				t.Fatal("Save = false, want true after retry")
+			}
+			if len(stub.Requests) != 2 {
+				t.Fatalf("requests = %d, want 2", len(stub.Requests))
+			}
+			if len(sleeps) != 1 || sleeps[0] != retryDelay {
+				t.Errorf("sleeps = %v, want [%v]", sleeps, retryDelay)
+			}
+			if stub.Requests[1].Body == "" || stub.Requests[1].Body != stub.Requests[0].Body {
+				t.Errorf("retry body = %q, want same as first %q", stub.Requests[1].Body, stub.Requests[0].Body)
+			}
+		})
+	}
+}
+
+func TestRetryGivesUpAfterSecondAttempt(t *testing.T) {
+	configure(t)
+	stub := install(t, testutil.Sequence(testutil.StubResponse{Status: 503, Body: "{}"}))
+	if cp := Load(); cp != nil {
+		t.Errorf("Load = %+v, want nil", cp)
+	}
+	if Save(Checkpoint{}) {
+		t.Error("Save = true, want false")
+	}
+	if len(stub.Requests) != 4 {
+		t.Errorf("requests = %d, want 4 (2 per call)", len(stub.Requests))
+	}
+}
+
+func TestNoRetryOnPermanentStatus(t *testing.T) {
+	configure(t)
+	stub := install(t, testutil.Sequence(testutil.StubResponse{Status: 404, Body: "{}"}))
+	if cp := Load(); cp != nil {
+		t.Errorf("Load = %+v, want nil", cp)
+	}
+	if Save(Checkpoint{}) {
+		t.Error("Save = true, want false")
+	}
+	if len(stub.Requests) != 2 {
+		t.Errorf("requests = %d, want 2 (1 per call)", len(stub.Requests))
+	}
+	if len(sleeps) != 0 {
+		t.Errorf("sleeps = %v, want none for a permanent status", sleeps)
 	}
 }

@@ -25,11 +25,17 @@ import (
 // Checkpoint is the settled lifetime aggregate over [Start, Through]
 // (dates as YYYY-MM-DD).
 type Checkpoint struct {
+	Version  int    `json:"version"`
 	Start    string `json:"start"`
 	Through  string `json:"through"`
 	Purchase int    `json:"purchase"`
 	Winning  int    `json:"winning"`
 }
+
+// schemaVersion identifies the aggregation rules a checkpoint was computed
+// under. Bump it whenever those rules change: Load rejects any other version,
+// so the next run rescans the full ledger and re-saves under the new rules.
+const schemaVersion = 1
 
 // fileName is the gist file holding the checkpoint JSON.
 const fileName = "ledger-checkpoint.json"
@@ -38,8 +44,20 @@ const fileName = "ledger-checkpoint.json"
 // (https://docs.github.com/en/rest/gists/gists).
 const gistsURL = "https://api.github.com/gists/"
 
-// doer is the injectable seam (overridden in tests).
-var doer httpclient.Doer = &http.Client{Timeout: 30 * time.Second}
+// Injectable seams (overridden in tests).
+var (
+	doer  httpclient.Doer = &http.Client{Timeout: 30 * time.Second}
+	sleep                 = time.Sleep
+)
+
+// retryDelay is the backoff before the single retry of a transient failure.
+const retryDelay = 500 * time.Millisecond
+
+// retryStatuses are transient GitHub API statuses worth one retry; any other
+// non-2xx is treated as permanent.
+var retryStatuses = map[int]bool{
+	408: true, 425: true, 429: true, 500: true, 502: true, 503: true, 504: true,
+}
 
 type gistFile struct {
 	Content string `json:"content"`
@@ -60,8 +78,32 @@ func credentials() (token, id string, ok bool) {
 	return token, id, true
 }
 
-func request(method, token, id string, body io.Reader) (*http.Response, error) {
-	req, err := http.NewRequestWithContext(context.Background(), method, gistsURL+id, body)
+// requestWithRetry sends the request, retrying once after retryDelay on a
+// transport error or a transient status, so one blip neither forces a full
+// rescan (Load) nor drops a checkpoint advance (Save).
+func requestWithRetry(method, token, id string, body []byte) (*http.Response, error) {
+	resp, err := request(method, token, id, body)
+	if err == nil && !retryStatuses[resp.StatusCode] {
+		return resp, nil
+	}
+	fields := logger.Fields{logger.FieldEvent: "checkpoint_retry", "method": method}
+	if err != nil {
+		fields[logger.FieldError] = err.Error()
+	} else {
+		fields[logger.FieldStatus] = resp.StatusCode
+		_ = resp.Body.Close()
+	}
+	logger.Warn("Ledger checkpoint request failed, retrying", fields)
+	sleep(retryDelay)
+	return request(method, token, id, body)
+}
+
+func request(method, token, id string, body []byte) (*http.Response, error) {
+	var reader io.Reader
+	if body != nil {
+		reader = bytes.NewReader(body)
+	}
+	req, err := http.NewRequestWithContext(context.Background(), method, gistsURL+id, reader)
 	if err != nil {
 		return nil, err
 	}
@@ -103,7 +145,7 @@ func Load() *Checkpoint {
 		return nil
 	}
 
-	resp, err := request(http.MethodGet, token, id, nil)
+	resp, err := requestWithRetry(http.MethodGet, token, id, nil)
 	if err != nil {
 		loadFailed(err)
 		return nil
@@ -131,6 +173,10 @@ func Load() *Checkpoint {
 		loadFailed(err)
 		return nil
 	}
+	if cp.Version != schemaVersion {
+		loadFailed(fmt.Errorf("checkpoint schema version %d, want %d", cp.Version, schemaVersion))
+		return nil
+	}
 	return &cp
 }
 
@@ -149,6 +195,7 @@ func Save(cp Checkpoint) bool {
 		return false
 	}
 
+	cp.Version = schemaVersion
 	content, err := json.Marshal(cp)
 	if err != nil {
 		return saveFailed(logger.Fields{logger.FieldError: err.Error()})
@@ -158,7 +205,7 @@ func Save(cp Checkpoint) bool {
 		return saveFailed(logger.Fields{logger.FieldError: err.Error()})
 	}
 
-	resp, err := request(http.MethodPatch, token, id, bytes.NewReader(body))
+	resp, err := requestWithRetry(http.MethodPatch, token, id, body)
 	if err != nil {
 		return saveFailed(logger.Fields{logger.FieldError: err.Error()})
 	}
