@@ -15,11 +15,15 @@ import (
 	"github.com/kadragon/dhlottery-worker/internal/testutil"
 )
 
+// sleeps records the backoffs requested by the code under test.
+var sleeps []time.Duration
+
 func install(t *testing.T, h func(int, testutil.RecordedRequest) (testutil.StubResponse, error)) *testutil.StubDoer {
 	t.Helper()
 	stub := &testutil.StubDoer{Handler: h}
 	orig, origSleep := doer, sleep
-	doer, sleep = stub, func(time.Duration) {}
+	sleeps = nil
+	doer, sleep = stub, func(d time.Duration) { sleeps = append(sleeps, d) }
 	t.Cleanup(func() { doer, sleep = orig, origSleep })
 	return stub
 }
@@ -215,6 +219,10 @@ func TestLoadRejectsSchemaVersionMismatch(t *testing.T) {
 
 var errTransient = errors.New("connection reset")
 
+// transientCases maps subtest names to a first-call failure: 0 means a
+// transport error, otherwise that HTTP status.
+var transientCases = map[string]int{"transport": 0, "408": 408, "429": 429, "500": 500, "502": 502, "503": 503, "504": 504}
+
 // transientThen fails the first call (transport error when status is 0,
 // otherwise that status) and answers ok afterwards.
 func transientThen(status int, ok testutil.StubResponse) func(int, testutil.RecordedRequest) (testutil.StubResponse, error) {
@@ -231,8 +239,8 @@ func transientThen(status int, ok testutil.StubResponse) func(int, testutil.Reco
 
 func TestLoadRetriesTransientFailureOnce(t *testing.T) {
 	valid := testutil.JSON(gistBody(t, `{"version":1,"start":"2020-01-01","through":"2026-08-23","purchase":1000,"winning":500}`))
-	for _, status := range []int{0, 408, 429, 500, 503} {
-		t.Run(http.StatusText(status), func(t *testing.T) {
+	for name, status := range transientCases {
+		t.Run(name, func(t *testing.T) {
 			configure(t)
 			stub := install(t, transientThen(status, valid))
 			if cp := Load(); cp == nil {
@@ -241,13 +249,16 @@ func TestLoadRetriesTransientFailureOnce(t *testing.T) {
 			if len(stub.Requests) != 2 {
 				t.Errorf("requests = %d, want 2", len(stub.Requests))
 			}
+			if len(sleeps) != 1 || sleeps[0] != retryDelay {
+				t.Errorf("sleeps = %v, want [%v]", sleeps, retryDelay)
+			}
 		})
 	}
 }
 
 func TestSaveRetriesTransientFailureOnce(t *testing.T) {
-	for _, status := range []int{0, 502, 504} {
-		t.Run(http.StatusText(status), func(t *testing.T) {
+	for name, status := range transientCases {
+		t.Run(name, func(t *testing.T) {
 			configure(t)
 			stub := install(t, transientThen(status, testutil.JSON("{}")))
 			if !Save(Checkpoint{Start: "2020-01-01", Through: "2026-08-23"}) {
@@ -255,6 +266,9 @@ func TestSaveRetriesTransientFailureOnce(t *testing.T) {
 			}
 			if len(stub.Requests) != 2 {
 				t.Fatalf("requests = %d, want 2", len(stub.Requests))
+			}
+			if len(sleeps) != 1 || sleeps[0] != retryDelay {
+				t.Errorf("sleeps = %v, want [%v]", sleeps, retryDelay)
 			}
 			if stub.Requests[1].Body == "" || stub.Requests[1].Body != stub.Requests[0].Body {
 				t.Errorf("retry body = %q, want same as first %q", stub.Requests[1].Body, stub.Requests[0].Body)
@@ -288,5 +302,8 @@ func TestNoRetryOnPermanentStatus(t *testing.T) {
 	}
 	if len(stub.Requests) != 2 {
 		t.Errorf("requests = %d, want 2 (1 per call)", len(stub.Requests))
+	}
+	if len(sleeps) != 0 {
+		t.Errorf("sleeps = %v, want none for a permanent status", sleeps)
 	}
 }
