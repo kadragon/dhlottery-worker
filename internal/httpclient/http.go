@@ -27,6 +27,17 @@ type RequestOptions struct {
 	Body    string
 }
 
+// TransientStatus reports whether an HTTP status is a transient failure worth
+// retrying (timeout, too early, rate limit, server/gateway error). Any other
+// non-2xx status is treated as permanent by the retrying callers.
+func TransientStatus(code int) bool {
+	switch code {
+	case 408, 425, 429, 500, 502, 503, 504:
+		return true
+	}
+	return false
+}
+
 // Response is a buffered HTTP response with decoding helpers.
 type Response struct {
 	Status     int

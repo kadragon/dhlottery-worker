@@ -176,3 +176,16 @@ func TestResponseTextEUCKR(t *testing.T) {
 		t.Errorf("euc-kr decode = %q, want 당첨", text)
 	}
 }
+
+func TestTransientStatus(t *testing.T) {
+	for _, code := range []int{408, 425, 429, 500, 502, 503, 504} {
+		if !httpclient.TransientStatus(code) {
+			t.Errorf("TransientStatus(%d) = false, want true", code)
+		}
+	}
+	for _, code := range []int{200, 204, 302, 400, 401, 403, 404, 501} {
+		if httpclient.TransientStatus(code) {
+			t.Errorf("TransientStatus(%d) = true, want false", code)
+		}
+	}
+}
