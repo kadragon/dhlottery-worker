@@ -43,3 +43,6 @@ yarn-error.log*
 
 # Local tool state
 .antigravitycli/
+
+# Agent maintenance stamp (local, rewritten each session)
+.agents/.maintenance-stamp
