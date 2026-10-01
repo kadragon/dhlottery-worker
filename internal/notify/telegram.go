@@ -116,52 +116,54 @@ func sendOnce(text string) (*http.Response, error) {
 // permanent error.
 func sendTelegramMessage(text, failureEvent string) bool {
 	maxAttempts := len(retryDelays) + 1
+	attempt := 0
+	sent := false
 
-	for attempt := 0; attempt < maxAttempts; attempt++ {
+	httpclient.Retry(retryDelays, sleepFn, func(final bool) (bool, time.Duration) {
+		attempt++
 		resp, err := sendOnce(text)
 		if err != nil {
-			if attempt < len(retryDelays) {
+			if !final {
 				logger.Warn("Telegram send failed, retrying", logger.Fields{
-					logger.FieldEvent: "telegram_retry_attempt", "attempt": attempt + 1, "error": err.Error(),
+					logger.FieldEvent: "telegram_retry_attempt", "attempt": attempt, "error": err.Error(),
 				})
-				sleepFn(retryDelays[attempt])
-				continue
+				return true, 0
 			}
 			logger.Error("Failed to send Telegram notification", logger.Fields{
 				logger.FieldEvent: failureEvent, "error": err.Error(),
 			})
-			return false
+			return false, 0
 		}
 
 		status := resp.StatusCode
 		_ = resp.Body.Close()
 
 		if status >= 200 && status < 300 {
-			return true
+			sent = true
+			return false, 0
 		}
 
 		if httpclient.TransientStatus(status) {
-			if attempt < len(retryDelays) {
+			if !final {
 				logger.Warn("Telegram API error, retrying", logger.Fields{
-					logger.FieldEvent: "telegram_retry_attempt", "attempt": attempt + 1, "status": status,
+					logger.FieldEvent: "telegram_retry_attempt", "attempt": attempt, "status": status,
 				})
-				sleepFn(retryDelays[attempt])
-				continue
+				return true, 0
 			}
 			logger.Error("Telegram notification failed after retries", logger.Fields{
 				logger.FieldEvent: "telegram_final_failure", "failureEvent": failureEvent,
 				"attempts": maxAttempts, "status": status,
 			})
-			return false
+			return false, 0
 		}
 
 		// Permanent client error.
 		logger.Error("Telegram API error", logger.Fields{
 			logger.FieldEvent: "telegram_api_error", "status": status,
 		})
-		return false
-	}
-	return false
+		return false, 0
+	})
+	return sent
 }
 
 // SendCombinedNotification formats multiple payloads as a single Telegram

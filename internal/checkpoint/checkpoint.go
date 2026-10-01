@@ -15,6 +15,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"time"
 
 	"github.com/kadragon/dhlottery-worker/internal/env"
@@ -48,10 +49,18 @@ const gistsURL = "https://api.github.com/gists/"
 var (
 	doer  httpclient.Doer = &http.Client{Timeout: 30 * time.Second}
 	sleep                 = time.Sleep
+	now                   = time.Now
 )
 
 // retryDelay is the backoff before the single retry of a transient failure.
 const retryDelay = 500 * time.Millisecond
+
+// maxRateLimitWait caps how long a rate-limited request waits for its retry;
+// a longer server-requested wait skips the retry instead of stalling the run.
+const maxRateLimitWait = 10 * time.Second
+
+// resetBuffer is added to a wait derived from x-ratelimit-reset.
+const resetBuffer = time.Second
 
 type gistFile struct {
 	Content string `json:"content"`
@@ -72,24 +81,71 @@ func credentials() (token, id string, ok bool) {
 	return token, id, true
 }
 
-// requestWithRetry sends the request, retrying once after retryDelay on a
-// transport error or an httpclient.TransientStatus, so one blip neither forces a full
-// rescan (Load) nor drops a checkpoint advance (Save).
+// requestWithRetry sends the request, retrying once on a transport error, an
+// httpclient.TransientStatus, or a GitHub rate limit, so one blip neither
+// forces a full rescan (Load) nor drops a checkpoint advance (Save). The retry
+// waits retryDelay, or the rate-limit wait GitHub asks for when that is at
+// most maxRateLimitWait; a longer one is not retried (the second attempt
+// would fail the same way).
 func requestWithRetry(method, token, id string, body []byte) (*http.Response, error) {
-	resp, err := request(method, token, id, body)
-	if err == nil && !httpclient.TransientStatus(resp.StatusCode) {
-		return resp, nil
+	var resp *http.Response
+	var err error
+	httpclient.Retry([]time.Duration{retryDelay}, sleep, func(final bool) (bool, time.Duration) {
+		resp, err = request(method, token, id, body) //nolint:bodyclose // closed here before a retry; the final resp is returned for the caller to close
+		var wait time.Duration
+		if err == nil {
+			var limited bool
+			wait, limited = rateLimitWait(resp)
+			if !limited && !httpclient.TransientStatus(resp.StatusCode) {
+				return false, 0
+			}
+			if wait > maxRateLimitWait {
+				logger.Warn("Ledger checkpoint rate limited beyond retry cap", logger.Fields{
+					logger.FieldEvent: "checkpoint_rate_limited", "method": method,
+					logger.FieldStatus: resp.StatusCode, "wait": wait.String(),
+				})
+				return false, 0
+			}
+		}
+		if final {
+			return false, 0
+		}
+		fields := logger.Fields{logger.FieldEvent: "checkpoint_retry", "method": method}
+		if err != nil {
+			fields[logger.FieldError] = err.Error()
+		} else {
+			fields[logger.FieldStatus] = resp.StatusCode
+			_ = resp.Body.Close()
+		}
+		logger.Warn("Ledger checkpoint request failed, retrying", fields)
+		return true, wait
+	})
+	return resp, err
+}
+
+// rateLimitWait reports whether resp is a GitHub rate-limit response (429, or
+// 403 carrying rate-limit headers; a bare 403 is a permission error) and how
+// long GitHub asks to wait: Retry-After seconds, else the time until
+// x-ratelimit-reset (plus resetBuffer) when x-ratelimit-remaining is 0. A
+// zero wait means none was given. An exhausted limit with no parseable reset
+// is reported as not rate limited, so a 403 is not retried. See https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api.
+func rateLimitWait(resp *http.Response) (time.Duration, bool) {
+	if resp.StatusCode != http.StatusTooManyRequests && resp.StatusCode != http.StatusForbidden {
+		return 0, false
 	}
-	fields := logger.Fields{logger.FieldEvent: "checkpoint_retry", "method": method}
-	if err != nil {
-		fields[logger.FieldError] = err.Error()
-	} else {
-		fields[logger.FieldStatus] = resp.StatusCode
-		_ = resp.Body.Close()
+	if secs, err := strconv.Atoi(resp.Header.Get("Retry-After")); err == nil {
+		return time.Duration(secs) * time.Second, true
 	}
-	logger.Warn("Ledger checkpoint request failed, retrying", fields)
-	sleep(retryDelay)
-	return request(method, token, id, body)
+	if resp.Header.Get("X-Ratelimit-Remaining") == "0" {
+		reset, err := strconv.ParseInt(resp.Header.Get("X-Ratelimit-Reset"), 10, 64)
+		if err != nil {
+			// Exhausted with no known reset: an early retry cannot succeed.
+			return 0, false
+		}
+		// The buffer absorbs sub-second truncation and runner clock skew.
+		return max(time.Unix(reset, 0).Sub(now()), 0) + resetBuffer, true
+	}
+	return 0, resp.StatusCode == http.StatusTooManyRequests
 }
 
 func request(method, token, id string, body []byte) (*http.Response, error) {

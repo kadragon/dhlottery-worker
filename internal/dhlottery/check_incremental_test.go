@@ -3,6 +3,7 @@ package dhlottery
 import (
 	"net/url"
 	"testing"
+	"time"
 
 	"github.com/kadragon/dhlottery-worker/internal/checkpoint"
 	"github.com/kadragon/dhlottery-worker/internal/httpclient"
@@ -197,6 +198,29 @@ func TestAggregateLedgerIncrementalFailure(t *testing.T) {
 			s, next, ok := aggregateLedgerIncremental(client, "20200101", aggNow(t), prev)
 			if ok || next != nil || s != (LedgerSummary{}) {
 				t.Errorf("got (%+v, %+v, %v), want all-or-nothing failure", s, next, ok)
+			}
+		})
+	}
+}
+
+func TestCheckpointResumable(t *testing.T) {
+	now := time.Date(2026, 10, 5, 1, 0, 0, 0, time.UTC) // KST 2026-10-05; settled cutoff 2026-08-31
+	cases := map[string]struct {
+		cp    *checkpoint.Checkpoint
+		start string
+		want  bool
+	}{
+		"valid":               {&checkpoint.Checkpoint{Start: "2020-01-01", Through: "2026-08-23"}, "20200101", true},
+		"through at cutoff":   {&checkpoint.Checkpoint{Start: "2020-01-01", Through: "2026-08-31"}, "20200101", true},
+		"through past":        {&checkpoint.Checkpoint{Start: "2020-01-01", Through: "2026-09-01"}, "20200101", false},
+		"start mismatch":      {&checkpoint.Checkpoint{Start: "2021-01-01", Through: "2026-08-23"}, "20200101", false},
+		"nil":                 {nil, "20200101", false},
+		"malformed env start": {&checkpoint.Checkpoint{Start: "2020-01-01", Through: "2026-08-23"}, "foo", false},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			if got := CheckpointResumable(tc.cp, tc.start, now); got != tc.want {
+				t.Errorf("CheckpointResumable = %v, want %v", got, tc.want)
 			}
 		})
 	}

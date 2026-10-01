@@ -26,7 +26,9 @@ type fakeClient struct {
 	summaryOK    bool
 	aggStartDate string
 	aggPrev      *checkpoint.Checkpoint
+	aggPrevs     []*checkpoint.Checkpoint
 	aggNext      *checkpoint.Checkpoint
+	failFullScan bool // fail only calls with prev == nil
 
 	login, checkDeposit, reserve, buy, checkWinning, aggregate int
 }
@@ -68,6 +70,10 @@ func (f *fakeClient) AggregateLedgerIncremental(startDate string, _ time.Time, p
 	f.aggregate++
 	f.aggStartDate = startDate
 	f.aggPrev = prev
+	f.aggPrevs = append(f.aggPrevs, prev)
+	if prev == nil && f.failFullScan {
+		return dhlottery.LedgerSummary{}, nil, false
+	}
 	return f.summary, f.aggNext, f.summaryOK
 }
 func (f *fakeClient) Collector() *notify.Collector { return f.collector }
@@ -300,6 +306,10 @@ func installCheckpoint(t *testing.T, prev *checkpoint.Checkpoint, saveOK bool) *
 	return cap
 }
 
+// midMonth is a run outside the monthly forced-rescan window (KST day > 7),
+// so the stored checkpoint is loaded.
+var midMonth = time.Date(2026, 10, 12, 1, 0, 0, 0, time.UTC)
+
 func TestRunWorkflowCheckpointSavedOnSuccess(t *testing.T) {
 	installSend(t, true)
 	prev := &checkpoint.Checkpoint{Start: "2020-01-01", Through: "2026-04-27", Purchase: 1000}
@@ -308,7 +318,7 @@ func TestRunWorkflowCheckpointSavedOnSuccess(t *testing.T) {
 	f := newFake()
 	f.aggNext = next
 
-	RunWorkflow(time.Now(), f)
+	RunWorkflow(midMonth, f)
 
 	if f.aggPrev != prev {
 		t.Errorf("AggregateLedgerIncremental prev = %+v, want loaded checkpoint", f.aggPrev)
@@ -335,7 +345,7 @@ func TestRunWorkflowCheckpointNotSaved(t *testing.T) {
 			f := newFake()
 			setup(f)
 
-			RunWorkflow(time.Now(), f)
+			RunWorkflow(midMonth, f)
 
 			if len(cap.saved) != 0 {
 				t.Errorf("saved = %+v, want none", cap.saved)
@@ -357,5 +367,96 @@ func TestRunWorkflowCheckpointSaveFailureNonBlocking(t *testing.T) {
 	last := send.payloads[len(send.payloads)-1]
 	if got := settlementDetail(last, "누적 구매"); got != "1,000원" {
 		t.Errorf("누적 구매 = %q, want 1,000원", got)
+	}
+}
+
+var firstMonday = time.Date(2026, 10, 5, 1, 0, 0, 0, time.UTC)
+
+func TestRunWorkflowForcedRescan(t *testing.T) {
+	cases := map[string]struct {
+		now    time.Time
+		forced bool
+	}{
+		"first Monday":           {firstMonday, true},
+		"KST day 7 late evening": {time.Date(2026, 10, 7, 14, 0, 0, 0, time.UTC), true},
+		"KST day 8 (UTC day 7)":  {time.Date(2026, 10, 7, 15, 30, 0, 0, time.UTC), false},
+		"mid month":              {midMonth, false},
+	}
+	prev := &checkpoint.Checkpoint{Start: "2020-01-01", Through: "2026-08-31", Purchase: 2000}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			installSend(t, true)
+			cap := installCheckpoint(t, prev, true)
+			f := newFake()
+			unchanged := *prev
+			f.aggNext = &unchanged
+			grown := checkpoint.Checkpoint{Start: prev.Start, Through: "2026-09-07", Purchase: 3000}
+			if tc.forced {
+				f.aggNext = &grown
+			}
+
+			RunWorkflow(tc.now, f)
+
+			if tc.forced {
+				if len(f.aggPrevs) != 1 || f.aggPrevs[0] != nil {
+					t.Errorf("aggregate prevs = %v, want one full scan (prev=nil)", f.aggPrevs)
+				}
+				if len(cap.saved) != 1 || cap.saved[0] != grown {
+					t.Errorf("saved = %+v, want the full-scan checkpoint written", cap.saved)
+				}
+				return
+			}
+			if len(f.aggPrevs) != 1 || f.aggPrevs[0] != prev {
+				t.Errorf("aggregate prevs = %v, want one resume from the stored checkpoint", f.aggPrevs)
+			}
+			if len(cap.saved) != 0 {
+				t.Errorf("saved = %+v, want none for an unchanged checkpoint", cap.saved)
+			}
+		})
+	}
+}
+
+func TestRunWorkflowForcedRescanFallsBackToResume(t *testing.T) {
+	installSend(t, true)
+	prev := &checkpoint.Checkpoint{Start: "2020-01-01", Through: "2026-08-31", Purchase: 2000}
+	installCheckpoint(t, prev, true)
+	f := newFake()
+	f.failFullScan = true
+	f.summary = dhlottery.LedgerSummary{CumulativePurchase: 3000}
+
+	summary, ok := aggregateLedger(f, firstMonday)
+
+	if !ok || summary.CumulativePurchase != 3000 {
+		t.Errorf("aggregateLedger = %+v, %v; want the resumed totals", summary, ok)
+	}
+	if len(f.aggPrevs) != 2 || f.aggPrevs[0] != nil || f.aggPrevs[1] != prev {
+		t.Errorf("aggregate prevs = %v, want [nil (full scan), stored checkpoint]", f.aggPrevs)
+	}
+}
+
+func TestRunWorkflowCheckpointNotSavedWhenTotalsShrink(t *testing.T) {
+	prev := &checkpoint.Checkpoint{Start: "2020-01-01", Through: "2026-08-31", Purchase: 2000, Winning: 500}
+	cases := map[string]struct {
+		next *checkpoint.Checkpoint
+		save bool
+	}{
+		"purchase shrank":    {&checkpoint.Checkpoint{Start: "2020-01-01", Through: "2026-09-07", Purchase: 1000, Winning: 500}, false},
+		"winning shrank":     {&checkpoint.Checkpoint{Start: "2020-01-01", Through: "2026-09-07", Purchase: 3000, Winning: 0}, false},
+		"grew":               {&checkpoint.Checkpoint{Start: "2020-01-01", Through: "2026-09-07", Purchase: 3000, Winning: 500}, true},
+		"start date changed": {&checkpoint.Checkpoint{Start: "2026-01-01", Through: "2026-09-07", Purchase: 100}, true},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			installSend(t, true)
+			cap := installCheckpoint(t, prev, true)
+			f := newFake()
+			f.aggNext = tc.next
+
+			RunWorkflow(firstMonday, f)
+
+			if got := len(cap.saved) == 1; got != tc.save {
+				t.Errorf("saved = %+v, want save=%v", cap.saved, tc.save)
+			}
+		})
 	}
 }
