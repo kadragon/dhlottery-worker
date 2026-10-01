@@ -53,12 +53,6 @@ var (
 // retryDelay is the backoff before the single retry of a transient failure.
 const retryDelay = 500 * time.Millisecond
 
-// retryStatuses are transient GitHub API statuses worth one retry; any other
-// non-2xx is treated as permanent.
-var retryStatuses = map[int]bool{
-	408: true, 425: true, 429: true, 500: true, 502: true, 503: true, 504: true,
-}
-
 type gistFile struct {
 	Content string `json:"content"`
 }
@@ -79,11 +73,11 @@ func credentials() (token, id string, ok bool) {
 }
 
 // requestWithRetry sends the request, retrying once after retryDelay on a
-// transport error or a transient status, so one blip neither forces a full
+// transport error or an httpclient.TransientStatus, so one blip neither forces a full
 // rescan (Load) nor drops a checkpoint advance (Save).
 func requestWithRetry(method, token, id string, body []byte) (*http.Response, error) {
 	resp, err := request(method, token, id, body)
-	if err == nil && !retryStatuses[resp.StatusCode] {
+	if err == nil && !httpclient.TransientStatus(resp.StatusCode) {
 		return resp, nil
 	}
 	fields := logger.Fields{logger.FieldEvent: "checkpoint_retry", "method": method}

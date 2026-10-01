@@ -11,6 +11,7 @@ import (
 	"unicode"
 
 	"github.com/kadragon/dhlottery-worker/internal/env"
+	"github.com/kadragon/dhlottery-worker/internal/httpclient"
 	"github.com/kadragon/dhlottery-worker/internal/logger"
 )
 
@@ -23,12 +24,6 @@ var (
 	doer    httpDoer = &http.Client{Timeout: 30 * time.Second}
 	sleepFn          = time.Sleep
 )
-
-// Retried on transient errors; permanent client errors (4xx outside this set)
-// are not retried.
-var retryStatuses = map[int]bool{
-	408: true, 425: true, 429: true, 500: true, 502: true, 503: true, 504: true,
-}
 
 // Delay between attempts; len(retryDelays)+1 = total attempts.
 var retryDelays = []time.Duration{500 * time.Millisecond, 1500 * time.Millisecond}
@@ -145,7 +140,7 @@ func sendTelegramMessage(text, failureEvent string) bool {
 			return true
 		}
 
-		if retryStatuses[status] {
+		if httpclient.TransientStatus(status) {
 			if attempt < len(retryDelays) {
 				logger.Warn("Telegram API error, retrying", logger.Fields{
 					logger.FieldEvent: "telegram_retry_attempt", "attempt": attempt + 1, "status": status,

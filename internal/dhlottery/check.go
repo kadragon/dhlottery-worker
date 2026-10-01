@@ -327,12 +327,18 @@ func aggregateWindow(client *httpclient.Client, strDt, endDt string) (purchase, 
 		}
 		if page == 1 {
 			total = data.Data.Total
+			if total == 0 && len(data.Data.List) > 0 {
+				logTotalAnomaly("total_zero_with_rows", strDt, endDt, page, len(data.Data.List), total)
+			}
 		}
 		for _, row := range data.Data.List {
 			purchase += row.PrchsQty * constants.CostPerGame
 			if row.LtWnAmt != nil && *row.LtWnAmt > 0 {
 				winning += *row.LtWnAmt
 			}
+		}
+		if len(data.Data.List) == 0 && fetched < total {
+			logTotalAnomaly("empty_page_before_total", strDt, endDt, page, fetched, total)
 		}
 		fetched += len(data.Data.List)
 		if len(data.Data.List) == 0 || fetched >= total {
@@ -351,28 +357,56 @@ func aggregateWindow(client *httpclient.Client, strDt, endDt string) (purchase, 
 	return 0, 0, false
 }
 
-// fetchLedgerPageWithRetry retries a failed page fetch once after
-// ledgerRetryDelay, so a single transient error does not fail the whole
-// all-or-nothing aggregation.
-func fetchLedgerPageWithRetry(client *httpclient.Client, strDt, endDt string, page, perPage int) (ledgerResponse, bool) {
-	if data, ok := fetchLedgerPage(client, strDt, endDt, page, perPage); ok {
-		return data, true
-	}
-	ledgerSleep(ledgerRetryDelay)
-	return fetchLedgerPage(client, strDt, endDt, page, perPage)
+// logTotalAnomaly records a page whose data.total disagrees with its rows.
+// The window still completes as before: the server's total semantics are not
+// yet confirmed, so these warnings are evidence (via realtest) for whether
+// aggregateWindow should treat them as failures.
+func logTotalAnomaly(reason, strDt, endDt string, page, rows, total int) {
+	logger.Warn("Ledger total inconsistent with rows", logger.Fields{
+		logger.FieldEvent: "ledger_total_anomaly",
+		"reason":          reason,
+		"srchStrDt":       strDt,
+		"srchEndDt":       endDt,
+		"page":            page,
+		"rows":            rows,
+		"total":           total,
+	})
 }
 
-// fetchLedgerPage fetches one page of the ledger. Returns ok=false (after
-// logging) on any network/parse error, redirect, or non-200 status.
-func fetchLedgerPage(client *httpclient.Client, strDt, endDt string, page, perPage int) (ledgerResponse, bool) {
-	var data ledgerResponse
+// fetchLedgerPageWithRetry retries a transiently failed page fetch (transport
+// error or httpclient.TransientStatus) once after ledgerRetryDelay, so a single
+// blip does not fail the whole all-or-nothing aggregation. Permanent failures
+// (other statuses, redirects, unparseable bodies) fail without a retry.
+func fetchLedgerPageWithRetry(client *httpclient.Client, strDt, endDt string, page, perPage int) (ledgerResponse, bool) {
+	data, ok, transient := fetchLedgerPage(client, strDt, endDt, page, perPage, true)
+	if ok || !transient {
+		return data, ok
+	}
+	ledgerSleep(ledgerRetryDelay)
+	data, ok, _ = fetchLedgerPage(client, strDt, endDt, page, perPage, false)
+	return data, ok
+}
+
+// fetchLedgerPage fetches one page of the ledger. Returns ok=false on any
+// network/parse error, redirect, or non-200 status; transient reports whether
+// the failure is worth retrying. A transient failure with willRetry set is
+// logged as a warning (ledger_retry_attempt); every other failure as an error.
+func fetchLedgerPage(client *httpclient.Client, strDt, endDt string, page, perPage int, willRetry bool) (data ledgerResponse, ok, transient bool) {
+	fail := func(transient bool, event string, fields logger.Fields) (ledgerResponse, bool, bool) {
+		if transient && willRetry {
+			fields[logger.FieldEvent] = "ledger_retry_attempt"
+			fields["page"] = page
+			logger.Warn("Ledger page fetch failed, retrying", fields)
+		} else {
+			fields[logger.FieldEvent] = event
+			logger.Error("Ledger aggregate failed (non-fatal)", fields)
+		}
+		return data, false, transient
+	}
 
 	u, err := url.Parse(winningLedgerURL)
 	if err != nil {
-		logger.Error("Ledger aggregate failed (non-fatal)", logger.Fields{
-			logger.FieldEvent: "ledger_aggregate_failed", logger.FieldError: err.Error(),
-		})
-		return data, false
+		return fail(false, "ledger_aggregate_failed", logger.Fields{logger.FieldError: err.Error()})
 	}
 	q := u.Query()
 	q.Set("srchStrDt", strDt)
@@ -396,22 +430,14 @@ func fetchLedgerPage(client *httpclient.Client, strDt, endDt string, page, perPa
 		},
 	})
 	if err != nil {
-		logger.Error("Ledger aggregate failed (non-fatal)", logger.Fields{
-			logger.FieldEvent: "ledger_aggregate_failed", logger.FieldError: err.Error(),
-		})
-		return data, false
+		return fail(true, "ledger_aggregate_failed", logger.Fields{logger.FieldError: err.Error()})
 	}
 	if resp.Status != 200 {
-		logger.Error("Ledger aggregate fetch failed", logger.Fields{
-			logger.FieldEvent: "ledger_aggregate_fetch_failed", logger.FieldStatus: resp.Status,
-		})
-		return data, false
+		return fail(httpclient.TransientStatus(resp.Status), "ledger_aggregate_fetch_failed",
+			logger.Fields{logger.FieldStatus: resp.Status})
 	}
 	if err := resp.JSON(&data); err != nil {
-		logger.Error("Ledger aggregate failed (non-fatal)", logger.Fields{
-			logger.FieldEvent: "ledger_aggregate_failed", logger.FieldError: err.Error(),
-		})
-		return data, false
+		return fail(false, "ledger_aggregate_failed", logger.Fields{logger.FieldError: err.Error()})
 	}
-	return data, true
+	return data, true, false
 }

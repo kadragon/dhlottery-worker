@@ -1,7 +1,9 @@
 package dhlottery
 
 import (
+	"bytes"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/url"
 	"os"
@@ -12,6 +14,7 @@ import (
 
 	"github.com/kadragon/dhlottery-worker/internal/datekst"
 	"github.com/kadragon/dhlottery-worker/internal/httpclient"
+	"github.com/kadragon/dhlottery-worker/internal/logger"
 	"github.com/kadragon/dhlottery-worker/internal/testutil"
 )
 
@@ -456,6 +459,144 @@ func TestAggregateLedgerRetryExhausted(t *testing.T) {
 	}
 	if len(stub.Requests) != 2 {
 		t.Errorf("expected exactly 2 requests (attempt + one retry), got %d", len(stub.Requests))
+	}
+}
+
+// captureLogs routes warn/error logs into a buffer for the test's duration.
+func captureLogs(t *testing.T) *bytes.Buffer {
+	t.Helper()
+	var buf bytes.Buffer
+	logger.SetWriters(&buf, &buf)
+	t.Cleanup(func() { logger.SetWriters(os.Stdout, os.Stderr) })
+	return &buf
+}
+
+// logEvents returns the level of each logged line keyed by its event field.
+func logEvents(t *testing.T, buf *bytes.Buffer) map[string]string {
+	t.Helper()
+	events := map[string]string{}
+	for _, line := range strings.Split(strings.TrimSpace(buf.String()), "\n") {
+		var entry struct {
+			Level string `json:"level"`
+			Event string `json:"event"`
+		}
+		if line == "" || json.Unmarshal([]byte(line), &entry) != nil {
+			continue
+		}
+		events[entry.Event] = entry.Level
+	}
+	return events
+}
+
+// A retried first failure is a warning, not an error: only the final failure
+// is reported at error level.
+func TestAggregateLedgerRetryAttemptLoggedAsWarn(t *testing.T) {
+	noLedgerSleep(t)
+	logs := captureLogs(t)
+	body := `{"data":{"total":1,"list":[{"ltGdsCd":"LO40","prchsQty":5}]}}`
+	stub := &testutil.StubDoer{Handler: testutil.Sequence(
+		testutil.StubResponse{Status: 503, Body: "busy"},
+		testutil.StubResponse{Status: 200, Body: body},
+	)}
+	if _, ok := aggregateLedger(httpclient.NewWithDoer(stub), aggRecentStart, aggNow(t)); !ok {
+		t.Fatal("expected ok=true after a successful retry")
+	}
+	events := logEvents(t, logs)
+	if events["ledger_retry_attempt"] != "warn" {
+		t.Errorf("events = %v, want ledger_retry_attempt at warn", events)
+	}
+	for ev, level := range events {
+		if level == "error" {
+			t.Errorf("unexpected error-level log %q after a recovered retry", ev)
+		}
+	}
+}
+
+// Transport errors are transient: retried once.
+func TestAggregateLedgerTransportErrorRetried(t *testing.T) {
+	noLedgerSleep(t)
+	stub := &testutil.StubDoer{Handler: func(n int, _ testutil.RecordedRequest) (testutil.StubResponse, error) {
+		if n == 0 {
+			return testutil.StubResponse{}, errors.New("connection reset")
+		}
+		return testutil.StubResponse{Status: 200, Body: `{"data":{"total":0,"list":[]}}`}, nil
+	}}
+	if _, ok := aggregateLedger(httpclient.NewWithDoer(stub), aggRecentStart, aggNow(t)); !ok {
+		t.Fatal("expected ok=true after retrying a transport error")
+	}
+	if len(stub.Requests) != 2 {
+		t.Errorf("expected 2 requests (error + retry), got %d", len(stub.Requests))
+	}
+}
+
+// Permanent failures (non-transient status, redirect, unparseable body) fail
+// immediately without a wasted retry.
+func TestAggregateLedgerPermanentFailureNotRetried(t *testing.T) {
+	cases := map[string]testutil.StubResponse{
+		"404":      {Status: 404, Body: "not found"},
+		"redirect": {Status: 302, Header: http.Header{"Location": {"/login"}}},
+		"bad json": {Status: 200, Body: "<html>maintenance</html>"},
+	}
+	for name, resp := range cases {
+		t.Run(name, func(t *testing.T) {
+			slept := noLedgerSleep(t)
+			logs := captureLogs(t)
+			client, stub := checkClient(resp)
+			if s, ok := aggregateLedger(client, aggRecentStart, aggNow(t)); ok || s != (LedgerSummary{}) {
+				t.Errorf("expected (zero, false), got (%+v, %v)", s, ok)
+			}
+			if len(stub.Requests) != 1 || len(*slept) != 0 {
+				t.Errorf("requests=%d slept=%v, want 1 request and no backoff", len(stub.Requests), *slept)
+			}
+			if _, retried := logEvents(t, logs)["ledger_retry_attempt"]; retried {
+				t.Error("permanent failure logged a retry attempt")
+			}
+		})
+	}
+}
+
+// Responses whose data.total disagrees with the rows still complete (the
+// server's total semantics are unconfirmed), but log a ledger_total_anomaly
+// warning so a realtest run can surface them.
+func TestAggregateLedgerTotalAnomalyLogged(t *testing.T) {
+	cases := map[string]func(int, testutil.RecordedRequest) (testutil.StubResponse, error){
+		"total zero with rows": testutil.Sequence(
+			testutil.StubResponse{Status: 200, Body: `{"data":{"total":0,"list":[{"ltGdsCd":"LO40","prchsQty":5}]}}`},
+		),
+		"total missing with rows": testutil.Sequence(
+			testutil.StubResponse{Status: 200, Body: `{"data":{"list":[{"ltGdsCd":"LO40","prchsQty":5}]}}`},
+		),
+		"empty page before total": func(n int, _ testutil.RecordedRequest) (testutil.StubResponse, error) {
+			if n == 0 {
+				return testutil.StubResponse{Status: 200, Body: `{"data":{"total":150,"list":[{"ltGdsCd":"LO40","prchsQty":5}]}}`}, nil
+			}
+			return testutil.StubResponse{Status: 200, Body: `{"data":{"total":150,"list":[]}}`}, nil
+		},
+	}
+	for name, handler := range cases {
+		t.Run(name, func(t *testing.T) {
+			logs := captureLogs(t)
+			stub := &testutil.StubDoer{Handler: handler}
+			s, ok := aggregateLedger(httpclient.NewWithDoer(stub), aggRecentStart, aggNow(t))
+			if !ok || s.CumulativePurchase != 5000 {
+				t.Errorf("got (%+v, %v), want purchase 5000 and ok=true (behavior unchanged)", s, ok)
+			}
+			if logEvents(t, logs)["ledger_total_anomaly"] != "warn" {
+				t.Errorf("missing ledger_total_anomaly warn; logs: %s", logs.String())
+			}
+		})
+	}
+}
+
+// A consistent response logs no anomaly.
+func TestAggregateLedgerConsistentTotalNoAnomaly(t *testing.T) {
+	logs := captureLogs(t)
+	client, _ := checkClient(testutil.StubResponse{Status: 200, Body: ledgerFixture(t)})
+	if _, ok := aggregateLedger(client, aggRecentStart, aggNow(t)); !ok {
+		t.Fatal("expected ok=true")
+	}
+	if _, found := logEvents(t, logs)["ledger_total_anomaly"]; found {
+		t.Errorf("unexpected anomaly log: %s", logs.String())
 	}
 }
 
