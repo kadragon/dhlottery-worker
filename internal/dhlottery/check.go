@@ -386,12 +386,13 @@ func logTotalAnomaly(reason, strDt, endDt string, page, rows, fetched, total int
 // blip does not fail the whole all-or-nothing aggregation. Permanent failures
 // (other statuses, redirects, unparseable bodies) fail without a retry.
 func fetchLedgerPageWithRetry(client *httpclient.Client, strDt, endDt string, page, perPage int) (ledgerResponse, bool) {
-	data, ok, transient := fetchLedgerPage(client, strDt, endDt, page, perPage, true)
-	if ok || !transient {
-		return data, ok
-	}
-	ledgerSleep(ledgerRetryDelay)
-	data, ok, _ = fetchLedgerPage(client, strDt, endDt, page, perPage, false)
+	var data ledgerResponse
+	var ok bool
+	httpclient.Retry([]time.Duration{ledgerRetryDelay}, ledgerSleep, func(final bool) (bool, time.Duration) {
+		var transient bool
+		data, ok, transient = fetchLedgerPage(client, strDt, endDt, page, perPage, !final)
+		return !ok && transient, 0
+	})
 	return data, ok
 }
 

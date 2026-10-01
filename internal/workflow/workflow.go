@@ -9,9 +9,11 @@ import (
 
 	"github.com/kadragon/dhlottery-worker/internal/checkpoint"
 	"github.com/kadragon/dhlottery-worker/internal/constants"
+	"github.com/kadragon/dhlottery-worker/internal/datekst"
 	"github.com/kadragon/dhlottery-worker/internal/dhlottery"
 	"github.com/kadragon/dhlottery-worker/internal/env"
 	"github.com/kadragon/dhlottery-worker/internal/format"
+	"github.com/kadragon/dhlottery-worker/internal/logger"
 	"github.com/kadragon/dhlottery-worker/internal/notify"
 )
 
@@ -86,12 +88,26 @@ func RunWorkflow(now time.Time, client Client) bool {
 	return SendCombined(collector.Payloads())
 }
 
+// forcedRescanLastDay is the last KST day of the month on which a run ignores
+// the checkpoint and rescans the full ledger. With the weekly Monday schedule
+// that is the month's first Monday, so a settled delta undercounted by a bad
+// read is overwritten within a month instead of frozen in forever.
+const forcedRescanLastDay = "07"
+
 // aggregateLedger computes the lifetime totals, resuming from the stored
-// checkpoint when there is one. The advanced checkpoint is persisted only
-// when the aggregation succeeded and it changed; a save failure is logged by
-// saveCheckpoint and never affects the settlement (Golden Rule #2).
+// checkpoint when there is one (except on the monthly forced rescan). The
+// advanced checkpoint is persisted only when the aggregation succeeded and it
+// changed; a save failure is logged by saveCheckpoint and never affects the
+// settlement (Golden Rule #2).
 func aggregateLedger(client Client, now time.Time) (dhlottery.LedgerSummary, bool) {
-	prev := loadCheckpoint()
+	var prev *checkpoint.Checkpoint
+	if day := datekst.FormatKstYmd(now)[8:]; day <= forcedRescanLastDay {
+		logger.Info("Monthly forced full ledger rescan; checkpoint not loaded", logger.Fields{
+			logger.FieldEvent: "checkpoint_forced_rescan",
+		})
+	} else {
+		prev = loadCheckpoint()
+	}
 	summary, next, ok := client.AggregateLedgerIncremental(resolveLedgerStartDate(), now, prev)
 	if ok && next != nil && (prev == nil || *next != *prev) {
 		saveCheckpoint(*next)

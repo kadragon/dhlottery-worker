@@ -307,3 +307,49 @@ func TestNoRetryOnPermanentStatus(t *testing.T) {
 		t.Errorf("sleeps = %v, want none for a permanent status", sleeps)
 	}
 }
+
+func TestRateLimitRetryHonorsServerWait(t *testing.T) {
+	fixed := time.Unix(1_700_000_000, 0)
+	origNow := now
+	now = func() time.Time { return fixed }
+	t.Cleanup(func() { now = origNow })
+
+	cases := map[string]struct {
+		status   int
+		header   http.Header
+		requests int
+		sleeps   []time.Duration
+	}{
+		"429 Retry-After":           {429, http.Header{"Retry-After": {"3"}}, 2, []time.Duration{3 * time.Second}},
+		"403 Retry-After":           {403, http.Header{"Retry-After": {"3"}}, 2, []time.Duration{3 * time.Second}},
+		"403 remaining 0 reset":     {403, http.Header{"X-Ratelimit-Remaining": {"0"}, "X-Ratelimit-Reset": {"1700000004"}}, 2, []time.Duration{4 * time.Second}},
+		"403 remaining 0 past":      {403, http.Header{"X-Ratelimit-Remaining": {"0"}, "X-Ratelimit-Reset": {"1699999990"}}, 2, []time.Duration{retryDelay}},
+		"429 no headers":            {429, nil, 2, []time.Duration{retryDelay}},
+		"429 Retry-After over cap":  {429, http.Header{"Retry-After": {"60"}}, 1, nil},
+		"403 reset over cap":        {403, http.Header{"X-Ratelimit-Remaining": {"0"}, "X-Ratelimit-Reset": {"1700003600"}}, 1, nil},
+		"403 without rate limiting": {403, nil, 1, nil},
+		"403 remaining nonzero":     {403, http.Header{"X-Ratelimit-Remaining": {"10"}}, 1, nil},
+	}
+	valid := testutil.JSON(gistBody(t, `{"version":1,"start":"2020-01-01","through":"2026-08-23","purchase":1000,"winning":500}`))
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			configure(t)
+			stub := install(t, func(call int, _ testutil.RecordedRequest) (testutil.StubResponse, error) {
+				if call > 0 {
+					return valid, nil
+				}
+				return testutil.StubResponse{Status: tc.status, Header: tc.header, Body: "{}"}, nil
+			})
+			cp := Load()
+			if len(stub.Requests) != tc.requests {
+				t.Errorf("requests = %d, want %d", len(stub.Requests), tc.requests)
+			}
+			if (cp != nil) != (tc.requests == 2) {
+				t.Errorf("Load = %+v, want checkpoint only after a retry", cp)
+			}
+			if len(sleeps) != len(tc.sleeps) || (len(sleeps) > 0 && sleeps[0] != tc.sleeps[0]) {
+				t.Errorf("sleeps = %v, want %v", sleeps, tc.sleeps)
+			}
+		})
+	}
+}

@@ -300,6 +300,10 @@ func installCheckpoint(t *testing.T, prev *checkpoint.Checkpoint, saveOK bool) *
 	return cap
 }
 
+// midMonth is a run outside the monthly forced-rescan window (KST day > 7),
+// so the stored checkpoint is loaded.
+var midMonth = time.Date(2026, 10, 12, 1, 0, 0, 0, time.UTC)
+
 func TestRunWorkflowCheckpointSavedOnSuccess(t *testing.T) {
 	installSend(t, true)
 	prev := &checkpoint.Checkpoint{Start: "2020-01-01", Through: "2026-04-27", Purchase: 1000}
@@ -308,7 +312,7 @@ func TestRunWorkflowCheckpointSavedOnSuccess(t *testing.T) {
 	f := newFake()
 	f.aggNext = next
 
-	RunWorkflow(time.Now(), f)
+	RunWorkflow(midMonth, f)
 
 	if f.aggPrev != prev {
 		t.Errorf("AggregateLedgerIncremental prev = %+v, want loaded checkpoint", f.aggPrev)
@@ -335,7 +339,7 @@ func TestRunWorkflowCheckpointNotSaved(t *testing.T) {
 			f := newFake()
 			setup(f)
 
-			RunWorkflow(time.Now(), f)
+			RunWorkflow(midMonth, f)
 
 			if len(cap.saved) != 0 {
 				t.Errorf("saved = %+v, want none", cap.saved)
@@ -357,5 +361,48 @@ func TestRunWorkflowCheckpointSaveFailureNonBlocking(t *testing.T) {
 	last := send.payloads[len(send.payloads)-1]
 	if got := settlementDetail(last, "누적 구매"); got != "1,000원" {
 		t.Errorf("누적 구매 = %q, want 1,000원", got)
+	}
+}
+
+func TestRunWorkflowForcedRescan(t *testing.T) {
+	cases := map[string]struct {
+		now    time.Time
+		forced bool
+	}{
+		"first Monday":           {time.Date(2026, 10, 5, 1, 0, 0, 0, time.UTC), true},
+		"KST day 7 late evening": {time.Date(2026, 10, 7, 14, 0, 0, 0, time.UTC), true},
+		"KST day 8 (UTC day 7)":  {time.Date(2026, 10, 7, 15, 30, 0, 0, time.UTC), false},
+		"mid month":              {midMonth, false},
+	}
+	prev := &checkpoint.Checkpoint{Start: "2020-01-01", Through: "2026-08-31", Purchase: 2000}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			installSend(t, true)
+			cap := installCheckpoint(t, prev, true)
+			loads := 0
+			load := loadCheckpoint
+			loadCheckpoint = func() *checkpoint.Checkpoint { loads++; return load() }
+			f := newFake()
+			unchanged := *prev
+			f.aggNext = &unchanged
+
+			RunWorkflow(tc.now, f)
+
+			if tc.forced {
+				if loads != 0 || f.aggPrev != nil {
+					t.Errorf("loads = %d, prev = %+v; want no load and a full scan (prev=nil)", loads, f.aggPrev)
+				}
+				if len(cap.saved) != 1 || cap.saved[0] != unchanged {
+					t.Errorf("saved = %+v, want the full-scan checkpoint written", cap.saved)
+				}
+				return
+			}
+			if loads != 1 || f.aggPrev != prev {
+				t.Errorf("loads = %d, prev = %+v; want the stored checkpoint", loads, f.aggPrev)
+			}
+			if len(cap.saved) != 0 {
+				t.Errorf("saved = %+v, want none for an unchanged checkpoint", cap.saved)
+			}
+		})
 	}
 }

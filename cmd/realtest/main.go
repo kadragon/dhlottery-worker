@@ -1,9 +1,11 @@
 // Command realtest is a money-free real-server smoke test, invoked by the
 // manual `.github/workflows/realtest.yml` workflow. It exercises only the
 // read-only paths — login (RSA + cookie session), account info (balance +
-// round JSON parse), and the previous-week winning check — and prints the
-// collected notifications instead of sending them. It NEVER purchases lotto,
-// reserves pension, or sends Telegram, so it is safe to run any time.
+// round JSON parse), the previous-week winning check, and the lifetime ledger
+// aggregate (full scan, then a resume from the gist checkpoint when one is
+// configured) — and prints the collected notifications instead of sending
+// them. It NEVER purchases lotto, reserves pension, sends Telegram, or writes
+// the gist checkpoint, so it is safe to run any time.
 package main
 
 import (
@@ -33,6 +35,8 @@ var (
 	runChecks   = defaultRunChecks
 	newClient   = func() smokeClient { return dhlottery.NewClient() }
 	nowFn       = time.Now
+	// Read-only: realtest never references checkpoint.Save.
+	loadCheckpoint = checkpoint.Load
 )
 
 func main() {
@@ -81,8 +85,8 @@ func defaultRunChecks() int {
 	if v, err := env.Get("LEDGER_START_DATE"); err == nil {
 		startDate = v
 	}
-	// prev=nil: never read or write the gist checkpoint (realtest is read-only).
-	s, next, ok := c.AggregateLedgerIncremental(startDate, nowFn(), nil)
+	now := nowFn()
+	s, next, ok := c.AggregateLedgerIncremental(startDate, now, nil)
 	if !ok {
 		fmt.Printf("  ❌ ledger aggregate lookup failed (start=%s)\n", startDate)
 	} else {
@@ -94,6 +98,11 @@ func defaultRunChecks() int {
 		}
 	}
 
+	fmt.Println("\n== 5) Checkpoint resume (gist read-only; incremental must equal the full scan) ==")
+	if code := compareResume(c, startDate, now, s, ok); code != 0 {
+		return code
+	}
+
 	fmt.Println("\n== collected payloads (NOT sent) ==")
 	payloads := c.Collector().Payloads()
 	if len(payloads) == 0 {
@@ -102,5 +111,36 @@ func defaultRunChecks() int {
 	for _, p := range payloads {
 		fmt.Printf("  [%s] %s — %s\n", p.Type, p.Title, p.Message)
 	}
+	return 0
+}
+
+// compareResume replays the production resume path from the stored gist
+// checkpoint and fails (1) when its lifetime totals differ from the full
+// scan's, which would mean the checkpoint froze in a bad delta or the
+// Through+1/settled/tail seams drop or double-count rows. Skips (0) when no
+// checkpoint is configured or the full scan itself failed.
+func compareResume(c smokeClient, startDate string, now time.Time, full dhlottery.LedgerSummary, fullOK bool) int {
+	prev := loadCheckpoint()
+	if prev == nil {
+		fmt.Println("  ⏭️  skipped — no checkpoint (GIST_TOKEN/GIST_ID unset or load failed)")
+		return 0
+	}
+	if !fullOK {
+		fmt.Println("  ⏭️  skipped — full scan failed, nothing to compare against")
+		return 0
+	}
+	fmt.Printf("  checkpoint start=%s through=%s\n", prev.Start, prev.Through)
+	inc, _, ok := c.AggregateLedgerIncremental(startDate, now, prev)
+	if !ok {
+		fmt.Println("  ❌ incremental aggregate lookup failed")
+		return 1
+	}
+	if inc != full {
+		fmt.Printf("  ❌ mismatch: incremental 구매=%s 당첨=%s vs full 구매=%s 당첨=%s\n",
+			format.Currency(inc.CumulativePurchase), format.Currency(inc.CumulativeWinning),
+			format.Currency(full.CumulativePurchase), format.Currency(full.CumulativeWinning))
+		return 1
+	}
+	fmt.Println("  ✅ incremental totals match the full scan")
 	return 0
 }

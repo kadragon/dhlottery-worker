@@ -1,7 +1,8 @@
 name: Real Test (money-free)
 
-# Manual money-free real test: login + account info + winning check only.
-# Never purchases lotto, reserves pension, or sends Telegram.
+# Manual money-free real test: login + account info + winning check + ledger
+# aggregate (full scan, then resume from the gist checkpoint read-only).
+# Never purchases lotto, reserves pension, sends Telegram, or writes the gist.
 on:
   workflow_dispatch: # Manual trigger only
 
@@ -27,4 +28,7 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           # Optional: lifetime settlement start date (YYYYMMDD). Defaults to 20200101.
           LEDGER_START_DATE: ${{ vars.LEDGER_START_DATE }}
+          # Optional: read-only checkpoint load for the resume-vs-full-scan check.
+          GIST_TOKEN: ${{ secrets.GIST_TOKEN }}
+          GIST_ID: ${{ secrets.GIST_ID }}
         run: go run ./cmd/realtest
