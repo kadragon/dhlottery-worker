@@ -322,8 +322,9 @@ func TestRateLimitRetryHonorsServerWait(t *testing.T) {
 	}{
 		"429 Retry-After":           {429, http.Header{"Retry-After": {"3"}}, 2, []time.Duration{3 * time.Second}},
 		"403 Retry-After":           {403, http.Header{"Retry-After": {"3"}}, 2, []time.Duration{3 * time.Second}},
-		"403 remaining 0 reset":     {403, http.Header{"X-Ratelimit-Remaining": {"0"}, "X-Ratelimit-Reset": {"1700000004"}}, 2, []time.Duration{4 * time.Second}},
-		"403 remaining 0 past":      {403, http.Header{"X-Ratelimit-Remaining": {"0"}, "X-Ratelimit-Reset": {"1699999990"}}, 2, []time.Duration{retryDelay}},
+		"403 remaining 0 reset":     {403, http.Header{"X-Ratelimit-Remaining": {"0"}, "X-Ratelimit-Reset": {"1700000004"}}, 2, []time.Duration{5 * time.Second}},
+		"403 remaining 0 past":      {403, http.Header{"X-Ratelimit-Remaining": {"0"}, "X-Ratelimit-Reset": {"1699999990"}}, 2, []time.Duration{resetBuffer}},
+		"403 remaining 0 no reset":  {403, http.Header{"X-Ratelimit-Remaining": {"0"}}, 1, nil},
 		"429 no headers":            {429, nil, 2, []time.Duration{retryDelay}},
 		"429 Retry-After over cap":  {429, http.Header{"Retry-After": {"60"}}, 1, nil},
 		"403 reset over cap":        {403, http.Header{"X-Ratelimit-Remaining": {"0"}, "X-Ratelimit-Reset": {"1700003600"}}, 1, nil},

@@ -59,6 +59,9 @@ const retryDelay = 500 * time.Millisecond
 // a longer server-requested wait skips the retry instead of stalling the run.
 const maxRateLimitWait = 10 * time.Second
 
+// resetBuffer is added to a wait derived from x-ratelimit-reset.
+const resetBuffer = time.Second
+
 type gistFile struct {
 	Content string `json:"content"`
 }
@@ -123,8 +126,9 @@ func requestWithRetry(method, token, id string, body []byte) (*http.Response, er
 // rateLimitWait reports whether resp is a GitHub rate-limit response (429, or
 // 403 carrying rate-limit headers; a bare 403 is a permission error) and how
 // long GitHub asks to wait: Retry-After seconds, else the time until
-// x-ratelimit-reset when x-ratelimit-remaining is 0. A zero wait means none
-// was given. See https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api.
+// x-ratelimit-reset (plus resetBuffer) when x-ratelimit-remaining is 0. A
+// zero wait means none was given. An exhausted limit with no parseable reset
+// is reported as not rate limited, so a 403 is not retried. See https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api.
 func rateLimitWait(resp *http.Response) (time.Duration, bool) {
 	if resp.StatusCode != http.StatusTooManyRequests && resp.StatusCode != http.StatusForbidden {
 		return 0, false
@@ -135,9 +139,11 @@ func rateLimitWait(resp *http.Response) (time.Duration, bool) {
 	if resp.Header.Get("X-Ratelimit-Remaining") == "0" {
 		reset, err := strconv.ParseInt(resp.Header.Get("X-Ratelimit-Reset"), 10, 64)
 		if err != nil {
-			return 0, true
+			// Exhausted with no known reset: an early retry cannot succeed.
+			return 0, false
 		}
-		return max(time.Unix(reset, 0).Sub(now()), 0), true
+		// The buffer absorbs sub-second truncation and runner clock skew.
+		return max(time.Unix(reset, 0).Sub(now()), 0) + resetBuffer, true
 	}
 	return 0, resp.StatusCode == http.StatusTooManyRequests
 }

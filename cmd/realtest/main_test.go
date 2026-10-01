@@ -12,10 +12,13 @@ import (
 
 func restoreVars(t *testing.T) {
 	t.Helper()
-	origValidate, origChecks, origClient, origNow, origLoad := validateEnv, runChecks, newClient, nowFn, loadCheckpoint
+	origValidate, origChecks, origClient, origNow, origLoad, origResumable := validateEnv, runChecks, newClient, nowFn, loadCheckpoint, checkpointResumable
 	loadCheckpoint = func() *checkpoint.Checkpoint { return nil }
+	checkpointResumable = func(*checkpoint.Checkpoint, string, time.Time) bool { return true }
+	t.Setenv("GIST_TOKEN", "")
+	t.Setenv("GIST_ID", "")
 	t.Cleanup(func() {
-		validateEnv, runChecks, newClient, nowFn, loadCheckpoint = origValidate, origChecks, origClient, origNow, origLoad
+		validateEnv, runChecks, newClient, nowFn, loadCheckpoint, checkpointResumable = origValidate, origChecks, origClient, origNow, origLoad, origResumable
 	})
 }
 
@@ -126,38 +129,65 @@ func TestDefaultRunChecksUsesIncrementalLedgerWithoutCheckpoint(t *testing.T) {
 func TestDefaultRunChecksComparesCheckpointResume(t *testing.T) {
 	stored := &checkpoint.Checkpoint{Start: "2020-01-01", Through: "2026-08-23"}
 	cases := map[string]struct {
-		client *fakeSmokeClient
-		want   int
+		client    *fakeSmokeClient
+		resumable bool
+		want      int
+		aggCalls  int
 	}{
-		"totals match":     {&fakeSmokeClient{}, 0},
-		"totals differ":    {&fakeSmokeClient{incSummary: dhlottery.LedgerSummary{CumulativeWinning: 5000}}, 1},
-		"incremental fail": {&fakeSmokeClient{incFailed: true}, 1},
+		"totals match":     {&fakeSmokeClient{}, true, 0, 2},
+		"totals differ":    {&fakeSmokeClient{incSummary: dhlottery.LedgerSummary{CumulativeWinning: 5000}}, true, 1, 2},
+		"incremental fail": {&fakeSmokeClient{incFailed: true}, true, 1, 2},
+		"not resumable":    {&fakeSmokeClient{}, false, 1, 1},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			restoreVars(t)
+			t.Setenv("GIST_TOKEN", "tok")
+			t.Setenv("GIST_ID", "id")
 			loadCheckpoint = func() *checkpoint.Checkpoint { return stored }
+			checkpointResumable = func(*checkpoint.Checkpoint, string, time.Time) bool { return tc.resumable }
 			newClient = func() smokeClient { return tc.client }
 
 			if code := defaultRunChecks(); code != tc.want {
 				t.Errorf("defaultRunChecks() = %d, want %d", code, tc.want)
 			}
-			if len(tc.client.aggPrevs) != 2 || tc.client.aggPrevs[0] != nil || tc.client.aggPrevs[1] != stored {
-				t.Errorf("aggregate prevs = %v, want [nil (full scan), stored checkpoint]", tc.client.aggPrevs)
+			if len(tc.client.aggPrevs) != tc.aggCalls || tc.client.aggPrevs[0] != nil ||
+				(tc.aggCalls == 2 && tc.client.aggPrevs[1] != stored) {
+				t.Errorf("aggregate prevs = %v, want full scan then (if resumable) the stored checkpoint", tc.client.aggPrevs)
 			}
 		})
 	}
 }
 
-func TestDefaultRunChecksSkipsResumeWithoutCheckpoint(t *testing.T) {
-	restoreVars(t)
-	client := &fakeSmokeClient{}
-	newClient = func() smokeClient { return client }
-
-	if code := defaultRunChecks(); code != 0 {
-		t.Fatalf("defaultRunChecks() = %d, want 0", code)
+func TestDefaultRunChecksResumeSkipOrFail(t *testing.T) {
+	cases := map[string]struct {
+		configured bool
+		want       int
+	}{
+		"gist unset: skip":                  {false, 0},
+		"gist configured, load fails: fail": {true, 1},
 	}
-	if client.aggCalls != 1 {
-		t.Errorf("AggregateLedgerIncremental calls = %d, want 1 (no resume without a checkpoint)", client.aggCalls)
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			restoreVars(t)
+			if tc.configured {
+				t.Setenv("GIST_TOKEN", "tok")
+				t.Setenv("GIST_ID", "id")
+			}
+			loads := 0
+			loadCheckpoint = func() *checkpoint.Checkpoint { loads++; return nil }
+			client := &fakeSmokeClient{}
+			newClient = func() smokeClient { return client }
+
+			if code := defaultRunChecks(); code != tc.want {
+				t.Errorf("defaultRunChecks() = %d, want %d", code, tc.want)
+			}
+			if client.aggCalls != 1 {
+				t.Errorf("AggregateLedgerIncremental calls = %d, want 1 (no resume)", client.aggCalls)
+			}
+			if !tc.configured && loads != 0 {
+				t.Errorf("loads = %d, want none when the gist is unset", loads)
+			}
+		})
 	}
 }

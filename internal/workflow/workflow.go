@@ -95,24 +95,49 @@ func RunWorkflow(now time.Time, client Client) bool {
 const forcedRescanLastDay = "07"
 
 // aggregateLedger computes the lifetime totals, resuming from the stored
-// checkpoint when there is one (except on the monthly forced rescan). The
-// advanced checkpoint is persisted only when the aggregation succeeded and it
-// changed; a save failure is logged by saveCheckpoint and never affects the
-// settlement (Golden Rule #2).
+// checkpoint when there is one. On the monthly forced rescan it scans the full
+// ledger instead, falling back to the resume if that scan fails. The advanced
+// checkpoint is persisted only when the aggregation succeeded, it changed, and
+// it does not shrink the stored totals; a save failure is logged by
+// saveCheckpoint and never affects the settlement (Golden Rule #2).
 func aggregateLedger(client Client, now time.Time) (dhlottery.LedgerSummary, bool) {
-	var prev *checkpoint.Checkpoint
+	start := resolveLedgerStartDate()
+	prev := loadCheckpoint()
+	var summary dhlottery.LedgerSummary
+	var next *checkpoint.Checkpoint
+	var ok bool
 	if day := datekst.FormatKstYmd(now)[8:]; day <= forcedRescanLastDay {
-		logger.Info("Monthly forced full ledger rescan; checkpoint not loaded", logger.Fields{
+		logger.Info("Monthly forced full ledger rescan; checkpoint not resumed", logger.Fields{
 			logger.FieldEvent: "checkpoint_forced_rescan",
 		})
+		summary, next, ok = client.AggregateLedgerIncremental(start, now, nil)
+		if !ok && prev != nil {
+			summary, next, ok = client.AggregateLedgerIncremental(start, now, prev)
+		}
 	} else {
-		prev = loadCheckpoint()
+		summary, next, ok = client.AggregateLedgerIncremental(start, now, prev)
 	}
-	summary, next, ok := client.AggregateLedgerIncremental(resolveLedgerStartDate(), now, prev)
-	if ok && next != nil && (prev == nil || *next != *prev) {
+	if ok && next != nil && (prev == nil || *next != *prev) && !shrinks(prev, next) {
 		saveCheckpoint(*next)
 	}
 	return summary, ok
+}
+
+// shrinks reports (and logs) a next checkpoint whose totals fall below prev's
+// for the same start date. Settled totals over a growing range never go down,
+// so a drop means a window silently came back short (e.g. total=0); saving it
+// would freeze the undercount in, so the stored checkpoint is kept instead.
+func shrinks(prev, next *checkpoint.Checkpoint) bool {
+	if prev == nil || prev.Start != next.Start ||
+		(next.Purchase >= prev.Purchase && next.Winning >= prev.Winning) {
+		return false
+	}
+	logger.Warn("Ledger checkpoint totals shrank; keeping the stored checkpoint", logger.Fields{
+		logger.FieldEvent: "checkpoint_drift",
+		"prevThrough":     prev.Through, "prevPurchase": prev.Purchase, "prevWinning": prev.Winning,
+		"nextThrough": next.Through, "nextPurchase": next.Purchase, "nextWinning": next.Winning,
+	})
+	return true
 }
 
 // resolveLedgerStartDate returns LEDGER_START_DATE (YYYYMMDD) when set, else

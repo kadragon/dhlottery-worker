@@ -194,11 +194,10 @@ func aggregateLedgerIncremental(client *httpclient.Client, startDate string, now
 	if !ok {
 		return LedgerSummary{}, nil, false
 	}
-	today := compactYmd(datekst.FormatKstYmd(now))
+	today, settled := ledgerCutoffs(now)
 	if start > today {
 		return LedgerSummary{}, nil, true // start in the future: genuinely nothing to sum
 	}
-	settled := compactYmd(datekst.AddDaysToYmd(today, -ledgerSettleLagDays))
 
 	from := start
 	var purchase, winning int
@@ -244,6 +243,25 @@ func aggregateLedgerIncremental(client *httpclient.Client, startDate string, now
 		return LedgerSummary{}, nil, false
 	}
 	return LedgerSummary{CumulativePurchase: purchase + p, CumulativeWinning: winning + w}, next, true
+}
+
+// ledgerCutoffs returns today and the settled cutoff (today −
+// ledgerSettleLagDays), both YYYYMMDD in KST.
+func ledgerCutoffs(now time.Time) (today, settled string) {
+	today = compactYmd(datekst.FormatKstYmd(now))
+	return today, compactYmd(datekst.AddDaysToYmd(today, -ledgerSettleLagDays))
+}
+
+// CheckpointResumable reports whether aggregateLedgerIncremental would resume
+// from cp rather than fall back to a full scan, so a caller comparing the two
+// paths (cmd/realtest) can tell a real resume from a second full scan.
+func CheckpointResumable(cp *checkpoint.Checkpoint, startDate string, now time.Time) bool {
+	start, ok := validLedgerStart(startDate)
+	if !ok {
+		return false
+	}
+	_, settled := ledgerCutoffs(now)
+	return validCheckpoint(cp, start, settled)
 }
 
 // validLedgerStart returns startDate as YYYYMMDD. A malformed

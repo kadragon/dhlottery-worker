@@ -73,7 +73,8 @@ Note: there is no built-in `.env` loader. Export the variables in your shell
 | Telegram fails | Invalid token or chat ID | Verify secrets |
 | 누적 결산 slow / `checkpoint_load_failed` or `checkpoint_disabled` in logs | Gist unset, token expired, or wrong `GIST_ID` | Verify `GIST_TOKEN` (gist scope) / `GIST_ID`; the run still falls back to a full scan |
 | Wrong 누적 totals after changing `LEDGER_START_DATE` | — (checkpoint auto-invalidates on start mismatch) | None; to force a rescan, set the gist's `ledger-checkpoint.json` content to `{}` |
-| realtest step 5 `❌ mismatch` (resume ≠ full scan) | Checkpoint froze an undercounted delta, or a resume-seam bug | Set the gist's `ledger-checkpoint.json` to `{}` (the first-Monday forced rescan also overwrites it); investigate the seam if it recurs |
+| realtest step 5 `❌ checkpoint load failed` / `not resumable` | Token expired, wrong `GIST_ID`, or checkpoint `start` ≠ `LEDGER_START_DATE` | Fix the secret; a start mismatch clears itself on the next weekly run |
+| realtest step 5 `❌ mismatch` (resume ≠ full scan) | Checkpoint froze an undercounted delta, or a resume-seam bug | Set the gist's `ledger-checkpoint.json` to `{}` (the first-Monday forced rescan also overwrites a lower checkpoint; a lower full scan logs `checkpoint_drift` and is not saved); investigate the seam if it recurs |
 | CI coverage gate fails | Total below 85% statement threshold | Add tests for uncovered paths |
 | Format check fails | Code not gofmt-clean | Run `gofmt -w ./cmd ./internal` |
 | `go vet` fails | Suspicious construct | Fix the reported issue |

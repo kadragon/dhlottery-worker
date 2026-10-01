@@ -35,8 +35,9 @@ var (
 	runChecks   = defaultRunChecks
 	newClient   = func() smokeClient { return dhlottery.NewClient() }
 	nowFn       = time.Now
-	// Read-only: realtest never references checkpoint.Save.
-	loadCheckpoint = checkpoint.Load
+	// Read-only toward the gist: never saves (enforced by save_ban_test.go).
+	loadCheckpoint      = checkpoint.Load
+	checkpointResumable = dhlottery.CheckpointResumable
 )
 
 func main() {
@@ -117,19 +118,29 @@ func defaultRunChecks() int {
 // compareResume replays the production resume path from the stored gist
 // checkpoint and fails (1) when its lifetime totals differ from the full
 // scan's, which would mean the checkpoint froze in a bad delta or the
-// Through+1/settled/tail seams drop or double-count rows. Skips (0) when no
-// checkpoint is configured or the full scan itself failed.
+// Through+1/settled/tail seams drop or double-count rows. It also fails when
+// the gist is configured but the checkpoint cannot be loaded or would not be
+// resumed (the comparison would then be a second full scan). Skips (0) when
+// the gist is unconfigured or the full scan itself failed.
 func compareResume(c smokeClient, startDate string, now time.Time, full dhlottery.LedgerSummary, fullOK bool) int {
-	prev := loadCheckpoint()
-	if prev == nil {
-		fmt.Println("  ⏭️  skipped — no checkpoint (GIST_TOKEN/GIST_ID unset or load failed)")
+	if !gistConfigured() {
+		fmt.Println("  ⏭️  skipped — GIST_TOKEN/GIST_ID unset")
 		return 0
 	}
 	if !fullOK {
 		fmt.Println("  ⏭️  skipped — full scan failed, nothing to compare against")
 		return 0
 	}
+	prev := loadCheckpoint()
+	if prev == nil {
+		fmt.Println("  ❌ checkpoint load failed (see checkpoint_load_failed log)")
+		return 1
+	}
 	fmt.Printf("  checkpoint start=%s through=%s\n", prev.Start, prev.Through)
+	if !checkpointResumable(prev, startDate, now) {
+		fmt.Printf("  ❌ checkpoint not resumable for start=%s (start mismatch or through past the settled cutoff)\n", startDate)
+		return 1
+	}
 	inc, _, ok := c.AggregateLedgerIncremental(startDate, now, prev)
 	if !ok {
 		fmt.Println("  ❌ incremental aggregate lookup failed")
@@ -143,4 +154,11 @@ func compareResume(c smokeClient, startDate string, now time.Time, full dhlotter
 	}
 	fmt.Println("  ✅ incremental totals match the full scan")
 	return 0
+}
+
+// gistConfigured reports whether both gist credentials are set.
+func gistConfigured() bool {
+	_, tokenErr := env.Get("GIST_TOKEN")
+	_, idErr := env.Get("GIST_ID")
+	return tokenErr == nil && idErr == nil
 }
