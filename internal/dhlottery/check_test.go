@@ -512,6 +512,24 @@ func TestAggregateLedgerRetryAttemptLoggedAsWarn(t *testing.T) {
 	}
 }
 
+// A transient failure that also fails on retry warns once, then reports the
+// final failure at error level.
+func TestAggregateLedgerRetryFailureLogLevels(t *testing.T) {
+	noLedgerSleep(t)
+	logs := captureLogs(t)
+	client, _ := checkClient(testutil.StubResponse{Status: 503, Body: "busy"})
+	if _, ok := aggregateLedger(client, aggRecentStart, aggNow(t)); ok {
+		t.Fatal("expected ok=false after retry exhausted")
+	}
+	events := logEvents(t, logs)
+	if events["ledger_retry_attempt"] != "warn" || events["ledger_aggregate_fetch_failed"] != "error" {
+		t.Errorf("events = %v, want ledger_retry_attempt=warn and ledger_aggregate_fetch_failed=error", events)
+	}
+	if !strings.Contains(logs.String(), `"srchStrDt"`) {
+		t.Errorf("failure logs lack the window: %s", logs.String())
+	}
+}
+
 // Transport errors are transient: retried once.
 func TestAggregateLedgerTransportErrorRetried(t *testing.T) {
 	noLedgerSleep(t)
@@ -566,6 +584,15 @@ func TestAggregateLedgerTotalAnomalyLogged(t *testing.T) {
 		"total missing with rows": testutil.Sequence(
 			testutil.StubResponse{Status: 200, Body: `{"data":{"list":[{"ltGdsCd":"LO40","prchsQty":5}]}}`},
 		),
+		"rows exceed total": testutil.Sequence(
+			testutil.StubResponse{Status: 200, Body: `{"data":{"total":1,"list":[{"ltGdsCd":"LO40","prchsQty":3},{"ltGdsCd":"LO40","prchsQty":2}]}}`},
+		),
+		"total changed between pages": func(n int, _ testutil.RecordedRequest) (testutil.StubResponse, error) {
+			if n == 0 {
+				return testutil.StubResponse{Status: 200, Body: `{"data":{"total":2,"list":[{"ltGdsCd":"LO40","prchsQty":5}]}}`}, nil
+			}
+			return testutil.StubResponse{Status: 200, Body: `{"data":{"total":1,"list":[]}}`}, nil
+		},
 		"empty page before total": func(n int, _ testutil.RecordedRequest) (testutil.StubResponse, error) {
 			if n == 0 {
 				return testutil.StubResponse{Status: 200, Body: `{"data":{"total":150,"list":[{"ltGdsCd":"LO40","prchsQty":5}]}}`}, nil

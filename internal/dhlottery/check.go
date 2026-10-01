@@ -325,11 +325,14 @@ func aggregateWindow(client *httpclient.Client, strDt, endDt string) (purchase, 
 		if !fetchOK {
 			return 0, 0, false
 		}
+		rows := len(data.Data.List)
 		if page == 1 {
 			total = data.Data.Total
-			if total == 0 && len(data.Data.List) > 0 {
-				logTotalAnomaly("total_zero_with_rows", strDt, endDt, page, len(data.Data.List), total)
+			if total == 0 && rows > 0 {
+				logTotalAnomaly("total_zero_with_rows", strDt, endDt, page, rows, fetched, total)
 			}
+		} else if data.Data.Total != total {
+			logTotalAnomaly("total_changed", strDt, endDt, page, rows, fetched, data.Data.Total)
 		}
 		for _, row := range data.Data.List {
 			purchase += row.PrchsQty * constants.CostPerGame
@@ -337,10 +340,13 @@ func aggregateWindow(client *httpclient.Client, strDt, endDt string) (purchase, 
 				winning += *row.LtWnAmt
 			}
 		}
-		if len(data.Data.List) == 0 && fetched < total {
-			logTotalAnomaly("empty_page_before_total", strDt, endDt, page, fetched, total)
+		if rows == 0 && fetched < total {
+			logTotalAnomaly("empty_page_before_total", strDt, endDt, page, rows, fetched, total)
 		}
-		fetched += len(data.Data.List)
+		fetched += rows
+		if total > 0 && fetched > total {
+			logTotalAnomaly("rows_exceed_total", strDt, endDt, page, rows, fetched, total)
+		}
 		if len(data.Data.List) == 0 || fetched >= total {
 			return purchase, winning, true
 		}
@@ -357,11 +363,12 @@ func aggregateWindow(client *httpclient.Client, strDt, endDt string) (purchase, 
 	return 0, 0, false
 }
 
-// logTotalAnomaly records a page whose data.total disagrees with its rows.
+// logTotalAnomaly records a page whose data.total disagrees with its rows
+// (rows on this page, fetched across the window so far, total as reported).
 // The window still completes as before: the server's total semantics are not
 // yet confirmed, so these warnings are evidence (via realtest) for whether
 // aggregateWindow should treat them as failures.
-func logTotalAnomaly(reason, strDt, endDt string, page, rows, total int) {
+func logTotalAnomaly(reason, strDt, endDt string, page, rows, fetched, total int) {
 	logger.Warn("Ledger total inconsistent with rows", logger.Fields{
 		logger.FieldEvent: "ledger_total_anomaly",
 		"reason":          reason,
@@ -369,6 +376,7 @@ func logTotalAnomaly(reason, strDt, endDt string, page, rows, total int) {
 		"srchEndDt":       endDt,
 		"page":            page,
 		"rows":            rows,
+		"fetched":         fetched,
 		"total":           total,
 	})
 }
@@ -393,9 +401,9 @@ func fetchLedgerPageWithRetry(client *httpclient.Client, strDt, endDt string, pa
 // logged as a warning (ledger_retry_attempt); every other failure as an error.
 func fetchLedgerPage(client *httpclient.Client, strDt, endDt string, page, perPage int, willRetry bool) (data ledgerResponse, ok, transient bool) {
 	fail := func(transient bool, event string, fields logger.Fields) (ledgerResponse, bool, bool) {
+		fields["srchStrDt"], fields["srchEndDt"], fields["page"] = strDt, endDt, page
 		if transient && willRetry {
 			fields[logger.FieldEvent] = "ledger_retry_attempt"
-			fields["page"] = page
 			logger.Warn("Ledger page fetch failed, retrying", fields)
 		} else {
 			fields[logger.FieldEvent] = event
