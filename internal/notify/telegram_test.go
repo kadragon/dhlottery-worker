@@ -138,6 +138,23 @@ func TestNetworkErrorRetriesThenFails(t *testing.T) {
 	}
 }
 
+func TestRetryLogsOneBasedAttempt(t *testing.T) {
+	var errBuf bytes.Buffer
+	logger.SetWriters(os.Stdout, &errBuf)
+	defer logger.SetWriters(os.Stdout, os.Stderr)
+
+	installDoer(t, testutil.Sequence(statusResp(500)))
+	SendNotification(Payload{Type: Error, Title: "T", Message: "M"})
+	for _, want := range []string{`"attempt":1`, `"attempt":2`} {
+		if !strings.Contains(errBuf.String(), want) {
+			t.Errorf("retry log missing %s, got %q", want, errBuf.String())
+		}
+	}
+	if strings.Contains(errBuf.String(), `"attempt":3`) {
+		t.Errorf("final attempt must not log a retry, got %q", errBuf.String())
+	}
+}
+
 func TestRetryOn5xxThenFails(t *testing.T) {
 	stub := installDoer(t, testutil.Sequence(statusResp(500)))
 	if SendNotification(Payload{Type: Error, Title: "T", Message: "M"}) {

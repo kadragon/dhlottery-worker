@@ -116,16 +116,14 @@ func sendOnce(text string) (*http.Response, error) {
 // permanent error.
 func sendTelegramMessage(text, failureEvent string) bool {
 	maxAttempts := len(retryDelays) + 1
-	attempt := 0
 	sent := false
 
-	httpclient.Retry(retryDelays, sleepFn, func(final bool) (bool, time.Duration) {
-		attempt++
+	httpclient.Retry(retryDelays, sleepFn, func(i int, final bool) (bool, time.Duration) {
 		resp, err := sendOnce(text)
 		if err != nil {
 			if !final {
 				logger.Warn("Telegram send failed, retrying", logger.Fields{
-					logger.FieldEvent: "telegram_retry_attempt", "attempt": attempt, "error": err.Error(),
+					logger.FieldEvent: "telegram_retry_attempt", "attempt": i + 1, "error": err.Error(),
 				})
 				return true, 0
 			}
@@ -146,7 +144,7 @@ func sendTelegramMessage(text, failureEvent string) bool {
 		if httpclient.TransientStatus(status) {
 			if !final {
 				logger.Warn("Telegram API error, retrying", logger.Fields{
-					logger.FieldEvent: "telegram_retry_attempt", "attempt": attempt, "status": status,
+					logger.FieldEvent: "telegram_retry_attempt", "attempt": i + 1, "status": status,
 				})
 				return true, 0
 			}

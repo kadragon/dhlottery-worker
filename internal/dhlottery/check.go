@@ -406,7 +406,7 @@ func logTotalAnomaly(reason, strDt, endDt string, page, rows, fetched, total int
 func fetchLedgerPageWithRetry(client *httpclient.Client, strDt, endDt string, page, perPage int) (ledgerResponse, bool) {
 	var data ledgerResponse
 	var ok bool
-	httpclient.Retry([]time.Duration{ledgerRetryDelay}, ledgerSleep, func(final bool) (bool, time.Duration) {
+	httpclient.Retry([]time.Duration{ledgerRetryDelay}, ledgerSleep, func(_ int, final bool) (bool, time.Duration) {
 		var transient bool
 		data, ok, transient = fetchLedgerPage(client, strDt, endDt, page, perPage, !final)
 		return !ok && transient, 0
