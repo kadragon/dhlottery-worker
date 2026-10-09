@@ -90,7 +90,7 @@ func credentials() (token, id string, ok bool) {
 func requestWithRetry(method, token, id string, body []byte) (*http.Response, error) {
 	var resp *http.Response
 	var err error
-	httpclient.Retry([]time.Duration{retryDelay}, sleep, func(final bool) (bool, time.Duration) {
+	httpclient.Retry([]time.Duration{retryDelay}, sleep, func(_ int, final bool) (bool, time.Duration) {
 		resp, err = request(method, token, id, body) //nolint:bodyclose // closed here before a retry; the final resp is returned for the caller to close
 		var wait time.Duration
 		if err == nil {
