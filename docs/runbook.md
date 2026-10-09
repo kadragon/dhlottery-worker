@@ -35,7 +35,7 @@ Required in the shell/`.env` (local) or GitHub Secrets (CI):
 | `DEBUG` | `true` enables debug-level structured logs (optional) |
 | `LEDGER_START_DATE` | Lifetime settlement start `YYYYMMDD` (optional, default `20200101`; repo variable) |
 | `GIST_TOKEN` | PAT with `gist` scope for the ledger checkpoint (optional; unset → full ledger scan every run) |
-| `GIST_ID` | ID of the secret gist holding `ledger-checkpoint.json` (optional, paired with `GIST_TOKEN`) |
+| `GIST_ID` | ID of the secret gist holding `ledger-checkpoint.json` and, after a failed Telegram send, `undelivered-notification.md` (optional, paired with `GIST_TOKEN`) |
 
 Note: there is no built-in `.env` loader. Export the variables in your shell
 (e.g. `set -a; source .env; set +a; go run ./cmd/worker`).
@@ -61,7 +61,7 @@ Note: there is no built-in `.env` loader. Export the variables in your shell
 | Code | Meaning |
 |------|---------|
 | `0` | Workflow ran; notification sent (or nothing to notify) |
-| `2` | Workflow ran but the Telegram notification failed after retries |
+| `2` | Workflow ran but the Telegram notification failed after retries; the message is in the gist's `undelivered-notification.md` when `GIST_*` is set |
 | `1` | Fatal error before the workflow could complete (e.g. missing env) |
 
 ## Common Failures
@@ -70,7 +70,7 @@ Note: there is no built-in `.env` loader. Export the variables in your shell
 |---------|-------------|-----|
 | Auth failure | Password changed or site maintenance | Update `PASSWORD` secret |
 | Purchase fails | Insufficient balance or site down | Check deposit, retry next week |
-| Telegram fails | Invalid token or chat ID | Verify secrets |
+| Telegram fails | Invalid token or chat ID | Verify secrets; read the lost message from the gist's `undelivered-notification.md` (its header names the run and KST time; the file is kept after later successes) |
 | 누적 결산 slow / `checkpoint_load_failed` or `checkpoint_disabled` in logs | Gist unset, token expired, or wrong `GIST_ID` | Verify `GIST_TOKEN` (gist scope) / `GIST_ID`; the run still falls back to a full scan |
 | Wrong 누적 totals after changing `LEDGER_START_DATE` | — (checkpoint auto-invalidates on start mismatch) | None; to force a rescan, set the gist's `ledger-checkpoint.json` content to `{}` |
 | realtest step 5 `❌ checkpoint load failed` / `not resumable` | Token expired, wrong `GIST_ID`, or checkpoint `start` ≠ `LEDGER_START_DATE` | Fix the secret; a start mismatch clears itself on the next weekly run |

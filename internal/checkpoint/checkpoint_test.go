@@ -354,3 +354,70 @@ func TestRateLimitRetryHonorsServerWait(t *testing.T) {
 		})
 	}
 }
+
+func TestSaveUndelivered(t *testing.T) {
+	configure(t)
+	var errBuf bytes.Buffer
+	logger.SetWriters(&errBuf, &errBuf)
+	defer logger.SetWriters(os.Stdout, os.Stderr)
+
+	stub := install(t, testutil.Sequence(testutil.JSON("{}")))
+	content := "생성: 2026-10-12 10:00 KST\n\n✅ **잔액 12345**"
+	if !SaveUndelivered(content) {
+		t.Fatal("SaveUndelivered = false, want true")
+	}
+	if len(stub.Requests) != 1 {
+		t.Fatalf("requests = %d, want 1", len(stub.Requests))
+	}
+	req := stub.Requests[0]
+	if req.Method != "PATCH" || req.URL != "https://api.github.com/gists/abc123" {
+		t.Errorf("request = %s %s", req.Method, req.URL)
+	}
+	var body struct {
+		Files map[string]struct {
+			Content string `json:"content"`
+		} `json:"files"`
+	}
+	if err := json.Unmarshal([]byte(req.Body), &body); err != nil {
+		t.Fatalf("body: %v", err)
+	}
+	if len(body.Files) != 1 {
+		t.Errorf("files = %v, want only %s", body.Files, undeliveredFileName)
+	}
+	if got := body.Files[undeliveredFileName].Content; got != content {
+		t.Errorf("content = %q, want %q", got, content)
+	}
+	if logs := errBuf.String(); strings.Contains(logs, "12345") || strings.Contains(logs, "abc123") {
+		t.Errorf("logs leak content or gist ID: %q", logs)
+	}
+}
+
+func TestSaveUndeliveredFailures(t *testing.T) {
+	cases := map[string]func(int, testutil.RecordedRequest) (testutil.StubResponse, error){
+		"network": func(int, testutil.RecordedRequest) (testutil.StubResponse, error) {
+			return testutil.StubResponse{}, errors.New("boom")
+		},
+		"non-2xx": testutil.Sequence(testutil.StubResponse{Status: 404, Body: "{}"}),
+	}
+	for name, h := range cases {
+		t.Run(name, func(t *testing.T) {
+			configure(t)
+			install(t, h)
+			if SaveUndelivered("x") {
+				t.Error("SaveUndelivered = true, want false")
+			}
+		})
+	}
+}
+
+func TestSaveUndeliveredUnconfigured(t *testing.T) {
+	t.Setenv("GIST_TOKEN", "")
+	t.Setenv("GIST_ID", "")
+	stub := install(t, testutil.Sequence(testutil.JSON("{}")))
+	if SaveUndelivered("x") {
+		t.Error("SaveUndelivered = true, want false")
+	}
+	if len(stub.Requests) != 0 {
+		t.Errorf("expected no request when unconfigured, got %d", len(stub.Requests))
+	}
+}

@@ -89,3 +89,10 @@ func TestFormatKstYmd(t *testing.T) {
 		t.Errorf("FormatKstYmd = %q, want 2025-12-20", got)
 	}
 }
+
+func TestFormatKstDateTime(t *testing.T) {
+	// 23:30 UTC crosses into the next KST day.
+	if got := FormatKstDateTime(mustTime(t, "2026-10-11T23:30:00Z")); got != "2026-10-12 08:30" {
+		t.Errorf("FormatKstDateTime = %q, want 2026-10-12 08:30", got)
+	}
+}

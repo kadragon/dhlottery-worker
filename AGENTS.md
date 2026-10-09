@@ -1,6 +1,6 @@
 # AGENTS.md
 
-DHLottery-worker: GitHub Actions scheduled job (every Monday 01:00 UTC) that logs in, purchases 5 lotto games, reserves the pension lottery, checks prior week's results, and sends a Telegram notification. Go (1.26+). Only external state: optional secret-gist ledger checkpoint (`GIST_TOKEN`/`GIST_ID`); losing it only costs a full ledger rescan. For full pipeline overview, see `docs/architecture.md`.
+DHLottery-worker: GitHub Actions scheduled job (every Monday 01:00 UTC) that logs in, purchases 5 lotto games, reserves the pension lottery, checks prior week's results, and sends a Telegram notification. Go (1.26+). Only external state: optional secret gist (`GIST_TOKEN`/`GIST_ID`) holding the ledger checkpoint (losing it only costs a full ledger rescan) and the last undelivered Telegram message. For full pipeline overview, see `docs/architecture.md`.
 
 ## Docs Index (read on demand)
 

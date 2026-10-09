@@ -31,6 +31,11 @@ func FormatKstYmd(t time.Time) string {
 	return formatYmd(y, int(m), d)
 }
 
+// FormatKstDateTime formats an instant as "YYYY-MM-DD HH:MM" in KST.
+func FormatKstDateTime(t time.Time) string {
+	return t.Add(kstOffset).UTC().Format("2006-01-02 15:04")
+}
+
 // CalculatePreviousWeekRange returns the previous week's Monday 00:00 KST to
 // Sunday 23:59:59.999 KST window for the given instant.
 func CalculatePreviousWeekRange(now time.Time) PreviousWeekRange {
