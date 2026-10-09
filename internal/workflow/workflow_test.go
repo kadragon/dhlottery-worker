@@ -38,6 +38,7 @@ type fakeClient struct {
 func TestMain(m *testing.M) {
 	loadCheckpoint = func() *checkpoint.Checkpoint { return nil }
 	saveCheckpoint = func(checkpoint.Checkpoint) bool { return true }
+	saveUndelivered = func(string) bool { return true }
 	os.Exit(m.Run())
 }
 
@@ -286,6 +287,64 @@ func TestRunWorkflowSendFails(t *testing.T) {
 
 	if RunWorkflow(time.Now(), f) {
 		t.Error("expected false when SendCombined fails")
+	}
+}
+
+func installUndelivered(t *testing.T, ok bool) *[]string {
+	t.Helper()
+	var saved []string
+	orig := saveUndelivered
+	saveUndelivered = func(content string) bool {
+		saved = append(saved, content)
+		return ok
+	}
+	t.Cleanup(func() { saveUndelivered = orig })
+	return &saved
+}
+
+func TestRunWorkflowSavesUndeliveredOnSendFailure(t *testing.T) {
+	t.Setenv("GITHUB_SERVER_URL", "https://github.com")
+	t.Setenv("GITHUB_REPOSITORY", "owner/repo")
+	t.Setenv("GITHUB_RUN_ID", "123")
+	cap := installSend(t, false)
+	saved := installUndelivered(t, true)
+
+	now := time.Date(2026, 10, 12, 1, 0, 0, 0, time.UTC)
+	if RunWorkflow(now, newFake()) {
+		t.Error("RunWorkflow = true, want false even when the gist write succeeds")
+	}
+	if len(*saved) != 1 {
+		t.Fatalf("saveUndelivered calls = %d, want 1", len(*saved))
+	}
+	want := "미전송 알림 — 2026-10-12 10:00 KST\n" +
+		"Run: https://github.com/owner/repo/actions/runs/123\n\n" +
+		notify.FormatCombined(cap.payloads)
+	if got := (*saved)[0]; got != want {
+		t.Errorf("content =\n%s\nwant\n%s", got, want)
+	}
+}
+
+func TestRunWorkflowUndeliveredLocalRun(t *testing.T) {
+	t.Setenv("GITHUB_SERVER_URL", "")
+	t.Setenv("GITHUB_REPOSITORY", "")
+	t.Setenv("GITHUB_RUN_ID", "")
+	installSend(t, false)
+	saved := installUndelivered(t, false)
+
+	RunWorkflow(time.Date(2026, 10, 12, 1, 0, 0, 0, time.UTC), newFake())
+	if len(*saved) != 1 || !strings.Contains((*saved)[0], "Run: (local run)\n") {
+		t.Errorf("saved = %q, want a local-run marker", *saved)
+	}
+}
+
+func TestRunWorkflowNoUndeliveredOnSuccess(t *testing.T) {
+	installSend(t, true)
+	saved := installUndelivered(t, true)
+	if !RunWorkflow(time.Now(), newFake()) {
+		t.Error("RunWorkflow = false, want true")
+	}
+	if len(*saved) != 0 {
+		t.Errorf("saveUndelivered calls = %d, want 0", len(*saved))
 	}
 }
 

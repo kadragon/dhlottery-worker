@@ -31,10 +31,11 @@ type Client interface {
 // SendCombined is the delivery seam (overridable in tests).
 var SendCombined = notify.SendCombinedNotification
 
-// Ledger checkpoint persistence seams (overridable in tests).
+// Gist persistence seams (overridable in tests).
 var (
-	loadCheckpoint = checkpoint.Load
-	saveCheckpoint = checkpoint.Save
+	loadCheckpoint  = checkpoint.Load
+	saveCheckpoint  = checkpoint.Save
+	saveUndelivered = checkpoint.SaveUndelivered
 )
 
 // lookupFailed is shown for cumulative settlement fields when the ledger
@@ -50,7 +51,9 @@ func workflowError(err error) notify.Payload {
 }
 
 // RunWorkflow runs the full pipeline once and returns the result of the single
-// final Telegram delivery (false only if it fails after all retries).
+// final Telegram delivery (false only if it fails after all retries). An
+// undelivered message is kept in the secret gist; the result stays false so
+// the run still fails and GitHub's failure mail flags it.
 func RunWorkflow(now time.Time, client Client) bool {
 	collector := client.Collector()
 
@@ -85,7 +88,31 @@ func RunWorkflow(now time.Time, client Client) bool {
 	}
 
 	// Always non-empty here: a login error or the settlement payload was added.
-	return SendCombined(collector.Payloads())
+	payloads := collector.Payloads()
+	if SendCombined(payloads) {
+		return true
+	}
+	saveUndelivered(undeliveredContent(now, payloads))
+	return false
+}
+
+// undeliveredContent is the gist copy of a notification Telegram failed to
+// deliver: when and by which run it was produced, then the message as sent.
+func undeliveredContent(now time.Time, payloads []notify.Payload) string {
+	return "미전송 알림 — " + datekst.FormatKstDateTime(now) + " KST\n" +
+		"Run: " + runURL() + "\n\n" + notify.FormatCombined(payloads)
+}
+
+// runURL links the GitHub Actions run, or marks a local run when the
+// GITHUB_* variables Actions sets are absent.
+func runURL() string {
+	server, serverErr := env.Get("GITHUB_SERVER_URL")
+	repo, repoErr := env.Get("GITHUB_REPOSITORY")
+	runID, runErr := env.Get("GITHUB_RUN_ID")
+	if serverErr != nil || repoErr != nil || runErr != nil {
+		return "(local run)"
+	}
+	return server + "/" + repo + "/actions/runs/" + runID
 }
 
 // forcedRescanLastDay is the last KST day of the month on which a run ignores

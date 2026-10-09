@@ -4,7 +4,7 @@
 
 DHLottery automation: session init → login → check deposit → if sufficient: (pension reserve → lotto purchase) → check winning → lifetime settlement → Telegram notification.
 
-In-memory cookies only. The one piece of external state is an optional ledger checkpoint in a secret GitHub gist (`internal/checkpoint`): settled lifetime totals up to today−35d, so each run queries the ledger only since then. Missing/corrupt/unconfigured → full rescan from `LEDGER_START_DATE`; results are identical either way. Platform: GitHub Actions scheduled (every Monday 01:00 UTC = KST 10:00).
+In-memory cookies only. The one piece of external state is an optional ledger checkpoint in a secret GitHub gist (`internal/checkpoint`): settled lifetime totals up to today−35d, so each run queries the ledger only since then. Missing/corrupt/unconfigured → full rescan from `LEDGER_START_DATE`; results are identical either way. The same gist also receives `undelivered-notification.md` — the combined message, overwritten whenever the final Telegram send fails (run logs are public, so the content goes only there). Platform: GitHub Actions scheduled (every Monday 01:00 UTC = KST 10:00).
 
 Core workflow: `init session → login → check deposit → (charge init + warn) or (pension reserve → purchase) → check winning → aggregate ledger (주간 결산) → notify`
 
@@ -15,7 +15,7 @@ Non-critical operations (charge init, pension reserve, winning check, Telegram f
 ```
 cmd/worker/main.go              ← GitHub Actions entry point (run() int)
   └─ internal/workflow          ← Orchestrator (RunWorkflow)
-       ├─ internal/checkpoint   ← Ledger checkpoint Load/Save (GitHub gist)
+       ├─ internal/checkpoint   ← Ledger checkpoint Load/Save + undelivered notification (GitHub gist)
        └─ dhlottery.Client      ← Facade (internal/dhlottery/client.go)
             ├─ auth.go              ← Login (RSA, cookie-based session)
             ├─ account.go           ← Balance/round info
@@ -49,9 +49,9 @@ cmd/worker/main.go              ← GitHub Actions entry point (run() int)
 | `internal/dhlottery/pension_reserve.go` | Pension 720+ | `reservePensionNextWeek()` |
 | `internal/dhlottery/pension_crypto.go` | Encryption | `EncryptElQ`/`DecryptElQ` |
 | `internal/dhlottery/check.go` | Winning check, ledger aggregation | `checkWinning()`, `aggregateLedger()`, `aggregateLedgerIncremental()` |
-| `internal/checkpoint` | Ledger checkpoint in secret gist | `Checkpoint`, `Load`, `Save` |
+| `internal/checkpoint` | Ledger checkpoint + undelivered notification in secret gist | `Checkpoint`, `Load`, `Save`, `SaveUndelivered` |
 | `internal/httpclient` | HTTP client | `New`, `NewWithDoer`, `Client`, `Response` |
-| `internal/notify/telegram.go` | Telegram API | `SendCombinedNotification` |
+| `internal/notify/telegram.go` | Telegram API | `SendCombinedNotification`, `FormatCombined` |
 | `internal/notify/collector.go` | Collect payloads | `Collector` |
 | `internal/logger` | Logging | `Debug`/`Info`/`Warn`/`Error` (JSON line) |
 | `internal/env` | Env boundary | `Get`, `Validate` |

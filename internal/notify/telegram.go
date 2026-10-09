@@ -171,11 +171,17 @@ func SendCombinedNotification(payloads []Payload) bool {
 	if len(payloads) == 0 {
 		return true
 	}
+	return sendTelegramMessage(FormatCombined(payloads), "telegram_combined_send_failed")
+}
+
+// FormatCombined renders payloads as the single combined message text,
+// separated by "---".
+func FormatCombined(payloads []Payload) string {
 	parts := make([]string, len(payloads))
 	for i, p := range payloads {
 		parts[i] = formatMessage(p)
 	}
-	return sendTelegramMessage(strings.Join(parts, "\n\n---\n\n"), "telegram_combined_send_failed")
+	return strings.Join(parts, "\n\n---\n\n")
 }
 
 // SendNotification sends a single notification. Returns false on failure.

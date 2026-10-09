@@ -41,6 +41,10 @@ const schemaVersion = 1
 // fileName is the gist file holding the checkpoint JSON.
 const fileName = "ledger-checkpoint.json"
 
+// undeliveredFileName is the gist file holding the last notification that
+// Telegram failed to deliver.
+const undeliveredFileName = "undelivered-notification.md"
+
 // gistsURL is the GitHub REST gists endpoint
 // (https://docs.github.com/en/rest/gists/gists).
 const gistsURL = "https://api.github.com/gists/"
@@ -250,21 +254,52 @@ func Save(cp Checkpoint) bool {
 	if err != nil {
 		return saveFailed(logger.Fields{logger.FieldError: err.Error()})
 	}
-	body, err := json.Marshal(gistPayload{Files: map[string]gistFile{fileName: {Content: string(content)}}})
-	if err != nil {
-		return saveFailed(logger.Fields{logger.FieldError: err.Error()})
-	}
-
-	resp, err := requestWithRetry(http.MethodPatch, token, id, body)
-	if err != nil {
-		return saveFailed(logger.Fields{logger.FieldError: err.Error()})
-	}
-	_ = resp.Body.Close()
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return saveFailed(logger.Fields{logger.FieldStatus: resp.StatusCode})
+	if failure := patchFile(token, id, fileName, string(content)); failure != nil {
+		return saveFailed(failure)
 	}
 	logger.Info("Ledger checkpoint saved", logger.Fields{
 		logger.FieldEvent: "checkpoint_saved", "through": cp.Through,
 	})
 	return true
+}
+
+// SaveUndelivered overwrites the gist's undelivered-notification file with
+// content, so a notification Telegram failed to deliver is kept somewhere
+// private (this repo's run logs are public). Returns false (after logging,
+// never the content) when unconfigured or on any error; never aborts the caller.
+func SaveUndelivered(content string) bool {
+	token, id, ok := credentials()
+	if !ok {
+		logger.Warn("Undelivered notification not saved (GIST_TOKEN/GIST_ID unset)", logger.Fields{
+			logger.FieldEvent: "undelivered_save_skipped",
+		})
+		return false
+	}
+	if failure := patchFile(token, id, undeliveredFileName, content); failure != nil {
+		failure[logger.FieldEvent] = "undelivered_save_failed"
+		logger.Error("Undelivered notification save failed (non-fatal)", failure)
+		return false
+	}
+	logger.Info("Undelivered notification saved to gist", logger.Fields{
+		logger.FieldEvent: "undelivered_saved", "file": undeliveredFileName,
+	})
+	return true
+}
+
+// patchFile overwrites one gist file; a PATCH leaves the gist's other files
+// intact. It returns the failure as log fields, or nil on success.
+func patchFile(token, id, name, content string) logger.Fields {
+	body, err := json.Marshal(gistPayload{Files: map[string]gistFile{name: {Content: content}}})
+	if err != nil {
+		return logger.Fields{logger.FieldError: err.Error()}
+	}
+	resp, err := requestWithRetry(http.MethodPatch, token, id, body)
+	if err != nil {
+		return logger.Fields{logger.FieldError: err.Error()}
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return logger.Fields{logger.FieldStatus: resp.StatusCode}
+	}
+	return nil
 }
