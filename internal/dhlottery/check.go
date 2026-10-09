@@ -331,9 +331,10 @@ func sumRange(client *httpclient.Client, start, end string) (purchase, winning i
 
 // aggregateWindow sums purchase and winning over a single [strDt, endDt] window,
 // paging through all rows via data.total. Returns ok=false on any fetch error
-// (after one retry) or when the ledgerMaxPages backstop is exhausted before
-// data.total rows were read, so a backstop-truncated sum is never reported as
-// complete. An empty page still ends the window as complete.
+// (after one retry), when the ledgerMaxPages backstop is exhausted before
+// data.total rows were read, or when data.total contradicts the rows (rows with
+// a missing/zero total, or an empty page before total rows arrived), so a
+// truncated sum is never reported as complete.
 func aggregateWindow(client *httpclient.Client, strDt, endDt string) (purchase, winning int, ok bool) {
 	const perPage = 100
 
@@ -347,10 +348,11 @@ func aggregateWindow(client *httpclient.Client, strDt, endDt string) (purchase, 
 		if page == 1 {
 			total = data.Data.Total
 			if total == 0 && rows > 0 {
-				logTotalAnomaly("total_zero_with_rows", strDt, endDt, page, rows, fetched, total)
+				logTotalAnomaly(true, "total_zero_with_rows", strDt, endDt, page, rows, fetched, total)
+				return 0, 0, false
 			}
 		} else if data.Data.Total != total {
-			logTotalAnomaly("total_changed", strDt, endDt, page, rows, fetched, data.Data.Total)
+			logTotalAnomaly(false, "total_changed", strDt, endDt, page, rows, fetched, data.Data.Total)
 		}
 		for _, row := range data.Data.List {
 			purchase += row.PrchsQty * constants.CostPerGame
@@ -359,11 +361,12 @@ func aggregateWindow(client *httpclient.Client, strDt, endDt string) (purchase, 
 			}
 		}
 		if rows == 0 && fetched < total {
-			logTotalAnomaly("empty_page_before_total", strDt, endDt, page, rows, fetched, total)
+			logTotalAnomaly(true, "empty_page_before_total", strDt, endDt, page, rows, fetched, total)
+			return 0, 0, false
 		}
 		fetched += rows
 		if total > 0 && fetched > total {
-			logTotalAnomaly("rows_exceed_total", strDt, endDt, page, rows, fetched, total)
+			logTotalAnomaly(false, "rows_exceed_total", strDt, endDt, page, rows, fetched, total)
 		}
 		if len(data.Data.List) == 0 || fetched >= total {
 			return purchase, winning, true
@@ -383,11 +386,15 @@ func aggregateWindow(client *httpclient.Client, strDt, endDt string) (purchase, 
 
 // logTotalAnomaly records a page whose data.total disagrees with its rows
 // (rows on this page, fetched across the window so far, total as reported).
-// The window still completes as before: the server's total semantics are not
-// yet confirmed, so these warnings are evidence (via realtest) for whether
-// aggregateWindow should treat them as failures.
-func logTotalAnomaly(reason, strDt, endDt string, page, rows, fetched, total int) {
-	logger.Warn("Ledger total inconsistent with rows", logger.Fields{
+// Realtest confirmed data.total tracks the row count, so an anomaly that means
+// rows went missing fails the window (logged as error); one that loses no rows
+// (over-delivery, a drifting total) is only a warning.
+func logTotalAnomaly(fails bool, reason, strDt, endDt string, page, rows, fetched, total int) {
+	log := logger.Warn
+	if fails {
+		log = logger.Error
+	}
+	log("Ledger total inconsistent with rows", logger.Fields{
 		logger.FieldEvent: "ledger_total_anomaly",
 		"reason":          reason,
 		"srchStrDt":       strDt,

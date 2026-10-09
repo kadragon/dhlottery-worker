@@ -573,10 +573,10 @@ func TestAggregateLedgerPermanentFailureNotRetried(t *testing.T) {
 	}
 }
 
-// Responses whose data.total disagrees with the rows still complete (the
-// server's total semantics are unconfirmed), but log a ledger_total_anomaly
-// warning so a realtest run can surface them.
-func TestAggregateLedgerTotalAnomalyLogged(t *testing.T) {
+// Responses whose data.total contradicts the rows read so far fail the window
+// (realtest confirmed data.total tracks the row count, so these mean a short or
+// garbled read) and log ledger_total_anomaly at error level.
+func TestAggregateLedgerTotalAnomalyFails(t *testing.T) {
 	cases := map[string]func(int, testutil.RecordedRequest) (testutil.StubResponse, error){
 		"total zero with rows": testutil.Sequence(
 			testutil.StubResponse{Status: 200, Body: `{"data":{"total":0,"list":[{"ltGdsCd":"LO40","prchsQty":5}]}}`},
@@ -584,20 +584,42 @@ func TestAggregateLedgerTotalAnomalyLogged(t *testing.T) {
 		"total missing with rows": testutil.Sequence(
 			testutil.StubResponse{Status: 200, Body: `{"data":{"list":[{"ltGdsCd":"LO40","prchsQty":5}]}}`},
 		),
-		"rows exceed total": testutil.Sequence(
-			testutil.StubResponse{Status: 200, Body: `{"data":{"total":1,"list":[{"ltGdsCd":"LO40","prchsQty":3},{"ltGdsCd":"LO40","prchsQty":2}]}}`},
-		),
-		"total changed between pages": func(n int, _ testutil.RecordedRequest) (testutil.StubResponse, error) {
-			if n == 0 {
-				return testutil.StubResponse{Status: 200, Body: `{"data":{"total":2,"list":[{"ltGdsCd":"LO40","prchsQty":5}]}}`}, nil
-			}
-			return testutil.StubResponse{Status: 200, Body: `{"data":{"total":1,"list":[]}}`}, nil
-		},
 		"empty page before total": func(n int, _ testutil.RecordedRequest) (testutil.StubResponse, error) {
 			if n == 0 {
 				return testutil.StubResponse{Status: 200, Body: `{"data":{"total":150,"list":[{"ltGdsCd":"LO40","prchsQty":5}]}}`}, nil
 			}
 			return testutil.StubResponse{Status: 200, Body: `{"data":{"total":150,"list":[]}}`}, nil
+		},
+		"empty first page with total": testutil.Sequence(
+			testutil.StubResponse{Status: 200, Body: `{"data":{"total":3,"list":[]}}`},
+		),
+	}
+	for name, handler := range cases {
+		t.Run(name, func(t *testing.T) {
+			logs := captureLogs(t)
+			stub := &testutil.StubDoer{Handler: handler}
+			if s, ok := aggregateLedger(httpclient.NewWithDoer(stub), aggRecentStart, aggNow(t)); ok || s != (LedgerSummary{}) {
+				t.Errorf("expected (zero, false), got (%+v, %v)", s, ok)
+			}
+			if logEvents(t, logs)["ledger_total_anomaly"] != "error" {
+				t.Errorf("missing ledger_total_anomaly error; logs: %s", logs.String())
+			}
+		})
+	}
+}
+
+// Over-delivery and a drifting data.total do not lose rows, so the window
+// still completes; they only log a ledger_total_anomaly warning.
+func TestAggregateLedgerTotalAnomalyWarns(t *testing.T) {
+	cases := map[string]func(int, testutil.RecordedRequest) (testutil.StubResponse, error){
+		"rows exceed total": testutil.Sequence(
+			testutil.StubResponse{Status: 200, Body: `{"data":{"total":1,"list":[{"ltGdsCd":"LO40","prchsQty":3},{"ltGdsCd":"LO40","prchsQty":2}]}}`},
+		),
+		"total changed between pages": func(n int, _ testutil.RecordedRequest) (testutil.StubResponse, error) {
+			if n == 0 {
+				return testutil.StubResponse{Status: 200, Body: `{"data":{"total":2,"list":[{"ltGdsCd":"LO40","prchsQty":3}]}}`}, nil
+			}
+			return testutil.StubResponse{Status: 200, Body: `{"data":{"total":3,"list":[{"ltGdsCd":"LO40","prchsQty":2}]}}`}, nil
 		},
 	}
 	for name, handler := range cases {
@@ -606,7 +628,7 @@ func TestAggregateLedgerTotalAnomalyLogged(t *testing.T) {
 			stub := &testutil.StubDoer{Handler: handler}
 			s, ok := aggregateLedger(httpclient.NewWithDoer(stub), aggRecentStart, aggNow(t))
 			if !ok || s.CumulativePurchase != 5000 {
-				t.Errorf("got (%+v, %v), want purchase 5000 and ok=true (behavior unchanged)", s, ok)
+				t.Errorf("got (%+v, %v), want purchase 5000 and ok=true", s, ok)
 			}
 			if logEvents(t, logs)["ledger_total_anomaly"] != "warn" {
 				t.Errorf("missing ledger_total_anomaly warn; logs: %s", logs.String())
