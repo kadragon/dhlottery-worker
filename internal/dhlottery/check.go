@@ -353,6 +353,7 @@ func aggregateWindow(client *httpclient.Client, strDt, endDt string) (purchase, 
 			}
 		} else if data.Data.Total != total {
 			logTotalAnomaly(false, "total_changed", strDt, endDt, page, rows, fetched, data.Data.Total)
+			total = data.Data.Total // later checks follow the server's latest count
 		}
 		for _, row := range data.Data.List {
 			purchase += row.PrchsQty * constants.CostPerGame

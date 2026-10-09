@@ -615,11 +615,27 @@ func TestAggregateLedgerTotalAnomalyWarns(t *testing.T) {
 		"rows exceed total": testutil.Sequence(
 			testutil.StubResponse{Status: 200, Body: `{"data":{"total":1,"list":[{"ltGdsCd":"LO40","prchsQty":3},{"ltGdsCd":"LO40","prchsQty":2}]}}`},
 		),
-		"total changed between pages": func(n int, _ testutil.RecordedRequest) (testutil.StubResponse, error) {
+		"total increased between pages": func(n int, _ testutil.RecordedRequest) (testutil.StubResponse, error) {
 			if n == 0 {
 				return testutil.StubResponse{Status: 200, Body: `{"data":{"total":2,"list":[{"ltGdsCd":"LO40","prchsQty":3}]}}`}, nil
 			}
-			return testutil.StubResponse{Status: 200, Body: `{"data":{"total":3,"list":[{"ltGdsCd":"LO40","prchsQty":2}]}}`}, nil
+			return testutil.StubResponse{Status: 200, Body: `{"data":{"total":3,"list":[{"ltGdsCd":"LO40","prchsQty":1},{"ltGdsCd":"LO40","prchsQty":1}]}}`}, nil
+		},
+		// The empty page matches the latest total, not the stale page-1 one.
+		"total decreased then empty page": func(n int, _ testutil.RecordedRequest) (testutil.StubResponse, error) {
+			if n == 0 {
+				return testutil.StubResponse{Status: 200, Body: `{"data":{"total":2,"list":[{"ltGdsCd":"LO40","prchsQty":5}]}}`}, nil
+			}
+			return testutil.StubResponse{Status: 200, Body: `{"data":{"total":1,"list":[]}}`}, nil
+		},
+		"total decreased mid-window": func(n int, _ testutil.RecordedRequest) (testutil.StubResponse, error) {
+			switch n {
+			case 0:
+				return testutil.StubResponse{Status: 200, Body: `{"data":{"total":3,"list":[{"ltGdsCd":"LO40","prchsQty":2}]}}`}, nil
+			case 1:
+				return testutil.StubResponse{Status: 200, Body: `{"data":{"total":2,"list":[{"ltGdsCd":"LO40","prchsQty":3}]}}`}, nil
+			}
+			return testutil.StubResponse{Status: 200, Body: `{"data":{"total":2,"list":[]}}`}, nil
 		},
 	}
 	for name, handler := range cases {
